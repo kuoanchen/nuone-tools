@@ -1,0 +1,499 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Window
+    x:Class="nuone_tools.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:nuone_tools"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    mc:Ignorable="d"
+    Title="Nuone Tools">
+
+    <Window.SystemBackdrop>
+        <MicaBackdrop />
+    </Window.SystemBackdrop>
+
+    <Grid Background="#141119">
+        <Grid.Resources>
+            <SolidColorBrush x:Key="AppBackgroundBrush" Color="#141119" />
+            <SolidColorBrush x:Key="PanelBrush" Color="#211C28" />
+            <SolidColorBrush x:Key="PanelAltBrush" Color="#191520" />
+            <SolidColorBrush x:Key="PanelStrokeBrush" Color="#3A3146" />
+            <SolidColorBrush x:Key="AccentBrush" Color="#BF4CFF" />
+            <SolidColorBrush x:Key="AccentSoftBrush" Color="#8B35C4" />
+            <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F6F2FF" />
+            <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B9AECF" />
+            <SolidColorBrush x:Key="SuccessBrush" Color="#74D89B" />
+            <SolidColorBrush x:Key="WarningBrush" Color="#FFD76A" />
+
+            <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
+                <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
+                <Setter Property="FontSize" Value="13" />
+                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="CharacterSpacing" Value="60" />
+                <Setter Property="TextWrapping" Value="NoWrap" />
+            </Style>
+
+            <Style x:Key="GhostButtonStyle" TargetType="Button">
+                <Setter Property="Foreground" Value="{StaticResource TextPrimaryBrush}" />
+                <Setter Property="Background" Value="#00FFFFFF" />
+                <Setter Property="BorderBrush" Value="{StaticResource PanelStrokeBrush}" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="CornerRadius" Value="10" />
+                <Setter Property="Padding" Value="10,8" />
+                <Setter Property="MinHeight" Value="38" />
+            </Style>
+
+            <Style x:Key="AccentButtonStyle" TargetType="Button" BasedOn="{StaticResource GhostButtonStyle}">
+                <Setter Property="Background" Value="{StaticResource AccentBrush}" />
+                <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
+            </Style>
+        </Grid.Resources>
+
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="290" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"
+                Margin="14"
+                Padding="16"
+                Background="{StaticResource PanelAltBrush}"
+                BorderBrush="{StaticResource PanelStrokeBrush}"
+                BorderThickness="1"
+                CornerRadius="22">
+            <Grid RowDefinitions="Auto,*">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Nuone Commander"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   FontSize="26"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="雙 pane 檔案管理工作台"
+                                   Style="{StaticResource SectionTitleStyle}" />
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            Click="RefreshAll_Click"
+                            Style="{StaticResource GhostButtonStyle}">
+                        <FontIcon Glyph="&#xE72C;" />
+                    </Button>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1"
+                              Margin="0,20,0,0"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="18">
+                        <Border Padding="14"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="磁碟機" Style="{StaticResource SectionTitleStyle}" />
+                                <ItemsControl ItemsSource="{x:Bind Drives, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:DriveShortcut">
+                                            <Button HorizontalAlignment="Stretch"
+                                                    Padding="0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Click="DriveShortcut_Click"
+                                                    Tag="{x:Bind RootPath}">
+                                                <Border Margin="0,0,0,10"
+                                                        Padding="12"
+                                                        Background="#281F31"
+                                                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="14">
+                                                    <StackPanel Spacing="8">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{x:Bind Name}"
+                                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                                       FontSize="15"
+                                                                       FontWeight="SemiBold" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       Text="{x:Bind Summary}"
+                                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                                        </Grid>
+                                                        <ProgressBar Value="{x:Bind UsagePercent}"
+                                                                     Maximum="100"
+                                                                     Height="6"
+                                                                     Foreground="{StaticResource AccentBrush}"
+                                                                     Background="#3A3146" />
+                                                        <TextBlock Text="{x:Bind Detail}"
+                                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   FontSize="12" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Padding="14"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="12">
+                                <TextBlock Text="常用捷徑" Style="{StaticResource SectionTitleStyle}" />
+                                <ItemsControl ItemsSource="{x:Bind QuickAccessItems, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:QuickAccessItem">
+                                            <Button HorizontalAlignment="Stretch"
+                                                    Padding="0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    Click="QuickAccess_Click"
+                                                    Tag="{x:Bind Path}">
+                                                <Border Margin="0,0,0,8"
+                                                        Padding="12"
+                                                        Background="#281F31"
+                                                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="12">
+                                                    <Grid>
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                        </Grid.ColumnDefinitions>
+                                                        <FontIcon Glyph="{x:Bind Glyph}"
+                                                                  Foreground="{StaticResource WarningBrush}"
+                                                                  Margin="0,0,10,0" />
+                                                        <StackPanel Grid.Column="1" Spacing="2">
+                                                            <TextBlock Text="{x:Bind Title}"
+                                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                                       FontWeight="SemiBold" />
+                                                            <TextBlock Text="{x:Bind Caption}"
+                                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                                       FontSize="12"
+                                                                       TextTrimming="CharacterEllipsis" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Padding="14"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="最近位置" Style="{StaticResource SectionTitleStyle}" />
+                                <ItemsControl ItemsSource="{x:Bind RecentLocations, Mode=OneWay}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:StringEntry">
+                                            <TextBlock Text="{x:Bind Value}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="0,14,14,14" RowDefinitions="Auto,*">
+            <Border Padding="16"
+                    Background="{StaticResource PanelAltBrush}"
+                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                    BorderThickness="1"
+                    CornerRadius="22">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Orientation="Horizontal" Spacing="10">
+                        <Button Style="{StaticResource GhostButtonStyle}" Click="BackLeft_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE72B;" />
+                                <TextBlock Text="左側返回" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource GhostButtonStyle}" Click="BackRight_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE72B;" />
+                                <TextBlock Text="右側返回" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource GhostButtonStyle}" Click="SwapPanes_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8AB;" />
+                                <TextBlock Text="交換 Pane" />
+                            </StackPanel>
+                        </Button>
+                    </StackPanel>
+
+                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
+                        <Button Style="{StaticResource AccentButtonStyle}" Click="OpenSelected_Click">
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <FontIcon Glyph="&#xE8A7;" />
+                                <TextBlock Text="開啟選取" />
+                            </StackPanel>
+                        </Button>
+                        <Button Style="{StaticResource GhostButtonStyle}" Click="RefreshAll_Click">
+                            <FontIcon Glyph="&#xE72C;" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <Grid Grid.Row="1" Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Padding="14"
+                        Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="22">
+                    <Grid RowDefinitions="Auto,Auto,*">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Pane A"
+                                           Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="{x:Bind LeftPane.CurrentPath, Mode=OneWay}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="28"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button Style="{StaticResource GhostButtonStyle}" Click="NavigateUpLeft_Click">
+                                    <FontIcon Glyph="&#xE74A;" />
+                                </Button>
+                                <Button Style="{StaticResource GhostButtonStyle}" Click="RefreshLeft_Click">
+                                    <FontIcon Glyph="&#xE72C;" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Row="1"
+                                Margin="0,14,0,14"
+                                Padding="12"
+                                Background="#1B1621"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Bind LeftPane.StatusText, Mode=OneWay}"
+                                           Foreground="{StaticResource TextSecondaryBrush}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{x:Bind LeftPane.SummaryText, Mode=OneWay}"
+                                           Foreground="{StaticResource SuccessBrush}"
+                                           Margin="10,0,0,0" />
+                                <TextBlock Grid.Column="2"
+                                           Text="{x:Bind LeftPane.SelectionText, Mode=OneWay}"
+                                           Foreground="{StaticResource WarningBrush}"
+                                           Margin="10,0,0,0" />
+                            </Grid>
+                        </Border>
+
+                        <ListView Grid.Row="2"
+                                  ItemsSource="{x:Bind LeftPane.Items, Mode=OneWay}"
+                                  SelectedItem="{x:Bind LeftPane.SelectedItem, Mode=TwoWay}"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="LeftPane_ItemClick"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  SelectionMode="Single">
+                            <ListView.Header>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="名稱" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="1" Text="類型" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="2" Text="修改時間" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="3" Text="大小" Style="{StaticResource SectionTitleStyle}" />
+                                </Grid>
+                            </ListView.Header>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:FileEntry">
+                                    <Border Padding="10" CornerRadius="12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="120" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <FontIcon Glyph="{x:Bind Glyph}"
+                                                          Foreground="{x:Bind AccentColor}" />
+                                                <TextBlock Text="{x:Bind Name}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{x:Bind Kind}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{x:Bind ModifiedText}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="3"
+                                                       Text="{x:Bind SizeText}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+
+                <Border Grid.Column="2"
+                        Padding="14"
+                        Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="22">
+                    <Grid RowDefinitions="Auto,Auto,*">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Spacing="2">
+                                <TextBlock Text="Pane B"
+                                           Style="{StaticResource SectionTitleStyle}" />
+                                <TextBlock Text="{x:Bind RightPane.CurrentPath, Mode=OneWay}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="28"
+                                           FontWeight="SemiBold"
+                                           TextTrimming="CharacterEllipsis" />
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                <Button Style="{StaticResource GhostButtonStyle}" Click="NavigateUpRight_Click">
+                                    <FontIcon Glyph="&#xE74A;" />
+                                </Button>
+                                <Button Style="{StaticResource GhostButtonStyle}" Click="RefreshRight_Click">
+                                    <FontIcon Glyph="&#xE72C;" />
+                                </Button>
+                            </StackPanel>
+                        </Grid>
+
+                        <Border Grid.Row="1"
+                                Margin="0,14,0,14"
+                                Padding="12"
+                                Background="#1B1621"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="14">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="{x:Bind RightPane.StatusText, Mode=OneWay}"
+                                           Foreground="{StaticResource TextSecondaryBrush}" />
+                                <TextBlock Grid.Column="1"
+                                           Text="{x:Bind RightPane.SummaryText, Mode=OneWay}"
+                                           Foreground="{StaticResource SuccessBrush}"
+                                           Margin="10,0,0,0" />
+                                <TextBlock Grid.Column="2"
+                                           Text="{x:Bind RightPane.SelectionText, Mode=OneWay}"
+                                           Foreground="{StaticResource WarningBrush}"
+                                           Margin="10,0,0,0" />
+                            </Grid>
+                        </Border>
+
+                        <ListView Grid.Row="2"
+                                  ItemsSource="{x:Bind RightPane.Items, Mode=OneWay}"
+                                  SelectedItem="{x:Bind RightPane.SelectedItem, Mode=TwoWay}"
+                                  IsItemClickEnabled="True"
+                                  ItemClick="RightPane_ItemClick"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  SelectionMode="Single">
+                            <ListView.Header>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="名稱" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="1" Text="類型" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="2" Text="修改時間" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="3" Text="大小" Style="{StaticResource SectionTitleStyle}" />
+                                </Grid>
+                            </ListView.Header>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:FileEntry">
+                                    <Border Padding="10" CornerRadius="12">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="120" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <FontIcon Glyph="{x:Bind Glyph}"
+                                                          Foreground="{x:Bind AccentColor}" />
+                                                <TextBlock Text="{x:Bind Name}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{x:Bind Kind}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{x:Bind ModifiedText}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="3"
+                                                       Text="{x:Bind SizeText}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</Window>

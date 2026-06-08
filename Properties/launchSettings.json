@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "nuone-tools (Package)": {
+      "commandName": "MsixPackage"
+    },
+    "nuone-tools (Unpackaged)": {
+      "commandName": "Project"
+    }
+  }
+}
