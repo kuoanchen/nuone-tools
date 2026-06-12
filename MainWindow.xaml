@@ -13,19 +13,29 @@
         <MicaBackdrop />
     </Window.SystemBackdrop>
 
-    <Grid Background="#141119">
+    <Grid x:Name="RootLayout"
+          Background="#141119"
+          ActualThemeChanged="RootLayout_ActualThemeChanged">
         <Grid.Resources>
             <SolidColorBrush x:Key="AppBackgroundBrush" Color="#141119" />
             <SolidColorBrush x:Key="PanelBrush" Color="#211C28" />
             <SolidColorBrush x:Key="PanelAltBrush" Color="#191520" />
             <SolidColorBrush x:Key="PanelStrokeBrush" Color="#3A3146" />
+            <SolidColorBrush x:Key="AppRailBrush" Color="#0F2025" />
+            <SolidColorBrush x:Key="AppRailBorderBrush" Color="#1F3138" />
+            <SolidColorBrush x:Key="AppRailActiveBrush" Color="#2D2835" />
+            <SolidColorBrush x:Key="AppRailActiveBorderBrush" Color="#4A3E58" />
+            <SolidColorBrush x:Key="AppRailFooterBrush" Color="#171622" />
+            <SolidColorBrush x:Key="AppRailFooterBorderBrush" Color="#2F2740" />
+            <SolidColorBrush x:Key="CardBrush" Color="#2A252F" />
+            <SolidColorBrush x:Key="InputBrush" Color="#1B1621" />
+            <SolidColorBrush x:Key="InputAltBrush" Color="#231E2B" />
             <SolidColorBrush x:Key="AccentBrush" Color="#BF4CFF" />
             <SolidColorBrush x:Key="AccentSoftBrush" Color="#8B35C4" />
             <SolidColorBrush x:Key="TextPrimaryBrush" Color="#F6F2FF" />
             <SolidColorBrush x:Key="TextSecondaryBrush" Color="#B9AECF" />
             <SolidColorBrush x:Key="SuccessBrush" Color="#74D89B" />
             <SolidColorBrush x:Key="WarningBrush" Color="#FFD76A" />
-
             <Style x:Key="SectionTitleStyle" TargetType="TextBlock">
                 <Setter Property="Foreground" Value="{StaticResource TextSecondaryBrush}" />
                 <Setter Property="FontSize" Value="13" />
@@ -48,452 +58,2174 @@
                 <Setter Property="Background" Value="{StaticResource AccentBrush}" />
                 <Setter Property="BorderBrush" Value="{StaticResource AccentBrush}" />
             </Style>
+
+            <Style x:Key="AppRailButtonStyle" TargetType="Button">
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="BorderThickness" Value="0" />
+                <Setter Property="HorizontalAlignment" Value="Stretch" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="CornerRadius" Value="14" />
+            </Style>
+
+            <Style x:Key="GroupCardListViewItemStyle" TargetType="ListViewItem">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+            </Style>
+
+            <Style x:Key="PaneListViewItemStyle" TargetType="ListViewItem">
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="VerticalContentAlignment" Value="Stretch" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0,0,0,2" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="UseSystemFocusVisuals" Value="False" />
+            </Style>
+
+            <Style x:Key="ToolbarListViewItemStyle" TargetType="ListViewItem">
+                <Setter Property="HorizontalContentAlignment" Value="Center" />
+                <Setter Property="VerticalContentAlignment" Value="Top" />
+                <Setter Property="Padding" Value="0" />
+                <Setter Property="Margin" Value="0" />
+                <Setter Property="MinHeight" Value="0" />
+                <Setter Property="MinWidth" Value="0" />
+                <Setter Property="Background" Value="Transparent" />
+                <Setter Property="BorderBrush" Value="Transparent" />
+                <Setter Property="UseSystemFocusVisuals" Value="False" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="ListViewItem">
+                            <ContentPresenter
+                                Margin="0"
+                                Padding="0"
+                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
+                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}"
+                                Content="{TemplateBinding Content}"
+                                ContentTemplate="{TemplateBinding ContentTemplate}"
+                                ContentTransitions="{TemplateBinding ContentTransitions}" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
         </Grid.Resources>
 
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="290" />
+            <ColumnDefinition Width="84" />
             <ColumnDefinition Width="*" />
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0"
-                Margin="14"
-                Padding="16"
-                Background="{StaticResource PanelAltBrush}"
-                BorderBrush="{StaticResource PanelStrokeBrush}"
-                BorderThickness="1"
-                CornerRadius="22">
-            <Grid RowDefinitions="Auto,*">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-
-                    <StackPanel Spacing="4">
-                        <TextBlock Text="Nuone Commander"
-                                   Foreground="{StaticResource TextPrimaryBrush}"
-                                   FontSize="26"
-                                   FontWeight="SemiBold" />
-                        <TextBlock Text="雙 pane 檔案管理工作台"
-                                   Style="{StaticResource SectionTitleStyle}" />
-                    </StackPanel>
-
-                    <Button Grid.Column="1"
-                            Click="RefreshAll_Click"
-                            Style="{StaticResource GhostButtonStyle}">
-                        <FontIcon Glyph="&#xE72C;" />
-                    </Button>
-                </Grid>
-
-                <ScrollViewer Grid.Row="1"
-                              Margin="0,20,0,0"
-                              VerticalScrollBarVisibility="Auto"
-                              HorizontalScrollBarVisibility="Disabled">
-                    <StackPanel Spacing="18">
-                        <Border Padding="14"
-                                Background="{StaticResource PanelBrush}"
-                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                Margin="0,0,0,0"
+                Background="{StaticResource AppRailBrush}"
+                BorderBrush="{StaticResource AppRailBorderBrush}"
+                BorderThickness="0,0,1,0">
+            <Grid RowDefinitions="Auto,*,Auto">
+                <StackPanel Margin="10,14,10,0" Spacing="10">
+                    <Button x:Name="FileManagerAppButton"
+                            Click="ShowFileManagerApp_Click"
+                            Style="{StaticResource AppRailButtonStyle}">
+                        <Border x:Name="FileManagerAppButtonBorder"
+                                Padding="10,12"
+                                Background="{StaticResource AppRailActiveBrush}"
+                                BorderBrush="{StaticResource AppRailActiveBorderBrush}"
                                 BorderThickness="1"
-                                CornerRadius="18">
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="磁碟機" Style="{StaticResource SectionTitleStyle}" />
-                                <ItemsControl ItemsSource="{x:Bind Drives, Mode=OneWay}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="local:DriveShortcut">
-                                            <Button HorizontalAlignment="Stretch"
-                                                    Padding="0"
-                                                    Background="Transparent"
-                                                    BorderThickness="0"
-                                                    Click="DriveShortcut_Click"
-                                                    Tag="{x:Bind RootPath}">
-                                                <Border Margin="0,0,0,10"
-                                                        Padding="12"
-                                                        Background="#281F31"
-                                                        BorderBrush="{StaticResource PanelStrokeBrush}"
-                                                        BorderThickness="1"
-                                                        CornerRadius="14">
+                                CornerRadius="14">
+                            <StackPanel HorizontalAlignment="Center" Spacing="6">
+                                <FontIcon x:Name="FileManagerAppIcon"
+                                          Glyph="&#xE8B7;"
+                                          FontSize="18"
+                                          Foreground="{StaticResource TextPrimaryBrush}" />
+                                <TextBlock x:Name="FileManagerAppText"
+                                           Text="檔案"
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+
+                    <Button x:Name="AutomationAppButton"
+                            Click="ShowAutomationApp_Click"
+                            Style="{StaticResource AppRailButtonStyle}">
+                        <Border x:Name="AutomationAppButtonBorder"
+                                Padding="10,12"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="14">
+                            <StackPanel HorizontalAlignment="Center" Spacing="6">
+                                <FontIcon x:Name="AutomationAppIcon"
+                                          Glyph="&#xE7B8;"
+                                          FontSize="18"
+                                          Foreground="{StaticResource TextSecondaryBrush}" />
+                                <TextBlock x:Name="AutomationAppText"
+                                           Text="自動化"
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+
+                    <Button x:Name="SettingsAppButton"
+                            Click="ShowSettingsApp_Click"
+                            Style="{StaticResource AppRailButtonStyle}">
+                        <Border x:Name="SettingsAppButtonBorder"
+                                Padding="10,12"
+                                Background="Transparent"
+                                BorderBrush="Transparent"
+                                BorderThickness="1"
+                                CornerRadius="14">
+                            <StackPanel HorizontalAlignment="Center" Spacing="6">
+                                <FontIcon x:Name="SettingsAppIcon"
+                                          Glyph="&#xE713;"
+                                          FontSize="18"
+                                          Foreground="{StaticResource TextSecondaryBrush}" />
+                                <TextBlock x:Name="SettingsAppText"
+                                           Text="設定"
+                                           FontSize="11"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           HorizontalAlignment="Center" />
+                            </StackPanel>
+                        </Border>
+                    </Button>
+                </StackPanel>
+
+                <StackPanel Grid.Row="2"
+                            Margin="10,0,10,14"
+                            Spacing="10">
+                    <Border Padding="10,12"
+                            Background="{StaticResource AppRailFooterBrush}"
+                            BorderBrush="{StaticResource AppRailFooterBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="14">
+                        <StackPanel HorizontalAlignment="Center" Spacing="2">
+                            <TextBlock Text="{x:Bind AppVersionText, Mode=OneWay}"
+                                       FontSize="14"
+                                       FontWeight="SemiBold"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center" />
+                            <TextBlock Text="版本"
+                                       FontSize="10"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       HorizontalAlignment="Center"
+                                       TextAlignment="Center" />
+                        </StackPanel>
+                    </Border>
+                </StackPanel>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid x:Name="FileManagerView" Grid.Row="0" Visibility="Visible">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="290" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border Grid.Column="0"
+                        Margin="14,32,14,14"
+                        Padding="16"
+                        Background="{StaticResource PanelAltBrush}"
+                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="22">
+                    <Grid RowDefinitions="Auto,*">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+
+                            <StackPanel Spacing="4">
+                                <TextBlock Text="Nuone Tools"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="26"
+                                           FontWeight="SemiBold" />
+                                <TextBlock Text="Nuone工具"
+                                           Style="{StaticResource SectionTitleStyle}" />
+                            </StackPanel>
+
+                            <Button Grid.Column="1"
+                                    Click="RefreshAll_Click"
+                                    Style="{StaticResource GhostButtonStyle}">
+                                <FontIcon Glyph="&#xE72C;" />
+                            </Button>
+                        </Grid>
+
+                        <ScrollViewer Grid.Row="1"
+                                      Margin="0,20,0,0"
+                                      VerticalScrollBarVisibility="Auto"
+                                      HorizontalScrollBarVisibility="Disabled">
+                            <StackPanel Spacing="18">
+                                <Border Padding="10"
+                                        Background="{StaticResource CardBrush}"
+                                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="10">
+                                    <StackPanel Spacing="8">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="磁碟機" Style="{StaticResource SectionTitleStyle}" />
+                                            <Button Grid.Column="1"
+                                                    x:Name="DriveSectionMenuButton"
+                                                    Style="{StaticResource GhostButtonStyle}">
+                                                <FontIcon Glyph="&#xE712;" />
+                                                <Button.Flyout>
+                                                    <MenuFlyout Opening="DriveRestoreFlyout_Opening" />
+                                                </Button.Flyout>
+                                            </Button>
+                                        </Grid>
+                                        <ItemsControl ItemsSource="{x:Bind Drives, Mode=OneWay}">
+                                            <ItemsControl.ItemTemplate>
+                                                <DataTemplate x:DataType="local:DriveShortcut">
+                                                    <Button HorizontalAlignment="Stretch"
+                                                            Padding="0"
+                                                            Background="Transparent"
+                                                            BorderThickness="0"
+                                                            HorizontalContentAlignment="Stretch"
+                                                            Click="DriveShortcut_Click"
+                                                            RightTapped="DriveShortcut_RightTapped"
+                                                            Tag="{x:Bind RootPath}">
+                                                        <Border HorizontalAlignment="Stretch"
+                                                                Margin="0,0,0,8"
+                                                                Padding="12"
+                                                                Background="{StaticResource CardBrush}"
+                                                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="10">
+                                                            <StackPanel Spacing="8">
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="*" />
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <TextBlock Text="{x:Bind Name}"
+                                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                                               FontSize="14"
+                                                                               FontWeight="SemiBold" />
+                                                                    <TextBlock Grid.Column="1"
+                                                                               Text="{x:Bind Summary}"
+                                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                                </Grid>
+                                                                <ProgressBar Value="{x:Bind UsagePercent}"
+                                                                             Maximum="100"
+                                                                             Height="6"
+                                                                             Foreground="{StaticResource AccentBrush}"
+                                                                             Background="#3A3146" />
+                                                            </StackPanel>
+                                                        </Border>
+                                                    </Button>
+                                                </DataTemplate>
+                                            </ItemsControl.ItemTemplate>
+                                        </ItemsControl>
+                                    </StackPanel>
+                                </Border>
+
+                                <StackPanel Spacing="12">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <TextBlock Text="自訂分組" Style="{StaticResource SectionTitleStyle}" />
+                                        <Button Grid.Column="1"
+                                                x:Name="AddGroupButton"
+                                                Click="ShowAddGroupEditor_Click"
+                                                Style="{StaticResource GhostButtonStyle}">
+                                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                                <FontIcon Glyph="&#xE710;" />
+                                                <TextBlock Text="新增分組" />
+                                            </StackPanel>
+                                        </Button>
+                                    </Grid>
+
+                                    <StackPanel x:Name="AddGroupEditor"
+                                                Visibility="Collapsed"
+                                                Spacing="8">
+                                        <TextBox x:Name="NewGroupNameTextBox"
+                                                 PlaceholderText="輸入分組名稱"
+                                                 Background="{StaticResource InputBrush}"
+                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                                 KeyDown="NewGroupNameTextBox_KeyDown" />
+                                        <Grid ColumnSpacing="8">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <Button Grid.Column="0"
+                                                    Click="ConfirmAddGroup_Click"
+                                                    Style="{StaticResource AccentButtonStyle}"
+                                                    Content="建立" />
+                                            <Button Grid.Column="1"
+                                                    Click="CancelAddGroup_Click"
+                                                    Style="{StaticResource GhostButtonStyle}"
+                                                    Content="取消" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <ListView x:Name="CustomGroupsListView"
+                                              ItemsSource="{x:Bind CustomGroups, Mode=OneWay}"
+                                              CanDragItems="True"
+                                              CanReorderItems="True"
+                                              AllowDrop="True"
+                                              SelectionMode="None"
+                                              IsItemClickEnabled="False"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              ItemContainerStyle="{StaticResource GroupCardListViewItemStyle}"
+                                              DragItemsCompleted="CustomGroupsListView_DragItemsCompleted">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="local:PathGroup">
+                                                        <Border Margin="0,0,0,10"
+                                                                Padding="10"
+                                                                Background="{StaticResource CardBrush}"
+                                                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="10">
                                                     <StackPanel Spacing="8">
                                                         <Grid>
                                                             <Grid.ColumnDefinitions>
                                                                 <ColumnDefinition Width="*" />
                                                                 <ColumnDefinition Width="Auto" />
                                                             </Grid.ColumnDefinitions>
-                                                            <TextBlock Text="{x:Bind Name}"
+                                                            <TextBlock Text="{x:Bind Title, Mode=OneWay}"
                                                                        Foreground="{StaticResource TextPrimaryBrush}"
-                                                                       FontSize="15"
+                                                                       FontSize="14"
                                                                        FontWeight="SemiBold" />
-                                                            <TextBlock Grid.Column="1"
-                                                                       Text="{x:Bind Summary}"
-                                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                                <Button Padding="0"
+                                                                        Width="24"
+                                                                        Height="24"
+                                                                        MinHeight="24"
+                                                                        Background="Transparent"
+                                                                        BorderBrush="Transparent"
+                                                                        BorderThickness="0"
+                                                                        CornerRadius="6">
+                                                                    <FontIcon Glyph="&#xE712;" />
+                                                                    <Button.Flyout>
+                                                                        <MenuFlyout>
+                                                                            <MenuFlyoutItem Text="群組改名"
+                                                                                            Tag="{x:Bind}"
+                                                                                            Click="RenameGroup_Click" />
+                                                                            <MenuFlyoutItem Text="刪除分組"
+                                                                                            Tag="{x:Bind}"
+                                                                                            Click="DeleteGroup_Click" />
+                                                                            <MenuFlyoutSeparator />
+                                                                            <MenuFlyoutItem Text="加入目前路徑"
+                                                                                            Tag="{x:Bind}"
+                                                                                            Click="AddCurrentPathToGroup_Click" />
+                                                                        </MenuFlyout>
+                                                                    </Button.Flyout>
+                                                                </Button>
+                                                                <Button Padding="0"
+                                                                        Width="24"
+                                                                        Height="24"
+                                                                        MinHeight="24"
+                                                                        Background="Transparent"
+                                                                        BorderBrush="Transparent"
+                                                                        BorderThickness="0"
+                                                                        CornerRadius="6"
+                                                                        Click="AddCurrentPathToGroup_Click">
+                                                                    <FontIcon Glyph="&#xE710;" />
+                                                                </Button>
+                                                            </StackPanel>
                                                         </Grid>
-                                                        <ProgressBar Value="{x:Bind UsagePercent}"
-                                                                     Maximum="100"
-                                                                     Height="6"
-                                                                     Foreground="{StaticResource AccentBrush}"
-                                                                     Background="#3A3146" />
-                                                        <TextBlock Text="{x:Bind Detail}"
-                                                                   Foreground="{StaticResource TextSecondaryBrush}"
-                                                                   FontSize="12" />
+
+                                                        <ListView ItemsSource="{x:Bind Items}"
+                                                                  CanDragItems="True"
+                                                                  CanReorderItems="True"
+                                                                  AllowDrop="True"
+                                                                  SelectionMode="None"
+                                                                  IsItemClickEnabled="False"
+                                                                  Background="Transparent"
+                                                                  BorderThickness="0"
+                                                                  ItemContainerStyle="{StaticResource GroupCardListViewItemStyle}"
+                                                                  DragItemsCompleted="GroupedPathsListView_DragItemsCompleted">
+                                                            <ListView.ItemTemplate>
+                                                                <DataTemplate x:DataType="local:GroupedPathItem">
+                                                                    <Border HorizontalAlignment="Stretch"
+                                                                            Margin="0,0,0,2"
+                                                                            Padding="8,5"
+                                                                            Background="Transparent"
+                                                                            BorderBrush="Transparent"
+                                                                            BorderThickness="0"
+                                                                            CornerRadius="6"
+                                                                            PointerEntered="GroupedPathItem_PointerEntered"
+                                                                            PointerExited="GroupedPathItem_PointerExited"
+                                                                            Tapped="GroupedPath_Tapped">
+                                                                        <Border.ContextFlyout>
+                                                                            <MenuFlyout>
+                                                                                <MenuFlyoutItem Text="開啟"
+                                                                                                Tag="{x:Bind}"
+                                                                                                Click="GroupedPathOpen_Click" />
+                                                                                <MenuFlyoutItem Text="更改別名"
+                                                                                                Tag="{x:Bind}"
+                                                                                                Click="RenameGroupedPathAlias_Click" />
+                                                                                <MenuFlyoutItem Text="從分組移除"
+                                                                                                Tag="{x:Bind}"
+                                                                                                Click="RemoveGroupedPath_Click" />
+                                                                            </MenuFlyout>
+                                                                        </Border.ContextFlyout>
+                                                                        <Grid>
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="Auto" />
+                                                                                <ColumnDefinition Width="*" />
+                                                                            </Grid.ColumnDefinitions>
+                                                                            <FontIcon Glyph="&#xE8B7;"
+                                                                                      Foreground="{StaticResource WarningBrush}"
+                                                                                      Margin="0,0,8,0"
+                                                                                      FontSize="13" />
+                                                                            <StackPanel Grid.Column="1" Spacing="2">
+                                                                                <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                                                           FontSize="13" />
+                                                                            </StackPanel>
+                                                                        </Grid>
+                                                                    </Border>
+                                                                </DataTemplate>
+                                                            </ListView.ItemTemplate>
+                                                        </ListView>
                                                     </StackPanel>
                                                 </Border>
-                                            </Button>
-                                        </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </StackPanel>
                             </StackPanel>
-                        </Border>
+                        </ScrollViewer>
+                    </Grid>
+                </Border>
 
-                        <Border Padding="14"
-                                Background="{StaticResource PanelBrush}"
+                <Grid Grid.Column="1" Margin="0,32,14,14" RowDefinitions="Auto,*">
+                    <Grid Padding="0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border x:Name="TopCommandBarBorder"
+                                Grid.Column="2"
+                                Padding="4,3"
+                                Background="{StaticResource CardBrush}"
                                 BorderBrush="{StaticResource PanelStrokeBrush}"
                                 BorderThickness="1"
-                                CornerRadius="18">
-                            <StackPanel Spacing="12">
-                                <TextBlock Text="常用捷徑" Style="{StaticResource SectionTitleStyle}" />
-                                <ItemsControl ItemsSource="{x:Bind QuickAccessItems, Mode=OneWay}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="local:QuickAccessItem">
-                                            <Button HorizontalAlignment="Stretch"
-                                                    Padding="0"
+                                CornerRadius="16">
+                            <Border.ContextFlyout>
+                                <MenuFlyout>
+                                    <MenuFlyoutItem Text="新增工具"
+                                                    Click="AddToolbarCommand_Click">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE710;" />
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                </MenuFlyout>
+                            </Border.ContextFlyout>
+
+                            <Grid HorizontalAlignment="Stretch">
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+
+                                <ListView x:Name="TopToolbarListView"
+                                          ItemsSource="{x:Bind ToolbarCommands, Mode=OneWay}"
+                                          CanDragItems="True"
+                                          CanReorderItems="True"
+                                          AllowDrop="True"
+                                          SelectionMode="None"
+                                          IsItemClickEnabled="True"
+                                          Padding="0"
+                                          Margin="0"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          HorizontalAlignment="Left"
+                                          HorizontalContentAlignment="Left"
+                                          ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                          ScrollViewer.HorizontalScrollMode="Enabled"
+                                          ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                          ScrollViewer.VerticalScrollMode="Disabled"
+                                          ItemClick="TopToolbarListView_ItemClick"
+                                          DragItemsCompleted="ToolbarCommandsListView_DragItemsCompleted">
+                                    <ListView.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <ItemsStackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ListView.ItemsPanel>
+                                    <ListView.ItemContainerStyle>
+                                        <StaticResource ResourceKey="ToolbarListViewItemStyle" />
+                                    </ListView.ItemContainerStyle>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="local:ToolbarCommandItem">
+                                            <Border Padding="3,1"
                                                     Background="Transparent"
-                                                    BorderThickness="0"
-                                                    Click="QuickAccess_Click"
-                                                    Tag="{x:Bind Path}">
-                                                <Border Margin="0,0,0,8"
-                                                        Padding="12"
-                                                        Background="#281F31"
-                                                        BorderBrush="{StaticResource PanelStrokeBrush}"
-                                                        BorderThickness="1"
-                                                        CornerRadius="12">
-                                                    <Grid>
-                                                        <Grid.ColumnDefinitions>
-                                                            <ColumnDefinition Width="Auto" />
-                                                            <ColumnDefinition Width="*" />
-                                                        </Grid.ColumnDefinitions>
-                                                        <FontIcon Glyph="{x:Bind Glyph}"
-                                                                  Foreground="{StaticResource WarningBrush}"
-                                                                  Margin="0,0,10,0" />
-                                                        <StackPanel Grid.Column="1" Spacing="2">
-                                                            <TextBlock Text="{x:Bind Title}"
-                                                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                                                       FontWeight="SemiBold" />
-                                                            <TextBlock Text="{x:Bind Caption}"
-                                                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                                                       FontSize="12"
-                                                                       TextTrimming="CharacterEllipsis" />
-                                                        </StackPanel>
+                                                    BorderBrush="Transparent"
+                                                    BorderThickness="1"
+                                                    CornerRadius="6"
+                                                    PointerEntered="ToolbarItem_PointerEntered"
+                                                    PointerExited="ToolbarItem_PointerExited">
+                                                <Border.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuFlyoutItem Text="編輯"
+                                                                        Tag="{x:Bind}"
+                                                                        Click="EditToolbarCommand_Click" />
+                                                        <MenuFlyoutItem Text="刪除"
+                                                                        Tag="{x:Bind}"
+                                                                        Click="DeleteToolbarCommand_Click" />
+                                                    </MenuFlyout>
+                                                </Border.ContextFlyout>
+                                                <StackPanel MinWidth="38"
+                                                            HorizontalAlignment="Center"
+                                                            Spacing="0">
+                                                    <Grid Width="32"
+                                                          Height="30"
+                                                          Tag="{x:Bind}"
+                                                          Loaded="ToolbarIconPresenter_Loaded">
+                                                        <Image Width="28"
+                                                               Height="28"
+                                                               HorizontalAlignment="Center"
+                                                               VerticalAlignment="Center"
+                                                               Stretch="Uniform"
+                                                               Visibility="Collapsed" />
+                                                        <FontIcon Glyph="{x:Bind DisplayGlyph, Mode=OneWay}"
+                                                                  FontSize="24"
+                                                                  Foreground="{StaticResource TextPrimaryBrush}"
+                                                                  HorizontalAlignment="Center"
+                                                                  VerticalAlignment="Center" />
                                                     </Grid>
-                                                </Border>
-                                            </Button>
+                                                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                               FontSize="10"
+                                                               HorizontalAlignment="Center"
+                                                               TextAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis"
+                                                               MaxWidth="62"
+                                                               Margin="0,-1,0,0" />
+                                                </StackPanel>
+                                            </Border>
                                         </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </Grid>
                         </Border>
+                    </Grid>
 
-                        <Border Padding="14"
+                    <Grid Grid.Row="1" Margin="0,14,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="14" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <Border x:Name="LeftPaneBorder"
+                                Grid.Column="0"
+                                Padding="14"
                                 Background="{StaticResource PanelBrush}"
                                 BorderBrush="{StaticResource PanelStrokeBrush}"
                                 BorderThickness="1"
-                                CornerRadius="18">
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="最近位置" Style="{StaticResource SectionTitleStyle}" />
-                                <ItemsControl ItemsSource="{x:Bind RecentLocations, Mode=OneWay}">
-                                    <ItemsControl.ItemTemplate>
-                                        <DataTemplate x:DataType="local:StringEntry">
-                                            <TextBlock Text="{x:Bind Value}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                CornerRadius="22"
+                                Tapped="LeftPaneContainer_Tapped">
+                            <Grid RowDefinitions="Auto,Auto,*">
+                                <TextBox x:Name="LeftPathTextBox"
+                                         Text="{x:Bind LeftPane.EditablePath, Mode=TwoWay}"
+                                         KeyDown="LeftPathBox_KeyDown"
+                                         GotFocus="LeftPathTextBox_GotFocus"
+                                         Background="{StaticResource InputBrush}"
+                                         BorderBrush="{StaticResource PanelStrokeBrush}"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         FontSize="16"
+                                         FontWeight="SemiBold"
+                                         CornerRadius="12"
+                                         Padding="12,10" />
+
+                                <Grid Grid.Row="1"
+                                      DataContext="{x:Bind LeftPane}"
+                                      Margin="0,14,0,0"
+                                      Visibility="{Binding FilterVisibility}">
+                                    <Border Padding="12,10"
+                                            Background="{StaticResource AccentSoftBrush}"
+                                            BorderBrush="{StaticResource AccentBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding FilterModeText}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
                                                        TextTrimming="CharacterEllipsis" />
+                                            <Button Grid.Column="1"
+                                                    Tag="{x:Bind LeftPane}"
+                                                    Click="ClearPaneFilter_Click"
+                                                    Style="{StaticResource GhostButtonStyle}"
+                                                    Padding="8,4"
+                                                    MinHeight="30"
+                                                    Content="✕" />
+                                        </Grid>
+                                    </Border>
+                                </Grid>
+
+                                <ListView x:Name="LeftPaneListView"
+                                          Grid.Row="2"
+                                          Margin="0,14,0,0"
+                                          ItemsSource="{x:Bind LeftPane.Items, Mode=OneWay}"
+                                          ItemContainerStyle="{StaticResource PaneListViewItemStyle}"
+                                          IsItemClickEnabled="False"
+                                          ContainerContentChanging="PaneListView_ContainerContentChanging"
+                                          SelectionChanged="LeftPaneList_SelectionChanged"
+                                          DoubleTapped="LeftPaneList_DoubleTapped"
+                                          Tapped="LeftPaneList_Tapped"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          SelectionMode="Extended">
+                                    <ListView.Header>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="120" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="名稱" Style="{StaticResource SectionTitleStyle}" />
+                                            <TextBlock Grid.Column="1" Text="類型" Style="{StaticResource SectionTitleStyle}" />
+                                            <TextBlock Grid.Column="2" Text="修改時間" Style="{StaticResource SectionTitleStyle}" />
+                                            <TextBlock Grid.Column="3" Text="大小" Style="{StaticResource SectionTitleStyle}" />
+                                        </Grid>
+                                    </ListView.Header>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="local:FileEntry">
+                                            <Border Padding="10"
+                                                    Background="{x:Bind ItemBackground, Mode=OneWay}"
+                                                    BorderBrush="{x:Bind ItemBorderBrush, Mode=OneWay}"
+                                                    BorderThickness="{x:Bind ItemBorderThickness, Mode=OneWay}"
+                                                    CornerRadius="12"
+                                                    Tapped="LeftPaneEntry_Tapped"
+                                                    RightTapped="LeftPaneEntry_RightTapped">
+                                                <Border.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuFlyoutItem Text="開啟"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="OpenPath_Click" />
+                                                        <MenuFlyoutItem Text="在另一側打開"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="OpenInRightPane_Click" />
+                                                        <MenuFlyoutSeparator />
+                                                        <MenuFlyoutItem Text="複製到另一側"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="CopyToRightPane_Click" />
+                                                        <MenuFlyoutItem Text="搬移到另一側"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="MoveToRightPane_Click" />
+                                                        <MenuFlyoutItem Text="重新命名"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="RenamePath_Click" />
+                                                        <MenuFlyoutItem Text="刪除"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="DeletePath_Click" />
+                                                        <MenuFlyoutItem Text="新增資料夾"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="CreateFolderLeft_Click" />
+                                                        <MenuFlyoutSeparator />
+                                                        <MenuFlyoutItem Text="複製路徑"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="CopyPath_Click" />
+                                                    </MenuFlyout>
+                                                </Border.ContextFlyout>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="110" />
+                                                        <ColumnDefinition Width="150" />
+                                                        <ColumnDefinition Width="120" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <FontIcon Glyph="{x:Bind Glyph}"
+                                                                  Foreground="{x:Bind AccentColor}" />
+                                                        <TextBlock Text="{x:Bind Name}"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{x:Bind Kind}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{x:Bind ModifiedText}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                    <TextBlock Grid.Column="3"
+                                                               Text="{x:Bind SizeText}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                </Grid>
+                                            </Border>
                                         </DataTemplate>
-                                    </ItemsControl.ItemTemplate>
-                                </ItemsControl>
-                            </StackPanel>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </Grid>
                         </Border>
-                    </StackPanel>
-                </ScrollViewer>
-            </Grid>
-        </Border>
 
-        <Grid Grid.Column="1" Margin="0,14,14,14" RowDefinitions="Auto,*">
-            <Border Padding="16"
-                    Background="{StaticResource PanelAltBrush}"
-                    BorderBrush="{StaticResource PanelStrokeBrush}"
-                    BorderThickness="1"
-                    CornerRadius="22">
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                        <Border x:Name="RightPaneBorder"
+                                Grid.Column="2"
+                                Padding="14"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="22"
+                                Tapped="RightPaneContainer_Tapped">
+                            <Grid RowDefinitions="Auto,Auto,*">
+                                <TextBox x:Name="RightPathTextBox"
+                                         Text="{x:Bind RightPane.EditablePath, Mode=TwoWay}"
+                                         KeyDown="RightPathBox_KeyDown"
+                                         GotFocus="RightPathTextBox_GotFocus"
+                                         Background="{StaticResource InputBrush}"
+                                         BorderBrush="{StaticResource PanelStrokeBrush}"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         FontSize="16"
+                                         FontWeight="SemiBold"
+                                         CornerRadius="12"
+                                         Padding="12,10" />
 
-                    <StackPanel Orientation="Horizontal" Spacing="10">
-                        <Button Style="{StaticResource GhostButtonStyle}" Click="BackLeft_Click">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE72B;" />
-                                <TextBlock Text="左側返回" />
-                            </StackPanel>
-                        </Button>
-                        <Button Style="{StaticResource GhostButtonStyle}" Click="BackRight_Click">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE72B;" />
-                                <TextBlock Text="右側返回" />
-                            </StackPanel>
-                        </Button>
-                        <Button Style="{StaticResource GhostButtonStyle}" Click="SwapPanes_Click">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE8AB;" />
-                                <TextBlock Text="交換 Pane" />
-                            </StackPanel>
-                        </Button>
-                    </StackPanel>
+                                <Grid Grid.Row="1"
+                                      DataContext="{x:Bind RightPane}"
+                                      Margin="0,14,0,0"
+                                      Visibility="{Binding FilterVisibility}">
+                                    <Border Padding="12,10"
+                                            Background="{StaticResource AccentSoftBrush}"
+                                            BorderBrush="{StaticResource AccentBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="{Binding FilterModeText}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="14"
+                                                       FontWeight="SemiBold"
+                                                       VerticalAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis" />
+                                            <Button Grid.Column="1"
+                                                    Tag="{x:Bind RightPane}"
+                                                    Click="ClearPaneFilter_Click"
+                                                    Style="{StaticResource GhostButtonStyle}"
+                                                    Padding="8,4"
+                                                    MinHeight="30"
+                                                    Content="✕" />
+                                        </Grid>
+                                    </Border>
+                                </Grid>
 
-                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="10">
-                        <Button Style="{StaticResource AccentButtonStyle}" Click="OpenSelected_Click">
-                            <StackPanel Orientation="Horizontal" Spacing="8">
-                                <FontIcon Glyph="&#xE8A7;" />
-                                <TextBlock Text="開啟選取" />
-                            </StackPanel>
-                        </Button>
-                        <Button Style="{StaticResource GhostButtonStyle}" Click="RefreshAll_Click">
-                            <FontIcon Glyph="&#xE72C;" />
-                        </Button>
-                    </StackPanel>
+                                <ListView x:Name="RightPaneListView"
+                                          Grid.Row="2"
+                                          Margin="0,14,0,0"
+                                          ItemsSource="{x:Bind RightPane.Items, Mode=OneWay}"
+                                          ItemContainerStyle="{StaticResource PaneListViewItemStyle}"
+                                          IsItemClickEnabled="False"
+                                          ContainerContentChanging="PaneListView_ContainerContentChanging"
+                                          SelectionChanged="RightPaneList_SelectionChanged"
+                                          DoubleTapped="RightPaneList_DoubleTapped"
+                                          Tapped="RightPaneList_Tapped"
+                                          Background="Transparent"
+                                          BorderThickness="0"
+                                          SelectionMode="Extended">
+                                    <ListView.Header>
+                                        <Grid Margin="0,0,0,10">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="120" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBlock Text="名稱" Style="{StaticResource SectionTitleStyle}" />
+                                            <TextBlock Grid.Column="1" Text="類型" Style="{StaticResource SectionTitleStyle}" />
+                                            <TextBlock Grid.Column="2" Text="修改時間" Style="{StaticResource SectionTitleStyle}" />
+                                            <TextBlock Grid.Column="3" Text="大小" Style="{StaticResource SectionTitleStyle}" />
+                                        </Grid>
+                                    </ListView.Header>
+                                    <ListView.ItemTemplate>
+                                        <DataTemplate x:DataType="local:FileEntry">
+                                            <Border Padding="10"
+                                                    Background="{x:Bind ItemBackground, Mode=OneWay}"
+                                                    BorderBrush="{x:Bind ItemBorderBrush, Mode=OneWay}"
+                                                    BorderThickness="{x:Bind ItemBorderThickness, Mode=OneWay}"
+                                                    CornerRadius="12"
+                                                    Tapped="RightPaneEntry_Tapped"
+                                                    RightTapped="RightPaneEntry_RightTapped">
+                                                <Border.ContextFlyout>
+                                                    <MenuFlyout>
+                                                        <MenuFlyoutItem Text="開啟"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="OpenPath_Click" />
+                                                        <MenuFlyoutItem Text="在另一側打開"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="OpenInLeftPane_Click" />
+                                                        <MenuFlyoutSeparator />
+                                                        <MenuFlyoutItem Text="複製到另一側"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="CopyToLeftPane_Click" />
+                                                        <MenuFlyoutItem Text="搬移到另一側"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="MoveToLeftPane_Click" />
+                                                        <MenuFlyoutItem Text="重新命名"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="RenamePath_Click" />
+                                                        <MenuFlyoutItem Text="刪除"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="DeletePath_Click" />
+                                                        <MenuFlyoutItem Text="新增資料夾"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="CreateFolderRight_Click" />
+                                                        <MenuFlyoutSeparator />
+                                                        <MenuFlyoutItem Text="複製路徑"
+                                                                        Tag="{Binding FullPath}"
+                                                                        Click="CopyPath_Click" />
+                                                    </MenuFlyout>
+                                                </Border.ContextFlyout>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="110" />
+                                                        <ColumnDefinition Width="150" />
+                                                        <ColumnDefinition Width="120" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                                        <FontIcon Glyph="{x:Bind Glyph}"
+                                                                  Foreground="{x:Bind AccentColor}" />
+                                                        <TextBlock Text="{x:Bind Name}"
+                                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                                   TextTrimming="CharacterEllipsis" />
+                                                    </StackPanel>
+                                                    <TextBlock Grid.Column="1"
+                                                               Text="{x:Bind Kind}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                    <TextBlock Grid.Column="2"
+                                                               Text="{x:Bind ModifiedText}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                    <TextBlock Grid.Column="3"
+                                                               Text="{x:Bind SizeText}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}" />
+                                                </Grid>
+                                            </Border>
+                                        </DataTemplate>
+                                    </ListView.ItemTemplate>
+                                </ListView>
+                            </Grid>
+                        </Border>
+                    </Grid>
                 </Grid>
-            </Border>
+            </Grid>
 
-            <Grid Grid.Row="1" Margin="0,14,0,0">
+            <Grid x:Name="AutomationView" Grid.Row="0" Visibility="Collapsed">
                 <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="360" />
                     <ColumnDefinition Width="*" />
                 </Grid.ColumnDefinitions>
 
                 <Border Grid.Column="0"
-                        Padding="14"
-                        Background="{StaticResource PanelBrush}"
+                        Margin="18"
+                        Padding="20"
+                        Background="{StaticResource PanelAltBrush}"
                         BorderBrush="{StaticResource PanelStrokeBrush}"
                         BorderThickness="1"
-                        CornerRadius="22">
-                    <Grid RowDefinitions="Auto,Auto,*">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Spacing="2">
-                                <TextBlock Text="Pane A"
-                                           Style="{StaticResource SectionTitleStyle}" />
-                                <TextBlock Text="{x:Bind LeftPane.CurrentPath, Mode=OneWay}"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="28"
-                                           FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                <Button Style="{StaticResource GhostButtonStyle}" Click="NavigateUpLeft_Click">
-                                    <FontIcon Glyph="&#xE74A;" />
-                                </Button>
-                                <Button Style="{StaticResource GhostButtonStyle}" Click="RefreshLeft_Click">
-                                    <FontIcon Glyph="&#xE72C;" />
-                                </Button>
-                            </StackPanel>
-                        </Grid>
+                        CornerRadius="18">
+                    <ScrollViewer VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="18">
+                            <TextBlock Text="自動化"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="28"
+                                       FontWeight="SemiBold" />
 
-                        <Border Grid.Row="1"
-                                Margin="0,14,0,14"
-                                Padding="12"
-                                Background="#1B1621"
-                                BorderBrush="{StaticResource PanelStrokeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="14">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{x:Bind LeftPane.StatusText, Mode=OneWay}"
-                                           Foreground="{StaticResource TextSecondaryBrush}" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{x:Bind LeftPane.SummaryText, Mode=OneWay}"
-                                           Foreground="{StaticResource SuccessBrush}"
-                                           Margin="10,0,0,0" />
-                                <TextBlock Grid.Column="2"
-                                           Text="{x:Bind LeftPane.SelectionText, Mode=OneWay}"
-                                           Foreground="{StaticResource WarningBrush}"
-                                           Margin="10,0,0,0" />
-                            </Grid>
-                        </Border>
+                            <TextBlock Text="建立自動備份工作，定時將檔案或資料夾複製到指定目的地。"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="15"
+                                       TextWrapping="Wrap" />
 
-                        <ListView Grid.Row="2"
-                                  ItemsSource="{x:Bind LeftPane.Items, Mode=OneWay}"
-                                  SelectedItem="{x:Bind LeftPane.SelectedItem, Mode=TwoWay}"
-                                  IsItemClickEnabled="True"
-                                  ItemClick="LeftPane_ItemClick"
-                                  Background="Transparent"
-                                  BorderThickness="0"
-                                  SelectionMode="Single">
-                            <ListView.Header>
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="150" />
-                                        <ColumnDefinition Width="120" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="名稱" Style="{StaticResource SectionTitleStyle}" />
-                                    <TextBlock Grid.Column="1" Text="類型" Style="{StaticResource SectionTitleStyle}" />
-                                    <TextBlock Grid.Column="2" Text="修改時間" Style="{StaticResource SectionTitleStyle}" />
-                                    <TextBlock Grid.Column="3" Text="大小" Style="{StaticResource SectionTitleStyle}" />
-                                </Grid>
-                            </ListView.Header>
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="local:FileEntry">
-                                    <Border Padding="10" CornerRadius="12">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="110" />
-                                                <ColumnDefinition Width="150" />
-                                                <ColumnDefinition Width="120" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                                <FontIcon Glyph="{x:Bind Glyph}"
-                                                          Foreground="{x:Bind AccentColor}" />
-                                                <TextBlock Text="{x:Bind Name}"
-                                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                                           TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="1"
-                                                       Text="{x:Bind Kind}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" />
-                                            <TextBlock Grid.Column="2"
-                                                       Text="{x:Bind ModifiedText}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" />
-                                            <TextBlock Grid.Column="3"
-                                                       Text="{x:Bind SizeText}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" />
-                                        </Grid>
-                                    </Border>
-                                </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </Grid>
+                            <Border Padding="16"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="16">
+                                <StackPanel Spacing="12">
+                                    <TextBlock Text="新增備份工作"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="20"
+                                               FontWeight="SemiBold" />
+
+                                    <TextBox x:Name="AutomationNameTextBox"
+                                             PlaceholderText="名稱，例如：文件每日備份"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                    <TextBox x:Name="AutomationSourcePathTextBox"
+                                             PlaceholderText="來源路徑，例如：C:\Users\kuo an chen\Documents"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                    <TextBox x:Name="AutomationDestinationPathTextBox"
+                                             PlaceholderText="目的地資料夾，例如：D:\backup"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                    <ComboBox x:Name="AutomationModeComboBox"
+                                              SelectedIndex="0"
+                                              Background="{StaticResource InputAltBrush}"
+                                              BorderBrush="{StaticResource PanelStrokeBrush}"
+                                              Foreground="{StaticResource TextPrimaryBrush}">
+                                        <ComboBoxItem Content="備份複製" Tag="Copy" />
+                                        <ComboBoxItem Content="同步鏡像" Tag="Mirror" />
+                                    </ComboBox>
+
+                                    <TextBox x:Name="AutomationIntervalTextBox"
+                                             PlaceholderText="間隔分鐘，例如：60"
+                                             Text="60"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                    <Button Click="AddAutomationJob_Click"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            Content="新增工作" />
+
+                                    <TextBlock Text="同步鏡像會讓目的地維持和來源一致，會刪除目的地多出來的檔案與資料夾。"
+                                               Foreground="{StaticResource WarningBrush}"
+                                               FontSize="13"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
                 </Border>
 
-                <Border Grid.Column="2"
-                        Padding="14"
-                        Background="{StaticResource PanelBrush}"
-                        BorderBrush="{StaticResource PanelStrokeBrush}"
-                        BorderThickness="1"
-                        CornerRadius="22">
-                    <Grid RowDefinitions="Auto,Auto,*">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Spacing="2">
-                                <TextBlock Text="Pane B"
-                                           Style="{StaticResource SectionTitleStyle}" />
-                                <TextBlock Text="{x:Bind RightPane.CurrentPath, Mode=OneWay}"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="28"
-                                           FontWeight="SemiBold"
-                                           TextTrimming="CharacterEllipsis" />
-                            </StackPanel>
-                            <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
-                                <Button Style="{StaticResource GhostButtonStyle}" Click="NavigateUpRight_Click">
-                                    <FontIcon Glyph="&#xE74A;" />
-                                </Button>
-                                <Button Style="{StaticResource GhostButtonStyle}" Click="RefreshRight_Click">
-                                    <FontIcon Glyph="&#xE72C;" />
-                                </Button>
-                            </StackPanel>
-                        </Grid>
+                <ScrollViewer Grid.Column="1"
+                              Margin="0,18,18,18"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="18">
+                        <TextBlock Text="備份工作"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   FontSize="34"
+                                   FontWeight="SemiBold" />
 
-                        <Border Grid.Row="1"
-                                Margin="0,14,0,14"
-                                Padding="12"
-                                Background="#1B1621"
-                                BorderBrush="{StaticResource PanelStrokeBrush}"
-                                BorderThickness="1"
-                                CornerRadius="14">
-                            <Grid>
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-                                <TextBlock Text="{x:Bind RightPane.StatusText, Mode=OneWay}"
-                                           Foreground="{StaticResource TextSecondaryBrush}" />
-                                <TextBlock Grid.Column="1"
-                                           Text="{x:Bind RightPane.SummaryText, Mode=OneWay}"
-                                           Foreground="{StaticResource SuccessBrush}"
-                                           Margin="10,0,0,0" />
-                                <TextBlock Grid.Column="2"
-                                           Text="{x:Bind RightPane.SelectionText, Mode=OneWay}"
-                                           Foreground="{StaticResource WarningBrush}"
-                                           Margin="10,0,0,0" />
-                            </Grid>
-                        </Border>
+                        <TextBlock Text="每個工作都會依照設定間隔自動在背景執行，也可以隨時手動執行。"
+                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                   FontSize="16"
+                                   TextWrapping="Wrap" />
 
-                        <ListView Grid.Row="2"
-                                  ItemsSource="{x:Bind RightPane.Items, Mode=OneWay}"
-                                  SelectedItem="{x:Bind RightPane.SelectedItem, Mode=TwoWay}"
-                                  IsItemClickEnabled="True"
-                                  ItemClick="RightPane_ItemClick"
-                                  Background="Transparent"
-                                  BorderThickness="0"
-                                  SelectionMode="Single">
-                            <ListView.Header>
-                                <Grid Margin="0,0,0,10">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="110" />
-                                        <ColumnDefinition Width="150" />
-                                        <ColumnDefinition Width="120" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock Text="名稱" Style="{StaticResource SectionTitleStyle}" />
-                                    <TextBlock Grid.Column="1" Text="類型" Style="{StaticResource SectionTitleStyle}" />
-                                    <TextBlock Grid.Column="2" Text="修改時間" Style="{StaticResource SectionTitleStyle}" />
-                                    <TextBlock Grid.Column="3" Text="大小" Style="{StaticResource SectionTitleStyle}" />
-                                </Grid>
-                            </ListView.Header>
-                            <ListView.ItemTemplate>
-                                <DataTemplate x:DataType="local:FileEntry">
-                                    <Border Padding="10" CornerRadius="12">
-                                        <Grid>
-                                            <Grid.ColumnDefinitions>
-                                                <ColumnDefinition Width="*" />
-                                                <ColumnDefinition Width="110" />
-                                                <ColumnDefinition Width="150" />
-                                                <ColumnDefinition Width="120" />
-                                            </Grid.ColumnDefinitions>
-                                            <StackPanel Orientation="Horizontal" Spacing="10">
-                                                <FontIcon Glyph="{x:Bind Glyph}"
-                                                          Foreground="{x:Bind AccentColor}" />
-                                                <TextBlock Text="{x:Bind Name}"
-                                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                                           TextTrimming="CharacterEllipsis" />
-                                            </StackPanel>
-                                            <TextBlock Grid.Column="1"
-                                                       Text="{x:Bind Kind}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" />
-                                            <TextBlock Grid.Column="2"
-                                                       Text="{x:Bind ModifiedText}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" />
-                                            <TextBlock Grid.Column="3"
-                                                       Text="{x:Bind SizeText}"
-                                                       Foreground="{StaticResource TextSecondaryBrush}" />
-                                        </Grid>
+                        <ItemsControl ItemsSource="{x:Bind BackupAutomations, Mode=OneWay}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate x:DataType="local:BackupAutomationProfile">
+                                    <Border Margin="0,0,0,14"
+                                            Padding="18"
+                                            Opacity="{x:Bind CardOpacity, Mode=OneWay}"
+                                            Background="{StaticResource PanelBrush}"
+                                            BorderBrush="{StaticResource PanelStrokeBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="18">
+                                        <StackPanel Spacing="12">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Spacing="4">
+                                                    <TextBox Text="{x:Bind Name, Mode=TwoWay}"
+                                                             Tag="{x:Bind}"
+                                                             TextChanged="AutomationNameTextBox_TextChanged"
+                                                             IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                             Background="{StaticResource InputAltBrush}"
+                                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                                    <TextBlock Text="{x:Bind StatusText, Mode=OneWay}"
+                                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                                               FontSize="14"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <ToggleSwitch Grid.Column="1"
+                                                              Margin="16,0,0,0"
+                                                              IsOn="{x:Bind IsEnabled, Mode=TwoWay}"
+                                                              IsEnabled="{x:Bind CanToggleEnabled, Mode=OneWay}"
+                                                              Tag="{x:Bind}"
+                                                              Toggled="AutomationEnabledToggle_Toggled"
+                                                              OffContent="停用"
+                                                              OnContent="啟用" />
+                                            </Grid>
+
+                                            <TextBox Text="{x:Bind SourcePath, Mode=TwoWay}"
+                                                     Tag="{x:Bind}"
+                                                     TextChanged="AutomationSourcePathTextBox_TextChanged"
+                                                     IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                     PlaceholderText="來源路徑"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                            <TextBox Text="{x:Bind DestinationPath, Mode=TwoWay}"
+                                                     Tag="{x:Bind}"
+                                                     TextChanged="AutomationDestinationPathTextBox_TextChanged"
+                                                     IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                     PlaceholderText="目的地資料夾"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="220" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <ComboBox Grid.Column="0"
+                                                          Tag="{x:Bind}"
+                                                          Loaded="AutomationModeComboBox_Loaded"
+                                                          SelectionChanged="AutomationModeComboBox_SelectionChanged"
+                                                          IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                          Background="{StaticResource InputAltBrush}"
+                                                          BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                          Foreground="{StaticResource TextPrimaryBrush}">
+                                                    <ComboBoxItem Content="備份複製" Tag="Copy" />
+                                                    <ComboBoxItem Content="同步鏡像" Tag="Mirror" />
+                                                </ComboBox>
+
+                                                <TextBlock Grid.Column="1"
+                                                           Text="{x:Bind ModeDescription, Mode=OneWay}"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           VerticalAlignment="Center"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+
+                                            <Grid ColumnSpacing="12">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="220" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <TextBox Grid.Column="0"
+                                                         Text="{x:Bind IntervalMinutesText, Mode=TwoWay}"
+                                                         Tag="{x:Bind}"
+                                                         TextChanged="AutomationIntervalTextBox_TextChanged"
+                                                         IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                         PlaceholderText="間隔分鐘"
+                                                         Background="{StaticResource InputAltBrush}"
+                                                         BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                         Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                                <Button Grid.Column="1"
+                                                        Tag="{x:Bind}"
+                                                        Click="StartAutomationJob_Click"
+                                                        IsEnabled="{x:Bind CanStart, Mode=OneWay}"
+                                                        Visibility="{x:Bind StartButtonVisibility, Mode=OneWay}"
+                                                        Style="{StaticResource GhostButtonStyle}"
+                                                        Content="啟動" />
+
+                                                <Button Grid.Column="2"
+                                                        Tag="{x:Bind}"
+                                                        Click="RunAutomationNow_Click"
+                                                        IsEnabled="{x:Bind CanRunNow, Mode=OneWay}"
+                                                        Visibility="{x:Bind RunButtonVisibility, Mode=OneWay}"
+                                                        Style="{StaticResource GhostButtonStyle}"
+                                                        Content="立即執行" />
+
+                                                <Button Grid.Column="3"
+                                                        Tag="{x:Bind}"
+                                                        Click="StopAutomationJob_Click"
+                                                        IsEnabled="{x:Bind CanStop, Mode=OneWay}"
+                                                        Visibility="{x:Bind StopButtonVisibility, Mode=OneWay}"
+                                                        Style="{StaticResource GhostButtonStyle}"
+                                                        Content="停止" />
+
+                                                <Button Grid.Column="4"
+                                                        Tag="{x:Bind}"
+                                                        Click="DeleteAutomationJob_Click"
+                                                        IsEnabled="{x:Bind CanDelete, Mode=OneWay}"
+                                                        Visibility="{x:Bind DeleteButtonVisibility, Mode=OneWay}"
+                                                        Style="{StaticResource GhostButtonStyle}"
+                                                        Content="刪除" />
+                                            </Grid>
+
+                                            <Grid ColumnSpacing="24">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+
+                                                <StackPanel Spacing="4">
+                                                    <TextBlock Text="上次執行"
+                                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                                               FontSize="13" />
+                                                    <TextBlock Text="{x:Bind LastRunText, Mode=OneWay}"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+
+                                                <StackPanel Grid.Column="1" Spacing="4">
+                                                    <TextBlock Text="結果"
+                                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                                               FontSize="13" />
+                                                    <TextBlock Text="{x:Bind LastResultText, Mode=OneWay}"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                               TextWrapping="Wrap" />
+                                                </StackPanel>
+                                            </Grid>
+                                        </StackPanel>
                                     </Border>
                                 </DataTemplate>
-                            </ListView.ItemTemplate>
-                        </ListView>
-                    </Grid>
-                </Border>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </ScrollViewer>
             </Grid>
+
+            <Grid x:Name="SettingsView" Grid.Row="0" Visibility="Collapsed">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="*" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <Grid Grid.Row="0">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="320" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Grid.Column="0"
+                            Margin="18"
+                            Padding="20"
+                            Background="{StaticResource PanelAltBrush}"
+                            BorderBrush="{StaticResource PanelStrokeBrush}"
+                            BorderThickness="1"
+                            CornerRadius="18">
+                        <StackPanel Spacing="18">
+                            <TextBlock Text="設定"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="28"
+                                       FontWeight="SemiBold" />
+
+                            <TextBox PlaceholderText="在設定中尋找"
+                                     IsReadOnly="True"
+                                     Background="{StaticResource InputAltBrush}"
+                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+                            <Button Click="ShowGeneralSettings_Click"
+                                    Style="{StaticResource AppRailButtonStyle}">
+                                <Border x:Name="GeneralSettingsNavBorder"
+                                        Padding="14,12"
+                                        Background="{StaticResource CardBrush}"
+                                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                    <TextBlock x:Name="GeneralSettingsNavText"
+                                               Text="一般"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="16"
+                                               FontWeight="SemiBold" />
+                                </Border>
+                            </Button>
+
+                            <Button Click="ShowAppearanceSettings_Click"
+                                    Style="{StaticResource AppRailButtonStyle}">
+                                <Border x:Name="AppearanceSettingsNavBorder"
+                                        Padding="14,12"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                    <TextBlock x:Name="AppearanceSettingsNavText"
+                                               Text="外觀"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="16" />
+                                </Border>
+                            </Button>
+
+                            <Button Click="ShowAccountSettings_Click"
+                                    Style="{StaticResource AppRailButtonStyle}">
+                                <Border x:Name="AccountSettingsNavBorder"
+                                        Padding="14,12"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                    <TextBlock x:Name="AccountSettingsNavText"
+                                               Text="帳號"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="16" />
+                                </Border>
+                            </Button>
+
+                            <Button Click="ShowShortcutSettings_Click"
+                                    Style="{StaticResource AppRailButtonStyle}">
+                                <Border x:Name="ShortcutSettingsNavBorder"
+                                        Padding="14,12"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                    <TextBlock x:Name="ShortcutSettingsNavText"
+                                               Text="快捷鍵"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="16" />
+                                </Border>
+                            </Button>
+
+                            <Button Click="ShowToolbarSettings_Click"
+                                    Style="{StaticResource AppRailButtonStyle}">
+                                <Border x:Name="ToolbarSettingsNavBorder"
+                                        Padding="14,12"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                    <TextBlock x:Name="ToolbarSettingsNavText"
+                                               Text="工具列"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="16" />
+                                </Border>
+                            </Button>
+
+                            <Button Click="ShowAutoExtractSettings_Click"
+                                    Style="{StaticResource AppRailButtonStyle}">
+                                <Border x:Name="AutoExtractSettingsNavBorder"
+                                        Padding="14,12"
+                                        Background="Transparent"
+                                        BorderBrush="Transparent"
+                                        BorderThickness="1"
+                                        CornerRadius="12">
+                                    <TextBlock x:Name="AutoExtractSettingsNavText"
+                                               Text="自動解壓"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="16" />
+                                </Border>
+                            </Button>
+                        </StackPanel>
+                    </Border>
+
+                    <ScrollViewer Grid.Column="1"
+                                  Margin="0,18,18,18"
+                                  VerticalScrollBarVisibility="Auto"
+                                  HorizontalScrollBarVisibility="Disabled">
+                        <StackPanel Spacing="18">
+                            <TextBlock x:Name="SettingsPageTitle"
+                                       Text="一般"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="34"
+                                       FontWeight="SemiBold" />
+
+                            <TextBlock x:Name="SettingsPageDescription"
+                                       Text="設定檔案管理和常用鍵盤快捷鍵。變更後會立即儲存到本機 config。"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="16"
+                                       TextWrapping="Wrap" />
+
+                            <Border x:Name="GeneralSettingsContent"
+                                    Padding="24"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="18"
+                                    Visibility="Visible">
+                                <StackPanel Spacing="18">
+                                    <TextBlock Text="檔案顯示"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="24"
+                                               FontWeight="SemiBold" />
+
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="顯示隱藏與系統檔案"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="18"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="包含 Hidden、System、ReparsePoint 項目。"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="15"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <ToggleSwitch x:Name="ShowHiddenSystemItemsToggle"
+                                                      Grid.Column="1"
+                                                      VerticalAlignment="Center"
+                                                      OffContent="關"
+                                                      OnContent="開"
+                                                      Toggled="ShowHiddenSystemItemsToggle_Toggled" />
+                                    </Grid>
+
+                                    <TextBlock Text="選取總大小"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="20"
+                                               FontWeight="SemiBold"
+                                               Margin="0,8,0,0" />
+
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="計算檔案總大小"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="18"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="選取多個檔案時，顯示它們的總大小。"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="15"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <ToggleSwitch x:Name="ShowSelectedFileSizeToggle"
+                                                      Grid.Column="1"
+                                                      VerticalAlignment="Center"
+                                                      OffContent="關"
+                                                      OnContent="開"
+                                                      Toggled="ShowSelectedFileSizeToggle_Toggled" />
+                                    </Grid>
+
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="計算資料夾總大小"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="18"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="選取資料夾時，遞迴計算資料夾內所有檔案總大小。"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="15"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <ToggleSwitch x:Name="ShowSelectedFolderSizeToggle"
+                                                      Grid.Column="1"
+                                                      VerticalAlignment="Center"
+                                                      OffContent="關"
+                                                      OnContent="開"
+                                                      Toggled="ShowSelectedFolderSizeToggle_Toggled" />
+                                    </Grid>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="AccountSettingsContent"
+                                    Padding="24"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="18"
+                                    Visibility="Collapsed">
+                                <StackPanel Spacing="18">
+                                    <TextBlock Text="帳號"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="24"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="連接 https://api.nuone.cl 的 identity login。密碼只用於當次登入，不會寫進 settings.json。"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="15"
+                                               TextWrapping="Wrap" />
+
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="API"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBox x:Name="AccountApiUrlTextBox"
+                                                 TextChanged="AccountApiUrlTextBox_TextChanged"
+                                                 PlaceholderText="https://api.nuone.cl"
+                                                 Background="{StaticResource InputAltBrush}"
+                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="Email"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBox x:Name="AccountEmailTextBox"
+                                                 TextChanged="AccountEmailTextBox_TextChanged"
+                                                 PlaceholderText="you@example.com"
+                                                 Background="{StaticResource InputAltBrush}"
+                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="10">
+                                        <TextBlock Text="Password"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <PasswordBox x:Name="AccountPasswordBox"
+                                                     PlaceholderText="輸入密碼後登入"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+                                    </StackPanel>
+
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Button x:Name="LoginAccountButton"
+                                                Click="LoginAccountButton_Click"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Content="登入" />
+                                        <Button x:Name="ClearAccountSessionButton"
+                                                Click="ClearAccountSessionButton_Click"
+                                                Style="{StaticResource GhostButtonStyle}"
+                                                Content="清除登入狀態" />
+                                    </StackPanel>
+
+                                    <Border Padding="16"
+                                            Background="{StaticResource CardBrush}"
+                                            BorderBrush="{StaticResource PanelStrokeBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="14">
+                                        <StackPanel Spacing="10">
+                                            <TextBlock Text="連線狀態"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="18"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock x:Name="AccountConnectionStatusTextBlock"
+                                                       Text="尚未登入"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="15"
+                                                       TextWrapping="Wrap" />
+
+                                            <Grid ColumnSpacing="16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="使用者"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="14" />
+                                                <TextBlock x:Name="AccountUserTextBlock"
+                                                           Grid.Column="1"
+                                                           Text="尚未登入"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           FontSize="14"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+
+                                            <Grid ColumnSpacing="16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="服務帳號"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="14" />
+                                                <TextBlock x:Name="AccountServiceAccountsTextBlock"
+                                                           Grid.Column="1"
+                                                           Text="尚未取得"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           FontSize="14"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+
+                                            <Grid ColumnSpacing="16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="上次登入"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="14" />
+                                                <TextBlock x:Name="AccountLastLoginTextBlock"
+                                                           Grid.Column="1"
+                                                           Text="尚未登入"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           FontSize="14"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+
+                                            <Grid ColumnSpacing="16">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="160" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Text="Token"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="14" />
+                                                <TextBlock x:Name="AccountTokenTextBlock"
+                                                           Grid.Column="1"
+                                                           Text="尚未登入"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           FontSize="14"
+                                                           TextWrapping="Wrap" />
+                                            </Grid>
+                                        </StackPanel>
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="AppearanceSettingsContent"
+                                    Padding="24"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="18"
+                                    Visibility="Collapsed">
+                                <StackPanel Spacing="18">
+                                    <TextBlock Text="外觀"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="24"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="選擇 Nuone Tools 使用深色、淺色，或跟隨 Windows 系統。"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="15"
+                                               TextWrapping="Wrap" />
+                                    <Grid ColumnSpacing="16">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="280" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="應用程式主題"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="18"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="會立即套用到主畫面與應用程式內建對話框。"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="15"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <ComboBox x:Name="ThemeModeComboBox"
+                                                  Grid.Column="1"
+                                                  SelectionChanged="ThemeModeComboBox_SelectionChanged"
+                                                  Background="{StaticResource InputAltBrush}"
+                                                  BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                  Foreground="{StaticResource TextPrimaryBrush}">
+                                            <ComboBoxItem Content="依系統" Tag="System" />
+                                            <ComboBoxItem Content="暗黑模式" Tag="Dark" />
+                                            <ComboBoxItem Content="明亮模式" Tag="Light" />
+                                        </ComboBox>
+                                    </Grid>
+
+                                    <Border Padding="14"
+                                            Background="{StaticResource CardBrush}"
+                                            BorderBrush="{StaticResource PanelStrokeBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="12">
+                                        <TextBlock Text="原生 Windows 複製 / 搬移進度視窗會跟隨 Windows 系統主題。若要連 copy progress 一起變更，請使用「依系統」或調整 Windows 本身的主題。"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="15"
+                                               TextWrapping="Wrap" />
+                                    </Border>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="ShortcutSettingsContent"
+                                    Padding="24"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="18"
+                                    Visibility="Collapsed">
+                                <StackPanel Spacing="18">
+                                    <TextBlock Text="快捷鍵"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="24"
+                                               FontWeight="SemiBold" />
+
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="複製到另一個 Pane"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="目前作用中的 pane 按下後，複製選取項目到另一側。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="CopyShortcutTextBox"
+                                                     IsReadOnly="True"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <Button Grid.Column="1"
+                                                    Click="EditCopyShortcut_Click"
+                                                    Style="{StaticResource GhostButtonStyle}"
+                                                    Content="修改" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="移動到另一個 Pane"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="目前作用中的 pane 按下後，將選取項目搬移到另一側。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="MoveShortcutTextBox"
+                                                     IsReadOnly="True"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <Button Grid.Column="1"
+                                                    Click="EditMoveShortcut_Click"
+                                                    Style="{StaticResource GhostButtonStyle}"
+                                                    Content="修改" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="上一層"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="目前作用中的 pane 按下後，回到上一層目錄。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="NavigateUpShortcutTextBox"
+                                                     IsReadOnly="True"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <Button Grid.Column="1"
+                                                    Click="EditNavigateUpShortcut_Click"
+                                                    Style="{StaticResource GhostButtonStyle}"
+                                                    Content="修改" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="新增資料夾"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="目前作用中的 pane 按下後，使用 Ctrl + Shift + [這顆鍵] 新增資料夾。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="CreateFolderShortcutTextBox"
+                                                     IsReadOnly="True"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <Button Grid.Column="1"
+                                                    Click="EditCreateFolderShortcut_Click"
+                                                    Style="{StaticResource GhostButtonStyle}"
+                                                    Content="修改" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="刪除"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="目前作用中的 pane 按下後，刪除選取項目。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                        <Grid ColumnSpacing="12">
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="Auto" />
+                                            </Grid.ColumnDefinitions>
+                                            <TextBox x:Name="DeleteShortcutTextBox"
+                                                     IsReadOnly="True"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+                                            <Button Grid.Column="1"
+                                                    Click="EditDeleteShortcut_Click"
+                                                    Style="{StaticResource GhostButtonStyle}"
+                                                    Content="修改" />
+                                        </Grid>
+                                    </StackPanel>
+
+                                    <TextBlock x:Name="CaptureHintTextBlock"
+                                               Text="按「修改」後，再按下實體鍵，會立即套用。"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="15"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="ToolbarSettingsContent"
+                                    Padding="24"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="18"
+                                    Visibility="Collapsed">
+                                <StackPanel Spacing="18">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="工具列"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="24"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="設定上方工具列按鈕。按下後會在目前作用中的 pane 路徑執行 command。拖曳可重新排序。"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="15"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+
+                                        <Button Grid.Column="1"
+                                                Click="AddToolbarCommand_Click"
+                                                Style="{StaticResource AccentButtonStyle}"
+                                                Content="新增工具" />
+                                    </Grid>
+
+                                    <ListView x:Name="ToolbarCommandsListView"
+                                              ItemsSource="{x:Bind ToolbarCommands, Mode=OneWay}"
+                                              CanDragItems="True"
+                                              CanReorderItems="True"
+                                              AllowDrop="True"
+                                              SelectionMode="None"
+                                              IsItemClickEnabled="False"
+                                              Background="Transparent"
+                                              BorderThickness="0"
+                                              ItemContainerStyle="{StaticResource GroupCardListViewItemStyle}"
+                                              DragItemsCompleted="ToolbarCommandsListView_DragItemsCompleted">
+                                        <ListView.ItemTemplate>
+                                            <DataTemplate x:DataType="local:ToolbarCommandItem">
+                                                <Border Margin="0,0,0,12"
+                                                        Padding="0"
+                                                        Background="{StaticResource CardBrush}"
+                                                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="14">
+                                                    <Grid ColumnSpacing="16">
+                                                        <Grid.ColumnDefinitions>
+                                                            <ColumnDefinition Width="Auto" />
+                                                            <ColumnDefinition Width="*" />
+                                                            <ColumnDefinition Width="Auto" />
+                                                        </Grid.ColumnDefinitions>
+
+                                                        <Border Width="52"
+                                                                Height="52"
+                                                                Background="{StaticResource InputBrush}"
+                                                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                                BorderThickness="1"
+                                                                CornerRadius="12">
+                                                            <Grid Tag="{x:Bind}"
+                                                                  Loaded="ToolbarIconPresenter_Loaded">
+                                                                <Image Width="24"
+                                                                       Height="24"
+                                                                       HorizontalAlignment="Center"
+                                                                       VerticalAlignment="Center"
+                                                                       Stretch="Uniform"
+                                                                       Visibility="Collapsed" />
+                                                                <FontIcon Glyph="{x:Bind DisplayGlyph, Mode=OneWay}"
+                                                                          FontSize="24"
+                                                                          Foreground="{StaticResource TextPrimaryBrush}"
+                                                                          HorizontalAlignment="Center"
+                                                                          VerticalAlignment="Center" />
+                                                            </Grid>
+                                                        </Border>
+
+                                                        <StackPanel Grid.Column="1" Spacing="4">
+                                                            <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                                       FontSize="17"
+                                                                       FontWeight="SemiBold" />
+                                                            <TextBlock Text="{x:Bind Command, Mode=OneWay}"
+                                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                                       FontSize="14"
+                                                                       TextWrapping="WrapWholeWords" />
+                                                            <TextBlock Tag="{x:Bind}"
+                                                                       Loaded="ToolbarIconSummary_Loaded"
+                                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                                       FontSize="13" />
+                                                        </StackPanel>
+
+                                                        <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="8">
+                                                            <Button Tag="{x:Bind}"
+                                                                    Click="EditToolbarCommand_Click"
+                                                                    Style="{StaticResource GhostButtonStyle}"
+                                                                    Content="編輯" />
+                                                            <Button Tag="{x:Bind}"
+                                                                    Click="DeleteToolbarCommand_Click"
+                                                                    Style="{StaticResource GhostButtonStyle}"
+                                                                    Content="刪除" />
+                                                        </StackPanel>
+                                                    </Grid>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ListView.ItemTemplate>
+                                    </ListView>
+                                </StackPanel>
+                            </Border>
+
+                            <Border x:Name="AutoExtractSettingsContent"
+                                    Padding="24"
+                                    Background="{StaticResource PanelBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="18"
+                                    Visibility="Collapsed">
+                                <StackPanel Spacing="18">
+                                    <Grid>
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+
+                                        <StackPanel Spacing="6">
+                                            <TextBlock Text="自動解壓"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="24"
+                                                       FontWeight="SemiBold" />
+                                            <TextBlock Text="監看指定目錄中出現的壓縮檔，依密碼清單自動嘗試解壓。預設支援 .zip、.rar、.7z，會解到同目錄下同名資料夾。"
+                                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                                       FontSize="15"
+                                                       TextWrapping="Wrap" />
+                                        </StackPanel>
+                                    </Grid>
+
+                                    <Border Padding="18"
+                                            Background="{StaticResource CardBrush}"
+                                            BorderBrush="{StaticResource PanelStrokeBrush}"
+                                            BorderThickness="1"
+                                            CornerRadius="14">
+                                        <StackPanel Spacing="12">
+                                            <TextBlock Text="新增解壓工作"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="18"
+                                                       FontWeight="SemiBold" />
+
+                                            <TextBox x:Name="AutoExtractNameTextBox"
+                                                     PlaceholderText="名稱，例如：收據自動解壓"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                            <TextBox x:Name="AutoExtractWatchPathTextBox"
+                                                     PlaceholderText="監看目錄，例如：C:\\Users\\kuo an chen\\Downloads"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                            <TextBox x:Name="AutoExtractExtractorPathTextBox"
+                                                     PlaceholderText="解壓工具路徑，可空白自動找 7z.exe / WinRAR.exe"
+                                                     Background="{StaticResource InputAltBrush}"
+                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                            <Border Padding="14"
+                                                    Background="{StaticResource InputAltBrush}"
+                                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                    BorderThickness="1"
+                                                    CornerRadius="12">
+                                                <TextBlock Text="密碼清單會在新增工作後，於下方工作卡片中逐筆新增、編輯、刪除。"
+                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                           FontSize="14"
+                                                           TextWrapping="Wrap" />
+                                            </Border>
+
+                                            <Button Click="AddAutoExtractProfile_Click"
+                                                    Style="{StaticResource AccentButtonStyle}"
+                                                    HorizontalAlignment="Left"
+                                                    Content="新增自動解壓" />
+                                        </StackPanel>
+                                    </Border>
+
+                                    <ItemsControl ItemsSource="{x:Bind AutoExtractProfiles, Mode=OneWay}">
+                                        <ItemsControl.ItemTemplate>
+                                            <DataTemplate x:DataType="local:AutoExtractProfile">
+                                                <Border Margin="0,0,0,12"
+                                                        Padding="20"
+                                                        Background="{StaticResource CardBrush}"
+                                                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="16"
+                                                        Opacity="{x:Bind CardOpacity, Mode=OneWay}">
+                                                    <StackPanel Spacing="12">
+                                                        <Grid ColumnSpacing="16">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <TextBox Text="{x:Bind Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                     TextChanged="AutoExtractNameTextBox_TextChanged"
+                                                                     Tag="{x:Bind}"
+                                                                     IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                                     Background="{StaticResource InputAltBrush}"
+                                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                                            <ToggleSwitch Grid.Column="1"
+                                                                          Tag="{x:Bind}"
+                                                                          IsOn="{x:Bind IsEnabled, Mode=OneWay}"
+                                                                          IsEnabled="{x:Bind CanToggleEnabled, Mode=OneWay}"
+                                                                          Toggled="AutoExtractEnabledToggle_Toggled"
+                                                                          VerticalAlignment="Center"
+                                                                          OffContent="關"
+                                                                          OnContent="開" />
+                                                        </Grid>
+
+                                                        <TextBlock Text="{x:Bind StatusText, Mode=OneWay}"
+                                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                                   FontSize="15"
+                                                                   TextWrapping="Wrap" />
+
+                                                        <TextBox Text="{x:Bind WatchPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 TextChanged="AutoExtractWatchPathTextBox_TextChanged"
+                                                                 Tag="{x:Bind}"
+                                                                 IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                                 PlaceholderText="監看目錄"
+                                                                 Background="{StaticResource InputAltBrush}"
+                                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                                        <TextBox Text="{x:Bind ExtractorPath, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                 TextChanged="AutoExtractExtractorPathTextBox_TextChanged"
+                                                                 Tag="{x:Bind}"
+                                                                 IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                                 PlaceholderText="解壓工具路徑，可空白自動找 7z.exe / WinRAR.exe"
+                                                                 Background="{StaticResource InputAltBrush}"
+                                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                                        <StackPanel Spacing="8">
+                                                            <TextBlock Text="密碼清單"
+                                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                                       FontSize="16"
+                                                                       FontWeight="SemiBold" />
+
+                                                            <Grid ColumnSpacing="10">
+                                                                <Grid.ColumnDefinitions>
+                                                                    <ColumnDefinition Width="*" />
+                                                                    <ColumnDefinition Width="Auto" />
+                                                                </Grid.ColumnDefinitions>
+
+                                                                <TextBox Text="{x:Bind PendingPasswordText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                         PlaceholderText="新增一組密碼"
+                                                                         IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                                         Background="{StaticResource InputAltBrush}"
+                                                                         BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                                         Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                                                <Button Grid.Column="1"
+                                                                        Tag="{x:Bind}"
+                                                                        Click="AddAutoExtractPassword_Click"
+                                                                        Style="{StaticResource GhostButtonStyle}"
+                                                                        IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
+                                                                        Content="新增" />
+                                                            </Grid>
+
+                                                            <ItemsControl ItemsSource="{x:Bind Passwords, Mode=OneWay}">
+                                                                <ItemsControl.ItemTemplate>
+                                                                    <DataTemplate x:DataType="local:AutoExtractPasswordItem">
+                                                                        <Grid ColumnSpacing="10"
+                                                                              Margin="0,0,0,8">
+                                                                            <Grid.ColumnDefinitions>
+                                                                                <ColumnDefinition Width="*" />
+                                                                                <ColumnDefinition Width="Auto" />
+                                                                            </Grid.ColumnDefinitions>
+
+                                                                            <TextBox Text="{x:Bind Value, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                                                                     TextChanged="AutoExtractPasswordItemTextBox_TextChanged"
+                                                                                     Background="{StaticResource InputAltBrush}"
+                                                                                     BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                                                     Foreground="{StaticResource TextPrimaryBrush}" />
+
+                                                                            <Button Grid.Column="1"
+                                                                                    Tag="{x:Bind}"
+                                                                                    Click="RemoveAutoExtractPassword_Click"
+                                                                                    Style="{StaticResource GhostButtonStyle}"
+                                                                                    Content="刪除" />
+                                                                        </Grid>
+                                                                    </DataTemplate>
+                                                                </ItemsControl.ItemTemplate>
+                                                            </ItemsControl>
+                                                        </StackPanel>
+
+                                                        <StackPanel Orientation="Horizontal" Spacing="10">
+                                                            <Button Tag="{x:Bind}"
+                                                                    Click="RunAutoExtractNow_Click"
+                                                                    Style="{StaticResource GhostButtonStyle}"
+                                                                    IsEnabled="{x:Bind CanRunNow, Mode=OneWay}"
+                                                                    Visibility="{x:Bind RunButtonVisibility, Mode=OneWay}"
+                                                                    Content="立即執行" />
+                                                            <Button Tag="{x:Bind}"
+                                                                    Click="StartAutoExtractProfile_Click"
+                                                                    Style="{StaticResource GhostButtonStyle}"
+                                                                    IsEnabled="{x:Bind CanStart, Mode=OneWay}"
+                                                                    Visibility="{x:Bind StartButtonVisibility, Mode=OneWay}"
+                                                                    Content="啟動" />
+                                                            <Button Tag="{x:Bind}"
+                                                                    Click="StopAutoExtractProfile_Click"
+                                                                    Style="{StaticResource GhostButtonStyle}"
+                                                                    IsEnabled="{x:Bind CanStop, Mode=OneWay}"
+                                                                    Visibility="{x:Bind StopButtonVisibility, Mode=OneWay}"
+                                                                    Content="停止" />
+                                                            <Button Tag="{x:Bind}"
+                                                                    Click="DeleteAutoExtractProfile_Click"
+                                                                    Style="{StaticResource GhostButtonStyle}"
+                                                                    IsEnabled="{x:Bind CanDelete, Mode=OneWay}"
+                                                                    Visibility="{x:Bind DeleteButtonVisibility, Mode=OneWay}"
+                                                                    Content="刪除" />
+                                                        </StackPanel>
+
+                                                        <Grid ColumnSpacing="24">
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="*" />
+                                                            </Grid.ColumnDefinitions>
+
+                                                            <StackPanel Spacing="4">
+                                                                <TextBlock Text="上次執行"
+                                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                                           FontSize="14" />
+                                                                <TextBlock Text="{x:Bind LastRunText, Mode=OneWay}"
+                                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                                           FontSize="15"
+                                                                           TextWrapping="Wrap" />
+                                                            </StackPanel>
+
+                                                            <StackPanel Grid.Column="1" Spacing="4">
+                                                                <TextBlock Text="結果"
+                                                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                                                           FontSize="14" />
+                                                                <TextBlock Text="{x:Bind LastResultText, Mode=OneWay}"
+                                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                                           FontSize="15"
+                                                                           TextWrapping="Wrap" />
+                                                            </StackPanel>
+                                                        </Grid>
+                                                    </StackPanel>
+                                                </Border>
+                                            </DataTemplate>
+                                        </ItemsControl.ItemTemplate>
+                                    </ItemsControl>
+                                </StackPanel>
+                            </Border>
+                        </StackPanel>
+                    </ScrollViewer>
+                </Grid>
+
+            </Grid>
+
+            <Border Grid.Row="1"
+                    Background="{StaticResource AppRailFooterBrush}"
+                    BorderBrush="{StaticResource AppRailFooterBorderBrush}"
+                    BorderThickness="1,1,0,0">
+                <Grid Padding="14,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="16" />
+                        <ColumnDefinition Width="1.4*" />
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="0.9*" />
+                        <ColumnDefinition Width="24" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Border Padding="10,4"
+                            Background="{StaticResource AppRailActiveBrush}"
+                            BorderBrush="{StaticResource AppRailActiveBorderBrush}"
+                            BorderThickness="1"
+                            CornerRadius="999">
+                        <TextBlock x:Name="SharedStatusSectionText"
+                                   Text="檔案管理"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   FontSize="12"
+                                   FontWeight="SemiBold" />
+                    </Border>
+
+                    <TextBlock x:Name="SharedStatusPrimaryText"
+                               Grid.Column="2"
+                               Text="準備就緒"
+                               Foreground="{StaticResource TextPrimaryBrush}"
+                               FontSize="13"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+
+                    <TextBlock x:Name="SharedStatusDetailText"
+                               Grid.Column="4"
+                               Text="Nuone Tools"
+                               Foreground="{StaticResource TextSecondaryBrush}"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               TextTrimming="CharacterEllipsis" />
+
+                    <Border x:Name="SharedStatusBackgroundBorder"
+                            Grid.Column="6"
+                            Padding="10,4"
+                            Background="{StaticResource PanelBrush}"
+                            BorderBrush="{StaticResource PanelStrokeBrush}"
+                            BorderThickness="1"
+                            CornerRadius="999">
+                        <StackPanel Orientation="Horizontal" Spacing="8">
+                            <TextBlock Text="背景工作"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="12"
+                                       VerticalAlignment="Center" />
+                            <TextBlock x:Name="SharedStatusBackgroundText"
+                                       Text="閒置"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Border>
+                </Grid>
+            </Border>
         </Grid>
     </Grid>
 </Window>

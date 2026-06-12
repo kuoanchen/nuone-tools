@@ -1,0 +1,137 @@
+param(
+    [string]$Profile = 'win-x64',
+    [string]$Configuration = 'Release',
+    [string]$PublishDir = '',
+    [string]$OutputDir = 'artifacts',
+    [string]$ZipName = ''
+)
+
+$ErrorActionPreference = 'Stop'
+
+function Resolve-ProjectValue {
+    param(
+        [xml]$ProjectXml,
+        [string]$Name
+    )
+
+    $propertyGroups = @($ProjectXml.Project.PropertyGroup)
+    foreach ($group in $propertyGroups) {
+        if ($null -ne $group.$Name -and -not [string]::IsNullOrWhiteSpace($group.$Name)) {
+            return [string]$group.$Name
+        }
+    }
+
+    return ''
+}
+
+function Expand-PublishPath {
+    param(
+        [string]$RawPath,
+        [hashtable]$Tokens
+    )
+
+    $expanded = $RawPath
+    foreach ($key in $Tokens.Keys) {
+        $expanded = $expanded.Replace('$(' + $key + ')', [string]$Tokens[$key])
+    }
+
+    return $expanded
+}
+
+$repoRoot = Split-Path -Parent $PSScriptRoot
+$projectPath = Join-Path $repoRoot 'nuone-tools.csproj'
+if (-not (Test-Path $projectPath)) {
+    throw "找不到專案檔：$projectPath"
+}
+
+[xml]$projectXml = Get-Content -Path $projectPath
+$version = Resolve-ProjectValue -ProjectXml $projectXml -Name 'Version'
+$targetFramework = Resolve-ProjectValue -ProjectXml $projectXml -Name 'TargetFramework'
+
+if ([string]::IsNullOrWhiteSpace($version)) {
+    throw '無法從 nuone-tools.csproj 讀取 Version。'
+}
+
+if ([string]::IsNullOrWhiteSpace($targetFramework)) {
+    throw '無法從 nuone-tools.csproj 讀取 TargetFramework。'
+}
+
+$profilePath = Join-Path $repoRoot ("Properties\PublishProfiles\{0}.pubxml" -f $Profile)
+if (-not (Test-Path $profilePath)) {
+    throw "找不到 publish profile：$profilePath"
+}
+
+[xml]$profileXml = Get-Content -Path $profilePath
+$runtimeIdentifier = Resolve-ProjectValue -ProjectXml $profileXml -Name 'RuntimeIdentifier'
+$profilePublishDir = Resolve-ProjectValue -ProjectXml $profileXml -Name 'PublishDir'
+
+if ([string]::IsNullOrWhiteSpace($runtimeIdentifier)) {
+    throw "無法從 $Profile 讀取 RuntimeIdentifier。"
+}
+
+$resolvedPublishDir = $PublishDir
+if ([string]::IsNullOrWhiteSpace($resolvedPublishDir)) {
+    $resolvedPublishDir = $profilePublishDir
+}
+
+if ([string]::IsNullOrWhiteSpace($resolvedPublishDir)) {
+    throw "無法從 $Profile 讀取 PublishDir。"
+}
+
+$resolvedPublishDir = Expand-PublishPath -RawPath $resolvedPublishDir -Tokens @{
+    Configuration = $Configuration
+    TargetFramework = $targetFramework
+    RuntimeIdentifier = $runtimeIdentifier
+}
+
+if (-not [System.IO.Path]::IsPathRooted($resolvedPublishDir)) {
+    $resolvedPublishDir = Join-Path $repoRoot $resolvedPublishDir
+}
+
+$resolvedPublishDir = [System.IO.Path]::GetFullPath($resolvedPublishDir)
+if (-not (Test-Path $resolvedPublishDir)) {
+    throw "Publish 目錄不存在：$resolvedPublishDir`n請先 publish，再執行這支腳本。"
+}
+
+$exePath = Join-Path $resolvedPublishDir 'nuone-tools.exe'
+if (-not (Test-Path $exePath)) {
+    Write-Warning "在 publish 目錄內找不到 nuone-tools.exe：$exePath"
+}
+
+$resolvedOutputDir = $OutputDir
+if (-not [System.IO.Path]::IsPathRooted($resolvedOutputDir)) {
+    $resolvedOutputDir = Join-Path $repoRoot $resolvedOutputDir
+}
+
+$resolvedOutputDir = [System.IO.Path]::GetFullPath($resolvedOutputDir)
+New-Item -ItemType Directory -Path $resolvedOutputDir -Force | Out-Null
+
+$archiveBaseName = if ([string]::IsNullOrWhiteSpace($ZipName)) {
+    "nuone-tools-$version-$runtimeIdentifier"
+} else {
+    $ZipName
+}
+
+$zipPath = Join-Path $resolvedOutputDir ($archiveBaseName + '.zip')
+$stagingRoot = Join-Path $resolvedOutputDir '.staging'
+$stagingDir = Join-Path $stagingRoot $archiveBaseName
+
+if (Test-Path $zipPath) {
+    Remove-Item -LiteralPath $zipPath -Force
+}
+
+if (Test-Path $stagingDir) {
+    Remove-Item -LiteralPath $stagingDir -Recurse -Force
+}
+
+New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
+Copy-Item -Path (Join-Path $resolvedPublishDir '*') -Destination $stagingDir -Recurse -Force
+
+Compress-Archive -Path $stagingDir -DestinationPath $zipPath -CompressionLevel Optimal
+Remove-Item -LiteralPath $stagingDir -Recurse -Force
+
+Write-Host "完成打包"
+Write-Host "Version      : $version"
+Write-Host "Runtime      : $runtimeIdentifier"
+Write-Host "PublishDir   : $resolvedPublishDir"
+Write-Host "Zip          : $zipPath"
