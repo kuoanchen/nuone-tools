@@ -1,5 +1,3 @@
-$ErrorActionPreference = 'Stop'
-
 param(
     [string]$Profile = 'win-x64',
     [string]$Configuration = 'Release',
@@ -7,6 +5,8 @@ param(
     [string]$OutputDir = 'artifacts',
     [string]$ZipName = ''
 )
+
+$ErrorActionPreference = 'Stop'
 
 function Resolve-ProjectValue {
     param(
