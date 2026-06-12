@@ -4,6 +4,10 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>nuone_tools</RootNamespace>
+    <Version>1.202606.1</Version>
+    <AssemblyVersion>1.2026.6.1</AssemblyVersion>
+    <FileVersion>1.2026.6.1</FileVersion>
+    <InformationalVersion>1.202606.1</InformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x86;x64;ARM64</Platforms>
