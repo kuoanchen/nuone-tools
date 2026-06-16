@@ -47,8 +47,43 @@ namespace nuone_tools
             ShowSelectedFileSizeToggle.IsOn = _editingShortcutSettings.ShowSelectedFileSize;
             ShowSelectedFolderSizeToggle.IsOn = _editingShortcutSettings.ShowSelectedFolderSize;
             SyncThemeModeSelection();
+            SyncDefaultTerminalShellSelection();
+            SyncDefaultTerminalWorkingDirectoryModeSelection();
+            DefaultTerminalCustomWorkingDirectoryTextBox.Text = _editingShortcutSettings.DefaultTerminalCustomWorkingDirectory;
+            UpdateDefaultTerminalCustomWorkingDirectoryVisibility();
+            UpdateFileBunkerSettingsUi();
             CaptureHintTextBlock.Text = "按「修改」後，再按下實體鍵，會立即套用。";
             _isUpdatingSettingsUi = false;
+        }
+
+        private void UpdateFileBunkerSettingsUi()
+        {
+            if (FileBunkerInputEndpointTextBox is null ||
+                FileBunkerOutputEndpointTextBox is null ||
+                FileBunkerClientIdTextBox is null ||
+                FileBunkerKeyLengthTextBox is null ||
+                FileBunkerDaysToExpirationTextBox is null ||
+                FileBunkerDaysToPurgeTextBox is null ||
+                FileBunkerApiKeyTextBox is null)
+            {
+                return;
+            }
+
+            _isUpdatingFileBunkerUi = true;
+            try
+            {
+                FileBunkerInputEndpointTextBox.Text = _fileBunkerSettings.InputEndpoint;
+                FileBunkerOutputEndpointTextBox.Text = _fileBunkerSettings.OutputEndpointBase;
+                FileBunkerClientIdTextBox.Text = _fileBunkerSettings.ClientId;
+                FileBunkerKeyLengthTextBox.Text = _fileBunkerSettings.KeyLength.ToString(CultureInfo.InvariantCulture);
+                FileBunkerDaysToExpirationTextBox.Text = _fileBunkerSettings.DaysToExpiration.ToString(CultureInfo.InvariantCulture);
+                FileBunkerDaysToPurgeTextBox.Text = _fileBunkerSettings.DaysToPurge.ToString(CultureInfo.InvariantCulture);
+                FileBunkerApiKeyTextBox.Text = _fileBunkerSettings.ApiKey;
+            }
+            finally
+            {
+                _isUpdatingFileBunkerUi = false;
+            }
         }
 
         private void SyncThemeModeSelection()
@@ -71,37 +106,85 @@ namespace nuone_tools
             ThemeModeComboBox.SelectedIndex = 0;
         }
 
-        private void ShowGeneralSettings_Click(object sender, RoutedEventArgs e)
+        private void SyncDefaultTerminalShellSelection()
+        {
+            if (DefaultTerminalShellComboBox is null)
+            {
+                return;
+            }
+
+            foreach (var item in DefaultTerminalShellComboBox.Items.OfType<ComboBoxItem>())
+            {
+                if (item.Tag is string tag
+                    && string.Equals(tag, _editingShortcutSettings.DefaultTerminalShellKind.ToString(), StringComparison.OrdinalIgnoreCase))
+                {
+                    DefaultTerminalShellComboBox.SelectedItem = item;
+                    return;
+                }
+            }
+
+            DefaultTerminalShellComboBox.SelectedIndex = 0;
+        }
+
+        private void SyncDefaultTerminalWorkingDirectoryModeSelection()
+        {
+            if (DefaultTerminalWorkingDirectoryModeComboBox is null)
+            {
+                return;
+            }
+
+            foreach (var item in DefaultTerminalWorkingDirectoryModeComboBox.Items.OfType<ComboBoxItem>())
+            {
+                if (item.Tag is string tag
+                    && string.Equals(tag, _editingShortcutSettings.DefaultTerminalWorkingDirectoryMode.ToString(), StringComparison.OrdinalIgnoreCase))
+                {
+                    DefaultTerminalWorkingDirectoryModeComboBox.SelectedItem = item;
+                    return;
+                }
+            }
+
+            DefaultTerminalWorkingDirectoryModeComboBox.SelectedIndex = 0;
+        }
+
+        private void UpdateDefaultTerminalCustomWorkingDirectoryVisibility()
+        {
+            if (DefaultTerminalCustomWorkingDirectoryTextBox is null)
+            {
+                return;
+            }
+
+            DefaultTerminalCustomWorkingDirectoryTextBox.Visibility =
+                _editingShortcutSettings.DefaultTerminalWorkingDirectoryMode == ToolbarWorkingDirectoryMode.CustomPath
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+        }
+
+        internal void ShowGeneralSettings_Click(object sender, RoutedEventArgs e)
         {
             SwitchToSettingsSection(SettingsSection.General);
         }
 
-        private void ShowAppearanceSettings_Click(object sender, RoutedEventArgs e)
+        internal void ShowAppearanceSettings_Click(object sender, RoutedEventArgs e)
         {
             SwitchToSettingsSection(SettingsSection.Appearance);
         }
 
-        private void ShowAccountSettings_Click(object sender, RoutedEventArgs e)
+        internal void ShowAccountSettings_Click(object sender, RoutedEventArgs e)
         {
             SwitchToSettingsSection(SettingsSection.Account);
         }
 
-        private void ShowShortcutSettings_Click(object sender, RoutedEventArgs e)
+        internal void ShowShortcutSettings_Click(object sender, RoutedEventArgs e)
         {
             SwitchToSettingsSection(SettingsSection.Shortcuts);
         }
 
-        private void ShowToolbarSettings_Click(object sender, RoutedEventArgs e)
+        internal void ShowToolbarSettings_Click(object sender, RoutedEventArgs e)
         {
             SwitchToSettingsSection(SettingsSection.Toolbar);
         }
 
-        private void ShowAutoExtractSettings_Click(object sender, RoutedEventArgs e)
-        {
-            SwitchToSettingsSection(SettingsSection.AutoExtract);
-        }
-
-        private async void AddToolbarCommand_Click(object sender, RoutedEventArgs e)
+        internal async void AddToolbarCommand_Click(object sender, RoutedEventArgs e)
         {
             var item = await ShowToolbarCommandEditorAsync(null);
             if (item is null)
@@ -113,7 +196,7 @@ namespace nuone_tools
             SaveToolbarCommandsSafe();
         }
 
-        private async void EditToolbarCommand_Click(object sender, RoutedEventArgs e)
+        internal async void EditToolbarCommand_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not FrameworkElement { Tag: ToolbarCommandItem item })
             {
@@ -130,10 +213,18 @@ namespace nuone_tools
             item.Command = editedItem.Command;
             item.IconPath = editedItem.IconPath;
             item.IconGlyph = editedItem.IconGlyph;
+            item.NodeDockerUser = editedItem.NodeDockerUser;
+            item.NodeDockerHost = editedItem.NodeDockerHost;
+            item.NodeDockerRemoteDirectory = editedItem.NodeDockerRemoteDirectory;
+            item.NodeDockerLaunchMode = editedItem.NodeDockerLaunchMode;
+            item.TerminalShellKind = editedItem.TerminalShellKind;
+            item.TerminalWorkingDirectoryMode = editedItem.TerminalWorkingDirectoryMode;
+            item.TerminalCustomWorkingDirectory = editedItem.TerminalCustomWorkingDirectory;
+            item.TerminalLaunchArguments = editedItem.TerminalLaunchArguments;
             SaveToolbarCommandsSafe();
         }
 
-        private async void DeleteToolbarCommand_Click(object sender, RoutedEventArgs e)
+        internal async void DeleteToolbarCommand_Click(object sender, RoutedEventArgs e)
         {
             if (sender is not FrameworkElement { Tag: ToolbarCommandItem item })
             {
@@ -150,7 +241,7 @@ namespace nuone_tools
             SaveToolbarCommandsSafe();
         }
 
-        private void ToolbarCommandsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+        internal void ToolbarCommandsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
         {
             SyncToolbarCommandsOrder(sender);
             SaveToolbarCommandsSafe();
@@ -166,7 +257,7 @@ namespace nuone_tools
             await ExecuteToolbarCommandAsync(item);
         }
 
-        private async void TopToolbarListView_ItemClick(object sender, ItemClickEventArgs e)
+        internal async void TopToolbarListView_ItemClick(object sender, ItemClickEventArgs e)
         {
             if (e.ClickedItem is not ToolbarCommandItem item)
             {
@@ -176,7 +267,7 @@ namespace nuone_tools
             await ExecuteToolbarCommandAsync(item);
         }
 
-        private void ToolbarItem_PointerEntered(object sender, PointerRoutedEventArgs e)
+        internal void ToolbarItem_PointerEntered(object sender, PointerRoutedEventArgs e)
         {
             if (sender is Border border)
             {
@@ -185,7 +276,7 @@ namespace nuone_tools
             }
         }
 
-        private void ToolbarItem_PointerExited(object sender, PointerRoutedEventArgs e)
+        internal void ToolbarItem_PointerExited(object sender, PointerRoutedEventArgs e)
         {
             if (sender is Border border)
             {
@@ -194,7 +285,7 @@ namespace nuone_tools
             }
         }
 
-        private async void ToolbarIconPresenter_Loaded(object sender, RoutedEventArgs e)
+        internal async void ToolbarIconPresenter_Loaded(object sender, RoutedEventArgs e)
         {
             if (sender is not Grid { Tag: ToolbarCommandItem item } presenter ||
                 presenter.Children.Count < 2 ||
@@ -207,7 +298,7 @@ namespace nuone_tools
             await UpdateToolbarIconVisualAsync(image, fontIcon, item.IconPath, item.DisplayGlyph);
         }
 
-        private void ToolbarIconSummary_Loaded(object sender, RoutedEventArgs e)
+        internal void ToolbarIconSummary_Loaded(object sender, RoutedEventArgs e)
         {
             if (sender is not TextBlock { Tag: ToolbarCommandItem item } textBlock)
             {
@@ -279,21 +370,18 @@ namespace nuone_tools
             var isAppearance = _activeSettingsSection == SettingsSection.Appearance;
             var isShortcuts = _activeSettingsSection == SettingsSection.Shortcuts;
             var isToolbar = _activeSettingsSection == SettingsSection.Toolbar;
-            var isAutoExtract = _activeSettingsSection == SettingsSection.AutoExtract;
 
             GeneralSettingsContent.Visibility = isGeneral ? Visibility.Visible : Visibility.Collapsed;
             AccountSettingsContent.Visibility = isAccount ? Visibility.Visible : Visibility.Collapsed;
             AppearanceSettingsContent.Visibility = isAppearance ? Visibility.Visible : Visibility.Collapsed;
             ShortcutSettingsContent.Visibility = isShortcuts ? Visibility.Visible : Visibility.Collapsed;
             ToolbarSettingsContent.Visibility = isToolbar ? Visibility.Visible : Visibility.Collapsed;
-            AutoExtractSettingsContent.Visibility = isAutoExtract ? Visibility.Visible : Visibility.Collapsed;
 
             ApplySettingsNavState(GeneralSettingsNavBorder, GeneralSettingsNavText, isGeneral);
             ApplySettingsNavState(AccountSettingsNavBorder, AccountSettingsNavText, isAccount);
             ApplySettingsNavState(AppearanceSettingsNavBorder, AppearanceSettingsNavText, isAppearance);
             ApplySettingsNavState(ShortcutSettingsNavBorder, ShortcutSettingsNavText, isShortcuts);
             ApplySettingsNavState(ToolbarSettingsNavBorder, ToolbarSettingsNavText, isToolbar);
-            ApplySettingsNavState(AutoExtractSettingsNavBorder, AutoExtractSettingsNavText, isAutoExtract);
 
             SettingsPageTitle.Text = _activeSettingsSection switch
             {
@@ -301,7 +389,6 @@ namespace nuone_tools
                 SettingsSection.Appearance => "外觀",
                 SettingsSection.Shortcuts => "快捷鍵",
                 SettingsSection.Toolbar => "工具列",
-                SettingsSection.AutoExtract => "自動解壓",
                 _ => "一般",
             };
 
@@ -311,8 +398,7 @@ namespace nuone_tools
                 SettingsSection.Appearance => "調整 Nuone Tools 的視覺偏好。變更後會立即儲存到本機 config。",
                 SettingsSection.Shortcuts => "設定常用鍵盤快捷鍵。變更後會立即儲存到本機 config。",
                 SettingsSection.Toolbar => "管理上方工具列按鈕。變更後會立即儲存到本機 config。",
-                SettingsSection.AutoExtract => "監看指定目錄中的壓縮檔，依密碼清單自動嘗試解壓。變更後會立即儲存到本機 config。",
-                _ => "設定檔案管理和常用鍵盤快捷鍵。變更後會立即儲存到本機 config。",
+                _ => "設定檔案顯示、內建終端機預設與常用鍵盤快捷鍵。變更後會立即儲存到本機 config。",
             };
         }
 
@@ -324,7 +410,7 @@ namespace nuone_tools
             }
         }
 
-        private void ThemeModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        internal void ThemeModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             if (_isUpdatingSettingsUi || ThemeModeComboBox.SelectedItem is not ComboBoxItem { Tag: string tag })
             {
@@ -394,7 +480,7 @@ namespace nuone_tools
             SetBrushColor("SuccessBrush", "#74D89B");
             SetBrushColor("WarningBrush", "#D09A00");
 
-            if (RootLayout.Resources.TryGetValue("AppBackgroundBrush", out var appBackgroundResource)
+            if (TryGetAppResource("AppBackgroundBrush", out var appBackgroundResource)
                 && appBackgroundResource is SolidColorBrush appBackgroundBrush)
             {
                 RootLayout.Background = appBackgroundBrush;
@@ -412,10 +498,35 @@ namespace nuone_tools
 
         private void SetBrushColor(string resourceKey, string colorHex)
         {
-            if (RootLayout.Resources.TryGetValue(resourceKey, out var resource) && resource is SolidColorBrush brush)
+            if (TryGetAppResource(resourceKey, out var resource) && resource is SolidColorBrush brush)
             {
                 brush.Color = ParseColor(colorHex);
             }
+        }
+
+        private bool TryGetAppResource(string resourceKey, out object? resource)
+        {
+            if (RootLayout.Resources.TryGetValue(resourceKey, out resource))
+            {
+                return true;
+            }
+
+            var appResources = Application.Current.Resources;
+            if (appResources.TryGetValue(resourceKey, out resource))
+            {
+                return true;
+            }
+
+            for (var index = appResources.MergedDictionaries.Count - 1; index >= 0; index--)
+            {
+                if (appResources.MergedDictionaries[index].TryGetValue(resourceKey, out resource))
+                {
+                    return true;
+                }
+            }
+
+            resource = null;
+            return false;
         }
 
         private void ApplyThemeToDialog(ContentDialog dialog)
@@ -429,7 +540,7 @@ namespace nuone_tools
 
         private Windows.UI.Color GetBrushColor(string resourceKey, string fallbackHex)
         {
-            if (RootLayout.Resources.TryGetValue(resourceKey, out var resource) && resource is SolidColorBrush brush)
+            if (TryGetAppResource(resourceKey, out var resource) && resource is SolidColorBrush brush)
             {
                 return brush.Color;
             }
@@ -476,27 +587,27 @@ namespace nuone_tools
                 : Microsoft.UI.Text.FontWeights.Normal;
         }
 
-        private void EditCopyShortcut_Click(object sender, RoutedEventArgs e)
+        internal void EditCopyShortcut_Click(object sender, RoutedEventArgs e)
         {
             BeginShortcutCapture(ShortcutCaptureTarget.CopyToOtherPane, CopyShortcutTextBox, "複製到另一個 Pane");
         }
 
-        private void EditMoveShortcut_Click(object sender, RoutedEventArgs e)
+        internal void EditMoveShortcut_Click(object sender, RoutedEventArgs e)
         {
             BeginShortcutCapture(ShortcutCaptureTarget.MoveToOtherPane, MoveShortcutTextBox, "移動到另一個 Pane");
         }
 
-        private void EditNavigateUpShortcut_Click(object sender, RoutedEventArgs e)
+        internal void EditNavigateUpShortcut_Click(object sender, RoutedEventArgs e)
         {
             BeginShortcutCapture(ShortcutCaptureTarget.NavigateUp, NavigateUpShortcutTextBox, "上一層");
         }
 
-        private void EditCreateFolderShortcut_Click(object sender, RoutedEventArgs e)
+        internal void EditCreateFolderShortcut_Click(object sender, RoutedEventArgs e)
         {
             BeginShortcutCapture(ShortcutCaptureTarget.CreateFolder, CreateFolderShortcutTextBox, "新增資料夾");
         }
 
-        private void EditDeleteShortcut_Click(object sender, RoutedEventArgs e)
+        internal void EditDeleteShortcut_Click(object sender, RoutedEventArgs e)
         {
             BeginShortcutCapture(ShortcutCaptureTarget.Delete, DeleteShortcutTextBox, "刪除");
         }
@@ -509,7 +620,7 @@ namespace nuone_tools
             _ = RootLayout.Focus(FocusState.Programmatic);
         }
 
-        private void ShowHiddenSystemItemsToggle_Toggled(object sender, RoutedEventArgs e)
+        internal void ShowHiddenSystemItemsToggle_Toggled(object sender, RoutedEventArgs e)
         {
             if (_isUpdatingSettingsUi || ShowHiddenSystemItemsToggle is null)
             {
@@ -525,7 +636,7 @@ namespace nuone_tools
             CaptureHintTextBlock.Text = "已立即儲存顯示設定。";
         }
 
-        private void ShowSelectedFileSizeToggle_Toggled(object sender, RoutedEventArgs e)
+        internal void ShowSelectedFileSizeToggle_Toggled(object sender, RoutedEventArgs e)
         {
             if (_isUpdatingSettingsUi || ShowSelectedFileSizeToggle is null)
             {
@@ -539,7 +650,7 @@ namespace nuone_tools
             CaptureHintTextBlock.Text = "已立即儲存檔案大小顯示設定。";
         }
 
-        private void ShowSelectedFolderSizeToggle_Toggled(object sender, RoutedEventArgs e)
+        internal void ShowSelectedFolderSizeToggle_Toggled(object sender, RoutedEventArgs e)
         {
             if (_isUpdatingSettingsUi || ShowSelectedFolderSizeToggle is null)
             {
@@ -553,7 +664,144 @@ namespace nuone_tools
             CaptureHintTextBlock.Text = "已立即儲存資料夾大小顯示設定。";
         }
 
-        private void AccountApiUrlTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        internal void DefaultTerminalShellComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isUpdatingSettingsUi || DefaultTerminalShellComboBox.SelectedItem is not ComboBoxItem { Tag: string tag })
+            {
+                return;
+            }
+
+            if (!Enum.TryParse<TerminalShellKind>(tag, ignoreCase: true, out var shellKind))
+            {
+                return;
+            }
+
+            _editingShortcutSettings.DefaultTerminalShellKind = shellKind;
+            _shortcutSettings.DefaultTerminalShellKind = shellKind;
+            SaveShortcutSettingsSafe();
+            CaptureHintTextBlock.Text = "已立即儲存內建終端機預設 shell。";
+        }
+
+        internal void DefaultTerminalWorkingDirectoryModeComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        {
+            if (_isUpdatingSettingsUi || DefaultTerminalWorkingDirectoryModeComboBox.SelectedItem is not ComboBoxItem { Tag: string tag })
+            {
+                return;
+            }
+
+            if (!Enum.TryParse<ToolbarWorkingDirectoryMode>(tag, ignoreCase: true, out var workingDirectoryMode))
+            {
+                return;
+            }
+
+            _editingShortcutSettings.DefaultTerminalWorkingDirectoryMode = workingDirectoryMode;
+            _shortcutSettings.DefaultTerminalWorkingDirectoryMode = workingDirectoryMode;
+            UpdateDefaultTerminalCustomWorkingDirectoryVisibility();
+            SaveShortcutSettingsSafe();
+            CaptureHintTextBlock.Text = "已立即儲存內建終端機預設工作目錄。";
+        }
+
+        internal void DefaultTerminalCustomWorkingDirectoryTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingSettingsUi || DefaultTerminalCustomWorkingDirectoryTextBox is null)
+            {
+                return;
+            }
+
+            var customPath = DefaultTerminalCustomWorkingDirectoryTextBox.Text.Trim();
+            _editingShortcutSettings.DefaultTerminalCustomWorkingDirectory = customPath;
+            _shortcutSettings.DefaultTerminalCustomWorkingDirectory = customPath;
+            SaveShortcutSettingsSafe();
+            CaptureHintTextBlock.Text = "已立即儲存內建終端機自訂工作目錄。";
+        }
+
+        internal void FileBunkerInputEndpointTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingFileBunkerUi || FileBunkerInputEndpointTextBox is null)
+            {
+                return;
+            }
+
+            _fileBunkerSettings.InputEndpoint = FileBunkerInputEndpointTextBox.Text.Trim();
+            SaveShortcutSettingsSafe();
+        }
+
+        internal void FileBunkerOutputEndpointTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingFileBunkerUi || FileBunkerOutputEndpointTextBox is null)
+            {
+                return;
+            }
+
+            _fileBunkerSettings.OutputEndpointBase = FileBunkerOutputEndpointTextBox.Text.Trim();
+            SaveShortcutSettingsSafe();
+        }
+
+        internal void FileBunkerClientIdTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingFileBunkerUi || FileBunkerClientIdTextBox is null)
+            {
+                return;
+            }
+
+            _fileBunkerSettings.ClientId = FileBunkerClientIdTextBox.Text.Trim();
+            SaveShortcutSettingsSafe();
+        }
+
+        internal void FileBunkerKeyLengthTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingFileBunkerUi || FileBunkerKeyLengthTextBox is null)
+            {
+                return;
+            }
+
+            if (int.TryParse(FileBunkerKeyLengthTextBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
+            {
+                _fileBunkerSettings.KeyLength = value;
+                SaveShortcutSettingsSafe();
+            }
+        }
+
+        internal void FileBunkerDaysToExpirationTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingFileBunkerUi || FileBunkerDaysToExpirationTextBox is null)
+            {
+                return;
+            }
+
+            if (int.TryParse(FileBunkerDaysToExpirationTextBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
+            {
+                _fileBunkerSettings.DaysToExpiration = value;
+                SaveShortcutSettingsSafe();
+            }
+        }
+
+        internal void FileBunkerDaysToPurgeTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingFileBunkerUi || FileBunkerDaysToPurgeTextBox is null)
+            {
+                return;
+            }
+
+            if (int.TryParse(FileBunkerDaysToPurgeTextBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var value) && value > 0)
+            {
+                _fileBunkerSettings.DaysToPurge = value;
+                SaveShortcutSettingsSafe();
+            }
+        }
+
+        internal void FileBunkerApiKeyTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingFileBunkerUi || FileBunkerApiKeyTextBox is null)
+            {
+                return;
+            }
+
+            _fileBunkerSettings.ApiKey = FileBunkerApiKeyTextBox.Text.Trim();
+            SaveShortcutSettingsSafe();
+        }
+
+        internal void AccountApiUrlTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (_isUpdatingAccountUi || AccountApiUrlTextBox is null)
             {
@@ -564,7 +812,7 @@ namespace nuone_tools
             SaveShortcutSettingsSafe();
         }
 
-        private void AccountEmailTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        internal void AccountEmailTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (_isUpdatingAccountUi || AccountEmailTextBox is null)
             {
@@ -575,7 +823,7 @@ namespace nuone_tools
             SaveShortcutSettingsSafe();
         }
 
-        private async void LoginAccountButton_Click(object sender, RoutedEventArgs e)
+        internal async void LoginAccountButton_Click(object sender, RoutedEventArgs e)
         {
             if (_isAccountLoginRunning)
             {
@@ -648,7 +896,7 @@ namespace nuone_tools
             }
         }
 
-        private void ClearAccountSessionButton_Click(object sender, RoutedEventArgs e)
+        internal void ClearAccountSessionButton_Click(object sender, RoutedEventArgs e)
         {
             _accountSettings.Token = string.Empty;
             _accountSettings.UserDisplayName = string.Empty;
@@ -690,12 +938,12 @@ namespace nuone_tools
             SwitchToAppSection(AppSection.FileManager);
         }
 
-        private void CustomGroupsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+        internal void CustomGroupsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
         {
             SaveCustomGroupsSafe();
         }
 
-        private void GroupedPathsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
+        internal void GroupedPathsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
         {
             SaveCustomGroupsSafe();
         }
@@ -741,6 +989,9 @@ namespace nuone_tools
                 ShowSelectedFileSize = source.ShowSelectedFileSize,
                 ShowSelectedFolderSize = source.ShowSelectedFolderSize,
                 ShowHiddenSystemItems = source.ShowHiddenSystemItems,
+                DefaultTerminalShellKind = source.DefaultTerminalShellKind,
+                DefaultTerminalWorkingDirectoryMode = source.DefaultTerminalWorkingDirectoryMode,
+                DefaultTerminalCustomWorkingDirectory = source.DefaultTerminalCustomWorkingDirectory,
             };
         }
     }

@@ -112,7 +112,7 @@ namespace nuone_tools
 
         private void Watcher_Changed(object sender, FileSystemEventArgs e)
         {
-            if (!MainWindow.IsSupportedArchivePath(e.FullPath))
+            if (!MainWindow.IsAutoExtractPathAllowed(_profile, e.FullPath))
             {
                 return;
             }
@@ -122,7 +122,7 @@ namespace nuone_tools
 
         private void Watcher_Renamed(object sender, RenamedEventArgs e)
         {
-            if (!MainWindow.IsSupportedArchivePath(e.FullPath))
+            if (!MainWindow.IsAutoExtractPathAllowed(_profile, e.FullPath))
             {
                 return;
             }

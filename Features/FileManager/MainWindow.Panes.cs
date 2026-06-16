@@ -418,7 +418,7 @@ namespace nuone_tools
             }
         }
 
-        private void RefreshAll_Click(object sender, RoutedEventArgs e)
+        internal void RefreshAll_Click(object sender, RoutedEventArgs e)
         {
             RefreshPane(LeftPane);
             RefreshPane(RightPane);
@@ -460,7 +460,7 @@ namespace nuone_tools
             NavigateBack(RightPane);
         }
 
-        private async void LeftPathBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        internal async void LeftPathBox_KeyDown(object sender, KeyRoutedEventArgs e)
         {
             if (e.Key == Windows.System.VirtualKey.Enter)
             {
@@ -469,7 +469,7 @@ namespace nuone_tools
             }
         }
 
-        private async void RightPathBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        internal async void RightPathBox_KeyDown(object sender, KeyRoutedEventArgs e)
         {
             if (e.Key == Windows.System.VirtualKey.Enter)
             {
@@ -478,51 +478,51 @@ namespace nuone_tools
             }
         }
 
-        private void LeftPathTextBox_GotFocus(object sender, RoutedEventArgs e)
+        internal void LeftPathTextBox_GotFocus(object sender, RoutedEventArgs e)
         {
             ActivatePane(LeftPane);
         }
 
-        private void RightPathTextBox_GotFocus(object sender, RoutedEventArgs e)
+        internal void RightPathTextBox_GotFocus(object sender, RoutedEventArgs e)
         {
             ActivatePane(RightPane);
         }
 
-        private void LeftPaneContainer_Tapped(object sender, TappedRoutedEventArgs e)
+        internal void LeftPaneContainer_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
         }
 
-        private void RightPaneContainer_Tapped(object sender, TappedRoutedEventArgs e)
+        internal void RightPaneContainer_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(RightPane);
         }
 
-        private void LeftPaneList_Tapped(object sender, TappedRoutedEventArgs e)
+        internal void LeftPaneList_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
         }
 
-        private void LeftPaneList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        internal void LeftPaneList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             SyncPaneSelectionFromListView(LeftPane, LeftPaneListView);
             ApplySelectionVisuals(LeftPaneListView);
             ScheduleSelectionSizeUpdate(LeftPane);
         }
 
-        private void RightPaneList_Tapped(object sender, TappedRoutedEventArgs e)
+        internal void RightPaneList_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(RightPane);
         }
 
-        private void RightPaneList_SelectionChanged(object sender, SelectionChangedEventArgs e)
+        internal void RightPaneList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
             SyncPaneSelectionFromListView(RightPane, RightPaneListView);
             ApplySelectionVisuals(RightPaneListView);
             ScheduleSelectionSizeUpdate(RightPane);
         }
 
-        private void PaneListView_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
+        internal void PaneListView_ContainerContentChanging(ListViewBase sender, ContainerContentChangingEventArgs args)
         {
             if (args.ItemContainer is ListViewItem listViewItem)
             {
@@ -530,7 +530,7 @@ namespace nuone_tools
             }
         }
 
-        private void ClearPaneFilter_Click(object sender, RoutedEventArgs e)
+        internal void ClearPaneFilter_Click(object sender, RoutedEventArgs e)
         {
             if (sender is FrameworkElement { Tag: PaneViewModel pane })
             {
@@ -539,7 +539,7 @@ namespace nuone_tools
             }
         }
 
-        private void DriveShortcut_Click(object sender, RoutedEventArgs e)
+        internal void DriveShortcut_Click(object sender, RoutedEventArgs e)
         {
             if (sender is Button { Tag: string path })
             {
@@ -547,7 +547,7 @@ namespace nuone_tools
             }
         }
 
-        private void DriveShortcut_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        internal void DriveShortcut_RightTapped(object sender, RightTappedRoutedEventArgs e)
         {
             if (sender is not FrameworkElement { DataContext: DriveShortcut drive } element)
             {
@@ -586,7 +586,7 @@ namespace nuone_tools
             UpdateDriveSectionMenuState();
         }
 
-        private void DriveRestoreFlyout_Opening(object sender, object e)
+        internal void DriveRestoreFlyout_Opening(object sender, object e)
         {
             if (sender is not MenuFlyout flyout)
             {

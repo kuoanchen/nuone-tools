@@ -1,0 +1,23 @@
+{
+  "id": "episode-number-only",
+  "name": "Episode Number Only",
+  "description": "Use the detected numeric segment from similar filenames and rename to number-only output while keeping the original extension.",
+  "format": "##",
+  "keepExtension": true,
+  "forceExtension": "",
+  "numberDetection": {
+    "mode": "common-varying-segment",
+    "requireSequential": true,
+    "minimumDigits": 2
+  },
+  "example": {
+    "input": [
+      "The.First.Jasmine.2026.S01E11.2160p.WEB-DL.H265.mkv",
+      "The.First.Jasmine.2026.S01E12.2160p.WEB-DL.H265.mkv"
+    ],
+    "output": [
+      "11.mkv",
+      "12.mkv"
+    ]
+  }
+}

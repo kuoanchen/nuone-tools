@@ -1,0 +1,735 @@
+<?xml version="1.0" encoding="utf-8"?>
+<UserControl
+    x:Class="nuone_tools.Views.FileManagerView"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:nuone_tools">
+    <Grid>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="290" />
+            <ColumnDefinition Width="*" />
+        </Grid.ColumnDefinitions>
+
+        <Border Grid.Column="0"
+                Margin="14,14,14,14"
+                Padding="16"
+                Background="{StaticResource PanelAltBrush}"
+                BorderBrush="{StaticResource PanelStrokeBrush}"
+                BorderThickness="1"
+                CornerRadius="22">
+            <Grid RowDefinitions="Auto,*">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <StackPanel Spacing="4">
+                        <TextBlock Text="Nuone Tools"
+                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                   FontSize="26"
+                                   FontWeight="SemiBold" />
+                        <TextBlock Text="Nuone工具"
+                                   Style="{StaticResource SectionTitleStyle}" />
+                    </StackPanel>
+
+                    <Button Grid.Column="1"
+                            Click="RefreshAll_Click"
+                            Style="{StaticResource GhostButtonStyle}">
+                        <FontIcon Glyph="&#xE72C;" />
+                    </Button>
+                </Grid>
+
+                <ScrollViewer Grid.Row="1"
+                              Margin="0,20,0,0"
+                              VerticalScrollBarVisibility="Auto"
+                              HorizontalScrollBarVisibility="Disabled">
+                    <StackPanel Spacing="18">
+                        <Border Padding="10"
+                                Background="{StaticResource CardBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="10">
+                            <StackPanel Spacing="8">
+                                <Grid>
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="磁碟機" Style="{StaticResource SectionTitleStyle}" />
+                                    <Button Grid.Column="1"
+                                            x:Name="DriveSectionMenuButton"
+                                            Style="{StaticResource GhostButtonStyle}">
+                                        <FontIcon Glyph="&#xE712;" />
+                                        <Button.Flyout>
+                                            <MenuFlyout Opening="DriveRestoreFlyout_Opening" />
+                                        </Button.Flyout>
+                                    </Button>
+                                </Grid>
+                                <ItemsControl ItemsSource="{Binding Drives}">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate x:DataType="local:DriveShortcut">
+                                            <Button HorizontalAlignment="Stretch"
+                                                    Padding="0"
+                                                    Background="Transparent"
+                                                    BorderThickness="0"
+                                                    HorizontalContentAlignment="Stretch"
+                                                    Click="DriveShortcut_Click"
+                                                    RightTapped="DriveShortcut_RightTapped"
+                                                    Tag="{x:Bind RootPath}">
+                                                <Border HorizontalAlignment="Stretch"
+                                                        Margin="0,0,0,8"
+                                                        Padding="12"
+                                                        Background="{StaticResource CardBrush}"
+                                                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="10">
+                                                    <StackPanel Spacing="8">
+                                                        <Grid>
+                                                            <Grid.ColumnDefinitions>
+                                                                <ColumnDefinition Width="*" />
+                                                                <ColumnDefinition Width="Auto" />
+                                                            </Grid.ColumnDefinitions>
+                                                            <TextBlock Text="{x:Bind Name}"
+                                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                                       FontSize="14"
+                                                                       FontWeight="SemiBold" />
+                                                            <TextBlock Grid.Column="1"
+                                                                       Text="{x:Bind Summary}"
+                                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                                        </Grid>
+                                                        <ProgressBar Value="{x:Bind UsagePercent}"
+                                                                     Maximum="100"
+                                                                     Height="6"
+                                                                     Foreground="{StaticResource AccentBrush}"
+                                                                     Background="#3A3146" />
+                                                    </StackPanel>
+                                                </Border>
+                                            </Button>
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </StackPanel>
+                        </Border>
+
+                        <StackPanel Spacing="12">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <TextBlock Text="自訂分組" Style="{StaticResource SectionTitleStyle}" />
+                                <Button Grid.Column="1"
+                                        x:Name="AddGroupButton"
+                                        Click="ShowAddGroupEditor_Click"
+                                        Style="{StaticResource GhostButtonStyle}">
+                                    <StackPanel Orientation="Horizontal" Spacing="6">
+                                        <FontIcon Glyph="&#xE710;" />
+                                        <TextBlock Text="新增分組" />
+                                    </StackPanel>
+                                </Button>
+                            </Grid>
+
+                            <StackPanel x:Name="AddGroupEditor"
+                                        Visibility="Collapsed"
+                                        Spacing="8">
+                                <TextBox x:Name="NewGroupNameTextBox"
+                                         PlaceholderText="輸入分組名稱"
+                                         Background="{StaticResource InputBrush}"
+                                         BorderBrush="{StaticResource PanelStrokeBrush}"
+                                         Foreground="{StaticResource TextPrimaryBrush}"
+                                         KeyDown="NewGroupNameTextBox_KeyDown" />
+                                <Grid ColumnSpacing="8">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="*" />
+                                    </Grid.ColumnDefinitions>
+                                    <Button Grid.Column="0"
+                                            Click="ConfirmAddGroup_Click"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            Content="建立" />
+                                    <Button Grid.Column="1"
+                                            Click="CancelAddGroup_Click"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="取消" />
+                                </Grid>
+                            </StackPanel>
+
+                            <ListView x:Name="CustomGroupsListView"
+                                      ItemsSource="{Binding CustomGroups}"
+                                      CanDragItems="True"
+                                      CanReorderItems="True"
+                                      AllowDrop="True"
+                                      SelectionMode="None"
+                                      IsItemClickEnabled="False"
+                                      Background="Transparent"
+                                      BorderThickness="0"
+                                      ItemContainerStyle="{StaticResource GroupCardListViewItemStyle}"
+                                      DragItemsCompleted="CustomGroupsListView_DragItemsCompleted">
+                                <ListView.ItemTemplate>
+                                    <DataTemplate x:DataType="local:PathGroup">
+                                                <Border Margin="0,0,0,10"
+                                                        Padding="10"
+                                                        Background="{StaticResource CardBrush}"
+                                                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                        BorderThickness="1"
+                                                        CornerRadius="10">
+                                            <StackPanel Spacing="8">
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="*" />
+                                                        <ColumnDefinition Width="Auto" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                                               FontSize="14"
+                                                               FontWeight="SemiBold" />
+                                                    <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8">
+                                                        <Button Padding="0"
+                                                                Width="24"
+                                                                Height="24"
+                                                                MinHeight="24"
+                                                                Background="Transparent"
+                                                                BorderBrush="Transparent"
+                                                                BorderThickness="0"
+                                                                CornerRadius="6">
+                                                            <FontIcon Glyph="&#xE712;" />
+                                                            <Button.Flyout>
+                                                                <MenuFlyout>
+                                                                    <MenuFlyoutItem Text="群組改名"
+                                                                                    Tag="{x:Bind}"
+                                                                                    Click="RenameGroup_Click" />
+                                                                    <MenuFlyoutItem Text="刪除分組"
+                                                                                    Tag="{x:Bind}"
+                                                                                    Click="DeleteGroup_Click" />
+                                                                    <MenuFlyoutSeparator />
+                                                                    <MenuFlyoutItem Text="加入目前路徑"
+                                                                                    Tag="{x:Bind}"
+                                                                                    Click="AddCurrentPathToGroup_Click" />
+                                                                </MenuFlyout>
+                                                            </Button.Flyout>
+                                                        </Button>
+                                                        <Button Padding="0"
+                                                                Width="24"
+                                                                Height="24"
+                                                                MinHeight="24"
+                                                                Background="Transparent"
+                                                                BorderBrush="Transparent"
+                                                                BorderThickness="0"
+                                                                CornerRadius="6"
+                                                                Click="AddCurrentPathToGroup_Click">
+                                                            <FontIcon Glyph="&#xE710;" />
+                                                        </Button>
+                                                    </StackPanel>
+                                                </Grid>
+
+                                                <ListView ItemsSource="{x:Bind Items}"
+                                                          CanDragItems="True"
+                                                          CanReorderItems="True"
+                                                          AllowDrop="True"
+                                                          SelectionMode="None"
+                                                          IsItemClickEnabled="False"
+                                                          Background="Transparent"
+                                                          BorderThickness="0"
+                                                          ItemContainerStyle="{StaticResource GroupCardListViewItemStyle}"
+                                                          DragItemsCompleted="GroupedPathsListView_DragItemsCompleted">
+                                                    <ListView.ItemTemplate>
+                                                        <DataTemplate x:DataType="local:GroupedPathItem">
+                                                            <Border HorizontalAlignment="Stretch"
+                                                                    Margin="0,0,0,2"
+                                                                    Padding="8,5"
+                                                                    Background="Transparent"
+                                                                    BorderBrush="Transparent"
+                                                                    BorderThickness="0"
+                                                                    CornerRadius="6"
+                                                                    PointerEntered="GroupedPathItem_PointerEntered"
+                                                                    PointerExited="GroupedPathItem_PointerExited"
+                                                                    Tapped="GroupedPath_Tapped">
+                                                                <Border.ContextFlyout>
+                                                                    <MenuFlyout>
+                                                                        <MenuFlyoutItem Text="開啟"
+                                                                                        Tag="{x:Bind}"
+                                                                                        Click="GroupedPathOpen_Click" />
+                                                                        <MenuFlyoutItem Text="更改別名"
+                                                                                        Tag="{x:Bind}"
+                                                                                        Click="RenameGroupedPathAlias_Click" />
+                                                                        <MenuFlyoutItem Text="從分組移除"
+                                                                                        Tag="{x:Bind}"
+                                                                                        Click="RemoveGroupedPath_Click" />
+                                                                    </MenuFlyout>
+                                                                </Border.ContextFlyout>
+                                                                <Grid>
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="Auto" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <FontIcon Glyph="&#xE8B7;"
+                                                                              Foreground="{StaticResource WarningBrush}"
+                                                                              Margin="0,0,8,0"
+                                                                              FontSize="13" />
+                                                                    <StackPanel Grid.Column="1" Spacing="2">
+                                                                        <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                                                   FontSize="13" />
+                                                                    </StackPanel>
+                                                                </Grid>
+                                                            </Border>
+                                                        </DataTemplate>
+                                                    </ListView.ItemTemplate>
+                                                </ListView>
+                                            </StackPanel>
+                                        </Border>
+                                    </DataTemplate>
+                                </ListView.ItemTemplate>
+                            </ListView>
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </Grid>
+        </Border>
+
+        <Grid Grid.Column="1" Margin="0,14,14,14" RowDefinitions="Auto,*">
+            <Grid Padding="0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="TopCommandBarBorder"
+                        Grid.Column="2"
+                        Padding="4,3"
+                        Background="{StaticResource CardBrush}"
+                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="16">
+                    <Border.ContextFlyout>
+                        <MenuFlyout>
+                            <MenuFlyoutItem Text="新增工具"
+                                            Click="AddToolbarCommand_Click">
+                                <MenuFlyoutItem.Icon>
+                                    <FontIcon Glyph="&#xE710;" />
+                                </MenuFlyoutItem.Icon>
+                            </MenuFlyoutItem>
+                        </MenuFlyout>
+                    </Border.ContextFlyout>
+
+                    <Grid HorizontalAlignment="Stretch">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+
+                        <ListView x:Name="TopToolbarListView"
+                                  ItemsSource="{Binding ToolbarCommands}"
+                                  CanDragItems="True"
+                                  CanReorderItems="True"
+                                  AllowDrop="True"
+                                  SelectionMode="None"
+                                  IsItemClickEnabled="True"
+                                  Padding="0"
+                                  Margin="0"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  HorizontalAlignment="Left"
+                                  HorizontalContentAlignment="Left"
+                                  ScrollViewer.HorizontalScrollBarVisibility="Auto"
+                                  ScrollViewer.HorizontalScrollMode="Enabled"
+                                  ScrollViewer.VerticalScrollBarVisibility="Hidden"
+                                  ScrollViewer.VerticalScrollMode="Disabled"
+                                  ItemClick="TopToolbarListView_ItemClick"
+                                  DragItemsCompleted="ToolbarCommandsListView_DragItemsCompleted">
+                            <ListView.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <ItemsStackPanel Orientation="Horizontal" />
+                                </ItemsPanelTemplate>
+                            </ListView.ItemsPanel>
+                            <ListView.ItemContainerStyle>
+                                <StaticResource ResourceKey="ToolbarListViewItemStyle" />
+                            </ListView.ItemContainerStyle>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:ToolbarCommandItem">
+                                    <Border Padding="3,1"
+                                            Background="Transparent"
+                                            BorderBrush="Transparent"
+                                            BorderThickness="1"
+                                            CornerRadius="6"
+                                            PointerEntered="ToolbarItem_PointerEntered"
+                                            PointerExited="ToolbarItem_PointerExited">
+                                        <Border.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="編輯"
+                                                                Tag="{x:Bind}"
+                                                                Click="EditToolbarCommand_Click" />
+                                                <MenuFlyoutItem Text="刪除"
+                                                                Tag="{x:Bind}"
+                                                                Click="DeleteToolbarCommand_Click" />
+                                            </MenuFlyout>
+                                        </Border.ContextFlyout>
+                                        <StackPanel MinWidth="38"
+                                                    HorizontalAlignment="Center"
+                                                    Spacing="0">
+                                            <Grid Width="32"
+                                                  Height="30"
+                                                  Tag="{x:Bind}"
+                                                  Loaded="ToolbarIconPresenter_Loaded">
+                                                <Image Width="28"
+                                                       Height="28"
+                                                       HorizontalAlignment="Center"
+                                                       VerticalAlignment="Center"
+                                                       Stretch="Uniform"
+                                                       Visibility="Collapsed" />
+                                                <FontIcon Glyph="{x:Bind DisplayGlyph, Mode=OneWay}"
+                                                          FontSize="24"
+                                                          Foreground="{StaticResource TextPrimaryBrush}"
+                                                          HorizontalAlignment="Center"
+                                                          VerticalAlignment="Center" />
+                                            </Grid>
+                                            <TextBlock Text="{x:Bind Title, Mode=OneWay}"
+                                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                                       FontSize="10"
+                                                       HorizontalAlignment="Center"
+                                                       TextAlignment="Center"
+                                                       TextTrimming="CharacterEllipsis"
+                                                       MaxWidth="62"
+                                                       Margin="0,-1,0,0" />
+                                        </StackPanel>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+            </Grid>
+
+            <Grid Grid.Row="1" Margin="0,14,0,0">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="14" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+
+                <Border x:Name="LeftPaneBorder"
+                        Grid.Column="0"
+                        Padding="14"
+                        Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="22"
+                        Tapped="LeftPaneContainer_Tapped">
+                    <Grid RowDefinitions="Auto,Auto,*">
+                        <TextBox x:Name="LeftPathTextBox"
+                                 Text="{Binding LeftPane.EditablePath, Mode=TwoWay}"
+                                 KeyDown="LeftPathBox_KeyDown"
+                                 GotFocus="LeftPathTextBox_GotFocus"
+                                 Background="{StaticResource InputBrush}"
+                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 FontSize="16"
+                                 FontWeight="SemiBold"
+                                 CornerRadius="12"
+                                 Padding="12,10" />
+
+                        <Grid Grid.Row="1"
+                              DataContext="{Binding LeftPane}"
+                              Margin="0,14,0,0"
+                              Visibility="{Binding FilterVisibility}">
+                            <Border Padding="12,10"
+                                    Background="{StaticResource AccentSoftBrush}"
+                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="12">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding FilterModeText}"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="1"
+                                            Tag="{Binding LeftPane}"
+                                            Click="ClearPaneFilter_Click"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Padding="8,4"
+                                            MinHeight="30"
+                                            Content="✕" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <ListView x:Name="LeftPaneListView"
+                                  Grid.Row="2"
+                                  Margin="0,14,0,0"
+                                  ItemsSource="{Binding LeftPane.Items}"
+                                  ItemContainerStyle="{StaticResource PaneListViewItemStyle}"
+                                  CanDragItems="True"
+                                  IsItemClickEnabled="False"
+                                  DragItemsStarting="LeftPaneList_DragItemsStarting"
+                                  ContainerContentChanging="PaneListView_ContainerContentChanging"
+                                  SelectionChanged="LeftPaneList_SelectionChanged"
+                                  DoubleTapped="LeftPaneList_DoubleTapped"
+                                  Tapped="LeftPaneList_Tapped"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  SelectionMode="Extended">
+                            <ListView.Header>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="名稱" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="1" Text="類型" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="2" Text="修改時間" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="3" Text="大小" Style="{StaticResource SectionTitleStyle}" />
+                                </Grid>
+                            </ListView.Header>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:FileEntry">
+                                    <Border Padding="10"
+                                            Background="{x:Bind ItemBackground, Mode=OneWay}"
+                                            BorderBrush="{x:Bind ItemBorderBrush, Mode=OneWay}"
+                                            BorderThickness="{x:Bind ItemBorderThickness, Mode=OneWay}"
+                                            CornerRadius="12"
+                                            Tapped="LeftPaneEntry_Tapped"
+                                            RightTapped="LeftPaneEntry_RightTapped">
+                                        <Border.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="開啟"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="OpenPath_Click" />
+                                                <MenuFlyoutItem Text="在另一側打開"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="OpenInRightPane_Click" />
+                                                <MenuFlyoutSeparator />
+                                                <MenuFlyoutItem Text="複製到另一側"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="CopyToRightPane_Click" />
+                                                <MenuFlyoutItem Text="搬移到另一側"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="MoveToRightPane_Click" />
+                                                <MenuFlyoutItem Text="重新命名"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="RenamePath_Click" />
+                                                <MenuFlyoutItem Text="刪除"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="DeletePath_Click" />
+                                                <MenuFlyoutItem Text="新增資料夾"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="CreateFolderLeft_Click" />
+                                                <MenuFlyoutSeparator />
+                                                <MenuFlyoutItem Text="複製路徑"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="CopyPath_Click" />
+                                            </MenuFlyout>
+                                        </Border.ContextFlyout>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="120" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Grid Width="20"
+                                                      Height="20"
+                                                      Loaded="FileEntryIconPresenter_Loaded">
+                                                    <Image Source="{x:Bind IconImageSource, Mode=OneWay}"
+                                                           Width="20"
+                                                           Height="20"
+                                                           Stretch="Uniform"
+                                                           Visibility="{x:Bind ImageIconVisibility, Mode=OneWay}" />
+                                                    <FontIcon Glyph="{x:Bind Glyph}"
+                                                              Foreground="{x:Bind AccentColor}"
+                                                              FontSize="16"
+                                                              Visibility="{x:Bind GlyphIconVisibility, Mode=OneWay}" />
+                                                </Grid>
+                                                <TextBlock Text="{x:Bind Name}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{x:Bind Kind}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{x:Bind ModifiedText}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="3"
+                                                       Text="{x:Bind SizeText}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+
+                <Border x:Name="RightPaneBorder"
+                        Grid.Column="2"
+                        Padding="14"
+                        Background="{StaticResource PanelBrush}"
+                        BorderBrush="{StaticResource PanelStrokeBrush}"
+                        BorderThickness="1"
+                        CornerRadius="22"
+                        Tapped="RightPaneContainer_Tapped">
+                    <Grid RowDefinitions="Auto,Auto,*">
+                        <TextBox x:Name="RightPathTextBox"
+                                 Text="{Binding RightPane.EditablePath, Mode=TwoWay}"
+                                 KeyDown="RightPathBox_KeyDown"
+                                 GotFocus="RightPathTextBox_GotFocus"
+                                 Background="{StaticResource InputBrush}"
+                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                 Foreground="{StaticResource TextPrimaryBrush}"
+                                 FontSize="16"
+                                 FontWeight="SemiBold"
+                                 CornerRadius="12"
+                                 Padding="12,10" />
+
+                        <Grid Grid.Row="1"
+                              DataContext="{Binding RightPane}"
+                              Margin="0,14,0,0"
+                              Visibility="{Binding FilterVisibility}">
+                            <Border Padding="12,10"
+                                    Background="{StaticResource AccentSoftBrush}"
+                                    BorderBrush="{StaticResource AccentBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="12">
+                                <Grid ColumnSpacing="12">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="{Binding FilterModeText}"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="14"
+                                               FontWeight="SemiBold"
+                                               VerticalAlignment="Center"
+                                               TextTrimming="CharacterEllipsis" />
+                                    <Button Grid.Column="1"
+                                            Tag="{Binding RightPane}"
+                                            Click="ClearPaneFilter_Click"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Padding="8,4"
+                                            MinHeight="30"
+                                            Content="✕" />
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <ListView x:Name="RightPaneListView"
+                                  Grid.Row="2"
+                                  Margin="0,14,0,0"
+                                  ItemsSource="{Binding RightPane.Items}"
+                                  ItemContainerStyle="{StaticResource PaneListViewItemStyle}"
+                                  CanDragItems="True"
+                                  IsItemClickEnabled="False"
+                                  DragItemsStarting="RightPaneList_DragItemsStarting"
+                                  ContainerContentChanging="PaneListView_ContainerContentChanging"
+                                  SelectionChanged="RightPaneList_SelectionChanged"
+                                  DoubleTapped="RightPaneList_DoubleTapped"
+                                  Tapped="RightPaneList_Tapped"
+                                  Background="Transparent"
+                                  BorderThickness="0"
+                                  SelectionMode="Extended">
+                            <ListView.Header>
+                                <Grid Margin="0,0,0,10">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="110" />
+                                        <ColumnDefinition Width="150" />
+                                        <ColumnDefinition Width="120" />
+                                    </Grid.ColumnDefinitions>
+                                    <TextBlock Text="名稱" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="1" Text="類型" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="2" Text="修改時間" Style="{StaticResource SectionTitleStyle}" />
+                                    <TextBlock Grid.Column="3" Text="大小" Style="{StaticResource SectionTitleStyle}" />
+                                </Grid>
+                            </ListView.Header>
+                            <ListView.ItemTemplate>
+                                <DataTemplate x:DataType="local:FileEntry">
+                                    <Border Padding="10"
+                                            Background="{x:Bind ItemBackground, Mode=OneWay}"
+                                            BorderBrush="{x:Bind ItemBorderBrush, Mode=OneWay}"
+                                            BorderThickness="{x:Bind ItemBorderThickness, Mode=OneWay}"
+                                            CornerRadius="12"
+                                            Tapped="RightPaneEntry_Tapped"
+                                            RightTapped="RightPaneEntry_RightTapped">
+                                        <Border.ContextFlyout>
+                                            <MenuFlyout>
+                                                <MenuFlyoutItem Text="開啟"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="OpenPath_Click" />
+                                                <MenuFlyoutItem Text="在另一側打開"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="OpenInLeftPane_Click" />
+                                                <MenuFlyoutSeparator />
+                                                <MenuFlyoutItem Text="複製到另一側"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="CopyToLeftPane_Click" />
+                                                <MenuFlyoutItem Text="搬移到另一側"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="MoveToLeftPane_Click" />
+                                                <MenuFlyoutItem Text="重新命名"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="RenamePath_Click" />
+                                                <MenuFlyoutItem Text="刪除"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="DeletePath_Click" />
+                                                <MenuFlyoutItem Text="新增資料夾"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="CreateFolderRight_Click" />
+                                                <MenuFlyoutSeparator />
+                                                <MenuFlyoutItem Text="複製路徑"
+                                                                Tag="{Binding FullPath}"
+                                                                Click="CopyPath_Click" />
+                                            </MenuFlyout>
+                                        </Border.ContextFlyout>
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="*" />
+                                                <ColumnDefinition Width="110" />
+                                                <ColumnDefinition Width="150" />
+                                                <ColumnDefinition Width="120" />
+                                            </Grid.ColumnDefinitions>
+                                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                                <Grid Width="20"
+                                                      Height="20"
+                                                      Loaded="FileEntryIconPresenter_Loaded">
+                                                    <Image Source="{x:Bind IconImageSource, Mode=OneWay}"
+                                                           Width="20"
+                                                           Height="20"
+                                                           Stretch="Uniform"
+                                                           Visibility="{x:Bind ImageIconVisibility, Mode=OneWay}" />
+                                                    <FontIcon Glyph="{x:Bind Glyph}"
+                                                              Foreground="{x:Bind AccentColor}"
+                                                              FontSize="16"
+                                                              Visibility="{x:Bind GlyphIconVisibility, Mode=OneWay}" />
+                                                </Grid>
+                                                <TextBlock Text="{x:Bind Name}"
+                                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                                           TextTrimming="CharacterEllipsis" />
+                                            </StackPanel>
+                                            <TextBlock Grid.Column="1"
+                                                       Text="{x:Bind Kind}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="2"
+                                                       Text="{x:Bind ModifiedText}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                            <TextBlock Grid.Column="3"
+                                                       Text="{x:Bind SizeText}"
+                                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ListView.ItemTemplate>
+                        </ListView>
+                    </Grid>
+                </Border>
+            </Grid>
+        </Grid>
+    </Grid>
+</UserControl>

@@ -73,4 +73,26 @@ namespace nuone_tools
 
         public string ServiceAccountsJson { get; set; } = string.Empty;
     }
+
+    public sealed class FileBunkerSettingsState
+    {
+        public string InputEndpoint { get; set; } = "https://filein.filebunker.com";
+
+        public string OutputEndpointBase { get; set; } = "https://out.filebunker.com";
+
+        public string ApiKey { get; set; } = string.Empty;
+
+        public int KeyLength { get; set; } = 64;
+
+        public string ClientId { get; set; } = string.Empty;
+
+        public int DaysToExpiration { get; set; } = 3650;
+
+        public int DaysToPurge { get; set; } = 20;
+
+        public static FileBunkerSettingsState CreateDefault()
+        {
+            return new FileBunkerSettingsState();
+        }
+    }
 }

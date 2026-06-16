@@ -109,6 +109,18 @@ namespace nuone_tools
                     document.RootElement,
                     "showSelectedFolderSize",
                     nameof(ShortcutSettingsConfig.ShowSelectedFolderSize));
+                var defaultTerminalShellKindProperty = ReadProperty(
+                    document.RootElement,
+                    "defaultTerminalShellKind",
+                    nameof(ShortcutSettingsConfig.DefaultTerminalShellKind));
+                var defaultTerminalWorkingDirectoryModeProperty = ReadProperty(
+                    document.RootElement,
+                    "defaultTerminalWorkingDirectoryMode",
+                    nameof(ShortcutSettingsConfig.DefaultTerminalWorkingDirectoryMode));
+                var defaultTerminalCustomWorkingDirectory = ReadStringSetting(
+                    document.RootElement,
+                    "defaultTerminalCustomWorkingDirectory",
+                    nameof(ShortcutSettingsConfig.DefaultTerminalCustomWorkingDirectory));
 
                 _shortcutSettings = new ShortcutSettings
                 {
@@ -121,6 +133,9 @@ namespace nuone_tools
                     ShowSelectedFileSize = ReadBooleanSetting(showSelectedFileSizeProperty, ShortcutSettings.DefaultShowSelectedFileSize),
                     ShowSelectedFolderSize = ReadBooleanSetting(showSelectedFolderSizeProperty, ShortcutSettings.DefaultShowSelectedFolderSize),
                     ShowHiddenSystemItems = ReadBooleanSetting(showHiddenSystemItemsProperty, ShortcutSettings.DefaultShowHiddenSystemItems),
+                    DefaultTerminalShellKind = ReadEnumSetting(defaultTerminalShellKindProperty, ShortcutSettings.DefaultTerminalShellKindValue),
+                    DefaultTerminalWorkingDirectoryMode = ReadEnumSetting(defaultTerminalWorkingDirectoryModeProperty, ShortcutSettings.DefaultTerminalWorkingDirectoryModeValue),
+                    DefaultTerminalCustomWorkingDirectory = defaultTerminalCustomWorkingDirectory,
                 };
             }
             catch
@@ -165,6 +180,40 @@ namespace nuone_tools
             catch
             {
                 _accountSettings = AccountSettingsState.CreateDefault();
+            }
+        }
+
+        private void LoadFileBunkerSettings()
+        {
+            _fileBunkerSettings = FileBunkerSettingsState.CreateDefault();
+
+            try
+            {
+                if (!File.Exists(SettingsConfigPath))
+                {
+                    return;
+                }
+
+                var settings = JsonSerializer.Deserialize<ShortcutSettingsConfig>(File.ReadAllText(SettingsConfigPath), JsonOptions);
+                if (settings?.FileBunker is null)
+                {
+                    return;
+                }
+
+                _fileBunkerSettings = new FileBunkerSettingsState
+                {
+                    InputEndpoint = settings.FileBunker.InputEndpoint?.Trim() ?? "https://filein.filebunker.com",
+                    OutputEndpointBase = settings.FileBunker.OutputEndpointBase?.Trim() ?? "https://out.filebunker.com",
+                    ApiKey = settings.FileBunker.ApiKey ?? string.Empty,
+                    KeyLength = settings.FileBunker.KeyLength <= 0 ? 64 : settings.FileBunker.KeyLength,
+                    ClientId = settings.FileBunker.ClientId?.Trim() ?? string.Empty,
+                    DaysToExpiration = settings.FileBunker.DaysToExpiration <= 0 ? 3650 : settings.FileBunker.DaysToExpiration,
+                    DaysToPurge = settings.FileBunker.DaysToPurge <= 0 ? 20 : settings.FileBunker.DaysToPurge,
+                };
+            }
+            catch
+            {
+                _fileBunkerSettings = FileBunkerSettingsState.CreateDefault();
             }
         }
 
@@ -236,12 +285,21 @@ namespace nuone_tools
                         Command = config.Command,
                         IconPath = config.IconPath,
                         IconGlyph = config.IconGlyph,
+                        NodeDockerUser = config.NodeDockerUser,
+                        NodeDockerHost = config.NodeDockerHost,
+                        NodeDockerRemoteDirectory = config.NodeDockerRemoteDirectory,
+                        NodeDockerLaunchMode = config.NodeDockerLaunchMode,
+                        TerminalShellKind = config.TerminalShellKind,
+                        TerminalWorkingDirectoryMode = config.TerminalWorkingDirectoryMode,
+                        TerminalCustomWorkingDirectory = config.TerminalCustomWorkingDirectory,
+                        TerminalLaunchArguments = config.TerminalLaunchArguments,
                     });
                 }
             }
             catch
             {
             }
+
         }
 
         private async Task ExecuteToolbarCommandAsync(ToolbarCommandItem item)
@@ -249,6 +307,12 @@ namespace nuone_tools
             if (string.IsNullOrWhiteSpace(item.Command))
             {
                 await ShowMessageAsync("無法執行工具列按鈕", "這個工具列按鈕尚未設定 command。");
+                return;
+            }
+
+            if (IsBuiltInToolbarCommand(item.Command))
+            {
+                await ExecuteBuiltInToolbarCommandAsync(item);
                 return;
             }
 
@@ -549,11 +613,15 @@ namespace nuone_tools
                 ShowSelectedFileSize = _shortcutSettings.ShowSelectedFileSize,
                 ShowSelectedFolderSize = _shortcutSettings.ShowSelectedFolderSize,
                 ShowHiddenSystemItems = _shortcutSettings.ShowHiddenSystemItems,
+                DefaultTerminalShellKind = _shortcutSettings.DefaultTerminalShellKind,
+                DefaultTerminalWorkingDirectoryMode = _shortcutSettings.DefaultTerminalWorkingDirectoryMode,
+                DefaultTerminalCustomWorkingDirectory = _shortcutSettings.DefaultTerminalCustomWorkingDirectory,
                 HiddenDrivePaths = _hiddenDrivePaths.OrderBy(static path => path, StringComparer.OrdinalIgnoreCase).ToList(),
                 LeftPanePath = LeftPane.CurrentPath,
                 RightPanePath = RightPane.CurrentPath,
                 WindowPlacement = BuildWindowPlacementConfig(),
                 Account = BuildAccountSettingsConfig(),
+                FileBunker = BuildFileBunkerSettingsConfig(),
                 ToolbarCommands = BuildToolbarCommandConfigs(),
                 BackupAutomations = BuildBackupAutomationConfigs(),
                 AutoExtractProfiles = BuildAutoExtractConfigs(),
@@ -591,6 +659,20 @@ namespace nuone_tools
             };
         }
 
+        private FileBunkerSettingsConfig BuildFileBunkerSettingsConfig()
+        {
+            return new FileBunkerSettingsConfig
+            {
+                InputEndpoint = _fileBunkerSettings.InputEndpoint,
+                OutputEndpointBase = _fileBunkerSettings.OutputEndpointBase,
+                ApiKey = _fileBunkerSettings.ApiKey,
+                KeyLength = Math.Max(1, _fileBunkerSettings.KeyLength),
+                ClientId = _fileBunkerSettings.ClientId,
+                DaysToExpiration = Math.Max(1, _fileBunkerSettings.DaysToExpiration),
+                DaysToPurge = Math.Max(1, _fileBunkerSettings.DaysToPurge),
+            };
+        }
+
         private List<ToolbarCommandConfig> BuildToolbarCommandConfigs()
         {
             return ToolbarCommands
@@ -601,6 +683,14 @@ namespace nuone_tools
                     Command = item.Command,
                     IconPath = item.IconPath,
                     IconGlyph = item.IconGlyph,
+                    NodeDockerUser = item.NodeDockerUser,
+                    NodeDockerHost = item.NodeDockerHost,
+                    NodeDockerRemoteDirectory = item.NodeDockerRemoteDirectory,
+                    NodeDockerLaunchMode = item.NodeDockerLaunchMode,
+                    TerminalShellKind = item.TerminalShellKind,
+                    TerminalWorkingDirectoryMode = item.TerminalWorkingDirectoryMode,
+                    TerminalCustomWorkingDirectory = item.TerminalCustomWorkingDirectory,
+                    TerminalLaunchArguments = item.TerminalLaunchArguments,
                 })
                 .ToList();
         }
@@ -629,10 +719,21 @@ namespace nuone_tools
                 {
                     Id = profile.Id,
                     Name = profile.Name,
+                    JobType = profile.JobType,
                     SourcePath = profile.SourcePath,
                     DestinationPath = profile.DestinationPath,
                     Mode = profile.Mode,
+                    MongoToolPath = profile.MongoToolPath,
+                    MongoConnectionString = profile.MongoConnectionString,
+                    MongoDatabaseName = profile.MongoDatabaseName,
+                    MongoUseGzip = profile.MongoUseGzip,
+                    MongoUseArchive = profile.MongoUseArchive,
+                    MongoRetentionCount = Math.Max(1, profile.MongoRetentionCount),
+                    ScheduleType = profile.ScheduleType,
                     IntervalMinutes = Math.Max(1, profile.IntervalMinutes),
+                    ScheduleTimeText = profile.ScheduleTimeText,
+                    WeeklyDaysMask = profile.WeeklyDaysMask,
+                    RunMissedOnStartup = profile.RunMissedOnStartup,
                     IsEnabled = profile.IsEnabled,
                     LastRunText = profile.LastRunText,
                     LastResultText = profile.LastResultText,
@@ -649,6 +750,7 @@ namespace nuone_tools
                     Name = profile.Name,
                     WatchPath = profile.WatchPath,
                     ExtractorPath = profile.ExtractorPath,
+                    ExtensionFilter = profile.ExtensionFilter,
                     Passwords = profile.Passwords
                         .Select(item => item.Value.Trim())
                         .Where(static value => !string.IsNullOrWhiteSpace(value))
@@ -889,6 +991,25 @@ namespace nuone_tools
                 && Enum.IsDefined(typeof(AppThemeMode), numericValue))
             {
                 return (AppThemeMode)numericValue;
+            }
+
+            return fallback;
+        }
+
+        private static TEnum ReadEnumSetting<TEnum>(JsonElement property, TEnum fallback)
+            where TEnum : struct, Enum
+        {
+            if (property.ValueKind == JsonValueKind.String
+                && Enum.TryParse<TEnum>(property.GetString(), true, out var enumValue))
+            {
+                return enumValue;
+            }
+
+            if (property.ValueKind == JsonValueKind.Number
+                && property.TryGetInt32(out var numericValue)
+                && Enum.IsDefined(typeof(TEnum), numericValue))
+            {
+                return (TEnum)Enum.ToObject(typeof(TEnum), numericValue);
             }
 
             return fallback;

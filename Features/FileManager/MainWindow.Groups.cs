@@ -37,24 +37,24 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
-        private void ShowAddGroupEditor_Click(object sender, RoutedEventArgs e)
+        internal void ShowAddGroupEditor_Click(object sender, RoutedEventArgs e)
         {
             AddGroupEditor.Visibility = Visibility.Visible;
             NewGroupNameTextBox.Text = string.Empty;
             _ = NewGroupNameTextBox.Focus(FocusState.Programmatic);
         }
 
-        private void CancelAddGroup_Click(object sender, RoutedEventArgs e)
+        internal void CancelAddGroup_Click(object sender, RoutedEventArgs e)
         {
             HideAddGroupEditor();
         }
 
-        private void ConfirmAddGroup_Click(object sender, RoutedEventArgs e)
+        internal void ConfirmAddGroup_Click(object sender, RoutedEventArgs e)
         {
             TryAddGroup();
         }
 
-        private void NewGroupNameTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
+        internal void NewGroupNameTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
         {
             if (e.Key == Windows.System.VirtualKey.Enter)
             {
@@ -63,7 +63,7 @@ namespace nuone_tools
             }
         }
 
-        private void AddCurrentPathToGroup_Click(object sender, RoutedEventArgs e)
+        internal void AddCurrentPathToGroup_Click(object sender, RoutedEventArgs e)
         {
             if (!TryGetPathGroup(sender, out var group))
             {
@@ -84,7 +84,7 @@ namespace nuone_tools
             }
         }
 
-        private void GroupedPath_Tapped(object sender, TappedRoutedEventArgs e)
+        internal void GroupedPath_Tapped(object sender, TappedRoutedEventArgs e)
         {
             if (sender is FrameworkElement { DataContext: GroupedPathItem item })
             {
@@ -93,7 +93,7 @@ namespace nuone_tools
             }
         }
 
-        private void GroupedPathItem_PointerEntered(object sender, PointerRoutedEventArgs e)
+        internal void GroupedPathItem_PointerEntered(object sender, PointerRoutedEventArgs e)
         {
             if (sender is Border border)
             {
@@ -102,7 +102,7 @@ namespace nuone_tools
             }
         }
 
-        private void GroupedPathItem_PointerExited(object sender, PointerRoutedEventArgs e)
+        internal void GroupedPathItem_PointerExited(object sender, PointerRoutedEventArgs e)
         {
             if (sender is Border border)
             {
@@ -111,7 +111,7 @@ namespace nuone_tools
             }
         }
 
-        private async void RenameGroup_Click(object sender, RoutedEventArgs e)
+        internal async void RenameGroup_Click(object sender, RoutedEventArgs e)
         {
             if (!TryGetPathGroup(sender, out var group))
             {
@@ -134,7 +134,7 @@ namespace nuone_tools
             SaveCustomGroupsSafe();
         }
 
-        private async void DeleteGroup_Click(object sender, RoutedEventArgs e)
+        internal async void DeleteGroup_Click(object sender, RoutedEventArgs e)
         {
             if (!TryGetPathGroup(sender, out var group))
             {
@@ -151,7 +151,7 @@ namespace nuone_tools
             SaveCustomGroupsSafe();
         }
 
-        private void GroupedPathOpen_Click(object sender, RoutedEventArgs e)
+        internal void GroupedPathOpen_Click(object sender, RoutedEventArgs e)
         {
             if (TryGetGroupedPathItem(sender, out var item))
             {
@@ -159,7 +159,7 @@ namespace nuone_tools
             }
         }
 
-        private async void RenameGroupedPathAlias_Click(object sender, RoutedEventArgs e)
+        internal async void RenameGroupedPathAlias_Click(object sender, RoutedEventArgs e)
         {
             if (!TryGetGroupedPathItem(sender, out var item))
             {
@@ -176,7 +176,7 @@ namespace nuone_tools
             SaveCustomGroupsSafe();
         }
 
-        private async void RemoveGroupedPath_Click(object sender, RoutedEventArgs e)
+        internal async void RemoveGroupedPath_Click(object sender, RoutedEventArgs e)
         {
             if (!TryGetGroupedPathItem(sender, out var item) || item.ParentGroup is null)
             {

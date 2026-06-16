@@ -75,6 +75,8 @@ namespace nuone_tools
         private static readonly Thickness UnselectedBorderThickness = new(1);
         private static readonly Thickness SelectedBorderThickness = new(1);
         private bool _isSelected;
+        private ImageSource? _iconImageSource;
+        private Task? _iconLoadTask;
 
         public string Name { get; set; } = string.Empty;
 
@@ -91,6 +93,27 @@ namespace nuone_tools
         public string Glyph { get; set; } = "\uE8B7";
 
         public SolidColorBrush AccentColor { get; set; } = new(Colors.Gold);
+
+        public ImageSource? IconImageSource
+        {
+            get => _iconImageSource;
+            private set
+            {
+                if (SetProperty(ref _iconImageSource, value))
+                {
+                    OnPropertyChanged(nameof(ImageIconVisibility));
+                    OnPropertyChanged(nameof(GlyphIconVisibility));
+                }
+            }
+        }
+
+        public Visibility ImageIconVisibility => IconImageSource is null
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        public Visibility GlyphIconVisibility => IconImageSource is null
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         public bool IsSelected
         {
@@ -161,6 +184,41 @@ namespace nuone_tools
                 Glyph = visual.Glyph,
                 AccentColor = visual.Brush,
             };
+        }
+
+        public Task EnsureShellIconAsync()
+        {
+            if (IsDirectory || string.IsNullOrWhiteSpace(FullPath))
+            {
+                return Task.CompletedTask;
+            }
+
+            return _iconLoadTask ??= LoadShellIconAsync();
+        }
+
+        private async Task LoadShellIconAsync()
+        {
+            try
+            {
+                var file = await StorageFile.GetFileFromPathAsync(FullPath);
+                using var thumbnail = await file.GetThumbnailAsync(
+                    ThumbnailMode.ListView,
+                    32,
+                    ThumbnailOptions.UseCurrentScale);
+
+                if (thumbnail is null || thumbnail.Size == 0)
+                {
+                    return;
+                }
+
+                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                await bitmap.SetSourceAsync(thumbnail);
+                IconImageSource = bitmap;
+            }
+            catch
+            {
+                // Keep the extension-based glyph when Windows cannot provide an icon.
+            }
         }
     }
 
@@ -278,6 +336,14 @@ namespace nuone_tools
         private string _command = string.Empty;
         private string _iconPath = string.Empty;
         private string _iconGlyph = DefaultGlyph;
+        private string _nodeDockerUser = string.Empty;
+        private string _nodeDockerHost = string.Empty;
+        private string _nodeDockerRemoteDirectory = string.Empty;
+        private NodeDockerLaunchMode _nodeDockerLaunchMode = NodeDockerLaunchMode.ExternalWindow;
+        private TerminalShellKind _terminalShellKind = TerminalShellKind.PowerShell;
+        private ToolbarWorkingDirectoryMode _terminalWorkingDirectoryMode = ToolbarWorkingDirectoryMode.ActivePane;
+        private string _terminalCustomWorkingDirectory = string.Empty;
+        private string _terminalLaunchArguments = string.Empty;
 
         public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -321,6 +387,54 @@ namespace nuone_tools
                     OnPropertyChanged(nameof(IconSummary));
                 }
             }
+        }
+
+        public string NodeDockerUser
+        {
+            get => _nodeDockerUser;
+            set => SetProperty(ref _nodeDockerUser, value);
+        }
+
+        public string NodeDockerHost
+        {
+            get => _nodeDockerHost;
+            set => SetProperty(ref _nodeDockerHost, value);
+        }
+
+        public string NodeDockerRemoteDirectory
+        {
+            get => _nodeDockerRemoteDirectory;
+            set => SetProperty(ref _nodeDockerRemoteDirectory, value);
+        }
+
+        public NodeDockerLaunchMode NodeDockerLaunchMode
+        {
+            get => _nodeDockerLaunchMode;
+            set => SetProperty(ref _nodeDockerLaunchMode, value);
+        }
+
+        public TerminalShellKind TerminalShellKind
+        {
+            get => _terminalShellKind;
+            set => SetProperty(ref _terminalShellKind, value);
+        }
+
+        public ToolbarWorkingDirectoryMode TerminalWorkingDirectoryMode
+        {
+            get => _terminalWorkingDirectoryMode;
+            set => SetProperty(ref _terminalWorkingDirectoryMode, value);
+        }
+
+        public string TerminalCustomWorkingDirectory
+        {
+            get => _terminalCustomWorkingDirectory;
+            set => SetProperty(ref _terminalCustomWorkingDirectory, value);
+        }
+
+        public string TerminalLaunchArguments
+        {
+            get => _terminalLaunchArguments;
+            set => SetProperty(ref _terminalLaunchArguments, value);
         }
 
         [JsonIgnore]
@@ -415,10 +529,15 @@ namespace nuone_tools
                 }
 
                 var file = await StorageFile.GetFileFromPathAsync(normalizedPath);
-                using StorageItemThumbnail thumbnail = await file.GetThumbnailAsync(
+                using var thumbnail = await file.GetThumbnailAsync(
                     ThumbnailMode.SingleItem,
                     64,
                     ThumbnailOptions.UseCurrentScale);
+
+                if (thumbnail is null || thumbnail.Size == 0)
+                {
+                    return null;
+                }
 
                 var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
                 await bitmap.SetSourceAsync(thumbnail);

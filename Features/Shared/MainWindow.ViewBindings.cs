@@ -1,0 +1,116 @@
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
+
+namespace nuone_tools
+{
+    public sealed partial class MainWindow
+    {
+        private FrameworkElement FileManagerView => FileManagerPage;
+        private FrameworkElement AutomationView => AutomationPage;
+        private FrameworkElement SettingsView => SettingsPage;
+        private FrameworkElement TerminalView => TerminalPage;
+
+        private StackPanel AddGroupEditor => FileManagerPage.AddGroupEditorElement;
+        private Button DriveSectionMenuButton => FileManagerPage.DriveSectionMenuButtonElement;
+        private Border LeftPaneBorder => FileManagerPage.LeftPaneBorderElement;
+        private ListView LeftPaneListView => FileManagerPage.LeftPaneListViewElement;
+        private TextBox LeftPathTextBox => FileManagerPage.LeftPathTextBoxElement;
+        private TextBox NewGroupNameTextBox => FileManagerPage.NewGroupNameTextBoxElement;
+        private Border RightPaneBorder => FileManagerPage.RightPaneBorderElement;
+        private ListView RightPaneListView => FileManagerPage.RightPaneListViewElement;
+        private TextBox RightPathTextBox => FileManagerPage.RightPathTextBoxElement;
+        private Border TopCommandBarBorder => FileManagerPage.TopCommandBarBorderElement;
+
+        private TextBox AutomationDestinationPathTextBox => AutomationPage.DestinationPathTextBox;
+        private TextBox AutoExtractExtensionFilterTextBox => AutomationPage.AutoExtractExtensionFilterTextBoxElement;
+        private TextBox AutoExtractExtractorPathTextBox => AutomationPage.AutoExtractExtractorPathTextBoxElement;
+        private TextBox AutoExtractNameTextBox => AutomationPage.AutoExtractNameTextBoxElement;
+        private TextBox AutoExtractWatchPathTextBox => AutomationPage.AutoExtractWatchPathTextBoxElement;
+        private StackPanel AutomationFileSettingsPanel => AutomationPage.FileSettingsPanel;
+        private TextBlock AutomationHintTextBlock => AutomationPage.HintTextBlock;
+        private StackPanel AutomationIntervalSchedulePanel => AutomationPage.IntervalSchedulePanel;
+        private TextBox AutomationIntervalTextBox => AutomationPage.IntervalTextBox;
+        private ComboBox AutomationJobTypeComboBox => AutomationPage.JobTypeComboBox;
+        private ComboBox AutomationModeComboBox => AutomationPage.ModeComboBox;
+        private CheckBox AutomationMongoUseArchiveCheckBox => AutomationPage.MongoUseArchiveCheckBox;
+        private TextBox AutomationMongoConnectionStringTextBox => AutomationPage.MongoConnectionStringTextBox;
+        private TextBox AutomationMongoDatabaseNameTextBox => AutomationPage.MongoDatabaseNameTextBox;
+        private TextBox AutomationMongoRetentionCountTextBox => AutomationPage.MongoRetentionCountTextBox;
+        private StackPanel AutomationMongoSettingsPanel => AutomationPage.MongoSettingsPanel;
+        private TextBox AutomationMongoToolPathTextBox => AutomationPage.MongoToolPathTextBox;
+        private CheckBox AutomationMongoUseGzipCheckBox => AutomationPage.MongoUseGzipCheckBox;
+        private TextBox AutomationNameTextBox => AutomationPage.NameTextBox;
+        private CheckBox AutomationRunMissedOnStartupCheckBox => AutomationPage.RunMissedOnStartupCheckBox;
+        private ComboBox AutomationScheduleTypeComboBox => AutomationPage.ScheduleTypeComboBox;
+        private TextBox AutomationScheduleTimeTextBox => AutomationPage.ScheduleTimeTextBox;
+        private TextBox AutomationSourcePathTextBox => AutomationPage.SourcePathTextBox;
+        private StackPanel AutomationTimeSchedulePanel => AutomationPage.TimeSchedulePanel;
+        private CheckBox AutomationWeeklyFridayCheckBox => AutomationPage.WeeklyFridayCheckBox;
+        private CheckBox AutomationWeeklyMondayCheckBox => AutomationPage.WeeklyMondayCheckBox;
+        private CheckBox AutomationWeeklySaturdayCheckBox => AutomationPage.WeeklySaturdayCheckBox;
+        private CheckBox AutomationWeeklySundayCheckBox => AutomationPage.WeeklySundayCheckBox;
+        private CheckBox AutomationWeeklyThursdayCheckBox => AutomationPage.WeeklyThursdayCheckBox;
+        private CheckBox AutomationWeeklyTuesdayCheckBox => AutomationPage.WeeklyTuesdayCheckBox;
+        private CheckBox AutomationWeeklyWednesdayCheckBox => AutomationPage.WeeklyWednesdayCheckBox;
+        private StackPanel AutomationWeeklyDaysPanel => AutomationPage.WeeklyDaysPanel;
+
+        private TextBox AccountApiUrlTextBox => SettingsPage.AccountApiUrlTextBoxElement;
+        private TextBlock AccountConnectionStatusTextBlock => SettingsPage.AccountConnectionStatusTextBlockElement;
+        private TextBox AccountEmailTextBox => SettingsPage.AccountEmailTextBoxElement;
+        private TextBlock AccountLastLoginTextBlock => SettingsPage.AccountLastLoginTextBlockElement;
+        private PasswordBox AccountPasswordBox => SettingsPage.AccountPasswordBoxElement;
+        private TextBlock AccountServiceAccountsTextBlock => SettingsPage.AccountServiceAccountsTextBlockElement;
+        private Border AccountSettingsContent => SettingsPage.AccountSettingsContentElement;
+        private Border AccountSettingsNavBorder => SettingsPage.AccountSettingsNavBorderElement;
+        private TextBlock AccountSettingsNavText => SettingsPage.AccountSettingsNavTextElement;
+        private TextBlock AccountTokenTextBlock => SettingsPage.AccountTokenTextBlockElement;
+        private TextBlock AccountUserTextBlock => SettingsPage.AccountUserTextBlockElement;
+        private Border AppearanceSettingsContent => SettingsPage.AppearanceSettingsContentElement;
+        private Border AppearanceSettingsNavBorder => SettingsPage.AppearanceSettingsNavBorderElement;
+        private TextBlock AppearanceSettingsNavText => SettingsPage.AppearanceSettingsNavTextElement;
+        private TextBlock CaptureHintTextBlock => SettingsPage.CaptureHintTextBlockElement;
+        private Button ClearAccountSessionButton => SettingsPage.ClearAccountSessionButtonElement;
+        private TextBox CopyShortcutTextBox => SettingsPage.CopyShortcutTextBoxElement;
+        private TextBox CreateFolderShortcutTextBox => SettingsPage.CreateFolderShortcutTextBoxElement;
+        private TextBox DeleteShortcutTextBox => SettingsPage.DeleteShortcutTextBoxElement;
+        private TextBox DefaultTerminalCustomWorkingDirectoryTextBox => SettingsPage.DefaultTerminalCustomWorkingDirectoryTextBoxElement;
+        private ComboBox DefaultTerminalShellComboBox => SettingsPage.DefaultTerminalShellComboBoxElement;
+        private ComboBox DefaultTerminalWorkingDirectoryModeComboBox => SettingsPage.DefaultTerminalWorkingDirectoryModeComboBoxElement;
+        private TextBox FileBunkerApiKeyTextBox => SettingsPage.FileBunkerApiKeyTextBoxElement;
+        private TextBox FileBunkerClientIdTextBox => SettingsPage.FileBunkerClientIdTextBoxElement;
+        private TextBox FileBunkerDaysToExpirationTextBox => SettingsPage.FileBunkerDaysToExpirationTextBoxElement;
+        private TextBox FileBunkerDaysToPurgeTextBox => SettingsPage.FileBunkerDaysToPurgeTextBoxElement;
+        private TextBox FileBunkerInputEndpointTextBox => SettingsPage.FileBunkerInputEndpointTextBoxElement;
+        private TextBox FileBunkerKeyLengthTextBox => SettingsPage.FileBunkerKeyLengthTextBoxElement;
+        private TextBox FileBunkerOutputEndpointTextBox => SettingsPage.FileBunkerOutputEndpointTextBoxElement;
+        private Border GeneralSettingsContent => SettingsPage.GeneralSettingsContentElement;
+        private Border GeneralSettingsNavBorder => SettingsPage.GeneralSettingsNavBorderElement;
+        private TextBlock GeneralSettingsNavText => SettingsPage.GeneralSettingsNavTextElement;
+        private Button LoginAccountButton => SettingsPage.LoginAccountButtonElement;
+        private TextBox MoveShortcutTextBox => SettingsPage.MoveShortcutTextBoxElement;
+        private TextBox NavigateUpShortcutTextBox => SettingsPage.NavigateUpShortcutTextBoxElement;
+        private TextBlock SettingsPageDescription => SettingsPage.SettingsPageDescriptionElement;
+        private TextBlock SettingsPageTitle => SettingsPage.SettingsPageTitleElement;
+        private Border ShortcutSettingsContent => SettingsPage.ShortcutSettingsContentElement;
+        private Border ShortcutSettingsNavBorder => SettingsPage.ShortcutSettingsNavBorderElement;
+        private TextBlock ShortcutSettingsNavText => SettingsPage.ShortcutSettingsNavTextElement;
+        private ToggleSwitch ShowHiddenSystemItemsToggle => SettingsPage.ShowHiddenSystemItemsToggleElement;
+        private ToggleSwitch ShowSelectedFileSizeToggle => SettingsPage.ShowSelectedFileSizeToggleElement;
+        private ToggleSwitch ShowSelectedFolderSizeToggle => SettingsPage.ShowSelectedFolderSizeToggleElement;
+        private ComboBox ThemeModeComboBox => SettingsPage.ThemeModeComboBoxElement;
+        private Border ToolbarSettingsContent => SettingsPage.ToolbarSettingsContentElement;
+        private Border ToolbarSettingsNavBorder => SettingsPage.ToolbarSettingsNavBorderElement;
+        private TextBlock ToolbarSettingsNavText => SettingsPage.ToolbarSettingsNavTextElement;
+
+        private TextBox TerminalCommandTextBox => TerminalPage.TerminalCommandTextBoxElement;
+        private Border TerminalHost => TerminalPage.TerminalHostElement;
+        private RichTextBlock TerminalOutputTextBlock => TerminalPage.TerminalOutputTextBlockElement;
+        private ScrollViewer TerminalOutputScrollViewer => TerminalPage.TerminalOutputScrollViewerElement;
+        private ComboBox TerminalShellComboBox => TerminalPage.TerminalShellComboBoxElement;
+        private TextBlock TerminalShellTextBlock => TerminalPage.TerminalShellTextBlockElement;
+        private TextBlock TerminalStatusTextBlock => TerminalPage.TerminalStatusTextBlockElement;
+        private TabView TerminalTabsView => TerminalPage.TerminalTabsViewElement;
+        private TextBlock TerminalWorkingDirectoryTextBlock => TerminalPage.TerminalWorkingDirectoryTextBlockElement;
+    }
+}

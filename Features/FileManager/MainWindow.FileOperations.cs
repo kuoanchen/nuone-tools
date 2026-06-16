@@ -37,37 +37,37 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
-        private void LeftPaneList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        internal void LeftPaneList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
             HandlePaneDoubleTapped(LeftPane, e);
         }
 
-        private void RightPaneList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        internal void RightPaneList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
             ActivatePane(RightPane);
             HandlePaneDoubleTapped(RightPane, e);
         }
 
-        private void LeftPaneEntry_Tapped(object sender, TappedRoutedEventArgs e)
+        internal void LeftPaneEntry_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
             HandleItemTapped(LeftPane, sender as FrameworkElement);
         }
 
-        private void RightPaneEntry_Tapped(object sender, TappedRoutedEventArgs e)
+        internal void RightPaneEntry_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(RightPane);
             HandleItemTapped(RightPane, sender as FrameworkElement);
         }
 
-        private async void LeftPaneEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        internal async void LeftPaneEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
             await HandleEntryRightTappedAsync(LeftPane, sender as FrameworkElement, e);
         }
 
-        private async void RightPaneEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        internal async void RightPaneEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
         {
             ActivatePane(RightPane);
             await HandleEntryRightTappedAsync(RightPane, sender as FrameworkElement, e);
@@ -343,7 +343,7 @@ namespace nuone_tools
             OpenSelectedInExplorer();
         }
 
-        private void OpenPath_Click(object sender, RoutedEventArgs e)
+        internal void OpenPath_Click(object sender, RoutedEventArgs e)
         {
             if (TryGetPath(sender, out var path))
             {
@@ -351,7 +351,7 @@ namespace nuone_tools
             }
         }
 
-        private void OpenInRightPane_Click(object sender, RoutedEventArgs e)
+        internal void OpenInRightPane_Click(object sender, RoutedEventArgs e)
         {
             if (TryGetPath(sender, out var path))
             {
@@ -359,7 +359,7 @@ namespace nuone_tools
             }
         }
 
-        private void OpenInLeftPane_Click(object sender, RoutedEventArgs e)
+        internal void OpenInLeftPane_Click(object sender, RoutedEventArgs e)
         {
             if (TryGetPath(sender, out var path))
             {
@@ -367,27 +367,27 @@ namespace nuone_tools
             }
         }
 
-        private async void CopyToRightPane_Click(object sender, RoutedEventArgs e)
+        internal async void CopyToRightPane_Click(object sender, RoutedEventArgs e)
         {
             await CopyOrMoveToPaneAsync(sender, LeftPane, RightPane, move: false);
         }
 
-        private async void MoveToRightPane_Click(object sender, RoutedEventArgs e)
+        internal async void MoveToRightPane_Click(object sender, RoutedEventArgs e)
         {
             await CopyOrMoveToPaneAsync(sender, LeftPane, RightPane, move: true);
         }
 
-        private async void CopyToLeftPane_Click(object sender, RoutedEventArgs e)
+        internal async void CopyToLeftPane_Click(object sender, RoutedEventArgs e)
         {
             await CopyOrMoveToPaneAsync(sender, RightPane, LeftPane, move: false);
         }
 
-        private async void MoveToLeftPane_Click(object sender, RoutedEventArgs e)
+        internal async void MoveToLeftPane_Click(object sender, RoutedEventArgs e)
         {
             await CopyOrMoveToPaneAsync(sender, RightPane, LeftPane, move: true);
         }
 
-        private async void RenamePath_Click(object sender, RoutedEventArgs e)
+        internal async void RenamePath_Click(object sender, RoutedEventArgs e)
         {
             if (!TryGetPath(sender, out var path))
             {
@@ -397,7 +397,7 @@ namespace nuone_tools
             await RenameSinglePathAsync(path, _activePane);
         }
 
-        private async void DeletePath_Click(object sender, RoutedEventArgs e)
+        internal async void DeletePath_Click(object sender, RoutedEventArgs e)
         {
             if (!TryGetPath(sender, out var path))
             {
@@ -437,17 +437,17 @@ namespace nuone_tools
             }
         }
 
-        private async void CreateFolderLeft_Click(object sender, RoutedEventArgs e)
+        internal async void CreateFolderLeft_Click(object sender, RoutedEventArgs e)
         {
             await CreateFolderAsync(LeftPane);
         }
 
-        private async void CreateFolderRight_Click(object sender, RoutedEventArgs e)
+        internal async void CreateFolderRight_Click(object sender, RoutedEventArgs e)
         {
             await CreateFolderAsync(RightPane);
         }
 
-        private void CopyPath_Click(object sender, RoutedEventArgs e)
+        internal void CopyPath_Click(object sender, RoutedEventArgs e)
         {
             if (!TryGetPath(sender, out var path))
             {
@@ -470,6 +470,7 @@ namespace nuone_tools
                 new ShellInjectedMenuItem($"複製到{targetPaneLabel}", ShellInjectedCommand.CopyToOtherPane),
                 new ShellInjectedMenuItem($"搬移到{targetPaneLabel}", ShellInjectedCommand.MoveToOtherPane),
                 new ShellInjectedMenuItem("新增自動化", ShellInjectedCommand.CreateAutomation),
+                new ShellInjectedMenuItem("部署 Node.js 到 Docker", ShellInjectedCommand.DeployNodeDocker),
                 new ShellInjectedMenuItem(string.Empty, ShellInjectedMenuItemKind.Separator),
                 new ShellInjectedMenuItem("重新命名", ShellInjectedCommand.Rename),
                 new ShellInjectedMenuItem("新增資料夾", ShellInjectedCommand.CreateFolder),
@@ -505,6 +506,9 @@ namespace nuone_tools
                     break;
                 case ShellInjectedCommand.CreateAutomation:
                     _ = CreateAutomationFromPanePairAsync(pane, primaryPath);
+                    break;
+                case ShellInjectedCommand.DeployNodeDocker:
+                    _ = DeploySelectedNodePackageToDockerAsync(pane, selectedPaths);
                     break;
                 case ShellInjectedCommand.CopyPath:
                     {
@@ -1304,6 +1308,11 @@ namespace nuone_tools
 
         private static int DetectBatchRenameStartNumber(IReadOnlyList<FileEntry> selectedEntries)
         {
+            if (TryDetectCommonNumberPattern(selectedEntries, out var detectedStartNumber, out _))
+            {
+                return detectedStartNumber;
+            }
+
             if (selectedEntries.Count == 0)
             {
                 return 1;
@@ -1342,6 +1351,11 @@ namespace nuone_tools
 
         private static int DetectBatchRenameDigits(IReadOnlyList<FileEntry> selectedEntries, int detectedStartNumber)
         {
+            if (TryDetectCommonNumberPattern(selectedEntries, out _, out var detectedDigits))
+            {
+                return detectedDigits;
+            }
+
             var defaultDigits = Math.Max(2, selectedEntries.Count.ToString(CultureInfo.InvariantCulture).Length);
             if (selectedEntries.Count == 0)
             {
@@ -1392,6 +1406,158 @@ namespace nuone_tools
 
             digitLength = numericText.Length;
             return true;
+        }
+
+        private static bool TryDetectCommonNumberPattern(
+            IReadOnlyList<FileEntry> selectedEntries,
+            out int startNumber,
+            out int digits)
+        {
+            startNumber = 1;
+            digits = 2;
+
+            if (selectedEntries.Count == 0)
+            {
+                return false;
+            }
+
+            var baseNames = selectedEntries
+                .Select(entry => entry.IsDirectory ? entry.Name : Path.GetFileNameWithoutExtension(entry.Name))
+                .Where(static name => !string.IsNullOrWhiteSpace(name))
+                .ToList();
+
+            if (baseNames.Count != selectedEntries.Count)
+            {
+                return false;
+            }
+
+            var prefixLength = GetCommonPrefixLength(baseNames);
+            var suffixLength = GetCommonSuffixLength(baseNames, prefixLength);
+            ExpandNumericSegmentBoundaries(baseNames, ref prefixLength, ref suffixLength);
+            var numberSegments = new List<string>(baseNames.Count);
+
+            foreach (var baseName in baseNames)
+            {
+                var segmentLength = baseName.Length - prefixLength - suffixLength;
+                if (segmentLength <= 0)
+                {
+                    return false;
+                }
+
+                var segment = baseName.Substring(prefixLength, segmentLength);
+                if (!int.TryParse(segment, NumberStyles.Integer, CultureInfo.InvariantCulture, out _))
+                {
+                    return false;
+                }
+
+                numberSegments.Add(segment);
+            }
+
+            if (!int.TryParse(numberSegments[0], NumberStyles.Integer, CultureInfo.InvariantCulture, out startNumber))
+            {
+                return false;
+            }
+
+            for (var index = 1; index < numberSegments.Count; index++)
+            {
+                if (!int.TryParse(numberSegments[index], NumberStyles.Integer, CultureInfo.InvariantCulture, out var currentNumber) ||
+                    currentNumber != startNumber + index)
+                {
+                    return false;
+                }
+            }
+
+            digits = Math.Max(2, numberSegments.Max(static segment => segment.Length));
+            return true;
+        }
+
+        private static void ExpandNumericSegmentBoundaries(
+            IReadOnlyList<string> values,
+            ref int prefixLength,
+            ref int suffixLength)
+        {
+            while (prefixLength > 0 && AreDigitsAt(values, prefixLength - 1) && AreDigitsAt(values, prefixLength))
+            {
+                prefixLength--;
+            }
+
+            while (suffixLength > 0)
+            {
+                var boundaryIndex = values[0].Length - suffixLength;
+                if (!AreDigitsAt(values, boundaryIndex - 1) || !AreDigitsAt(values, boundaryIndex))
+                {
+                    break;
+                }
+
+                suffixLength--;
+            }
+        }
+
+        private static bool AreDigitsAt(IReadOnlyList<string> values, int index)
+        {
+            foreach (var value in values)
+            {
+                if (index < 0 || index >= value.Length || !char.IsDigit(value[index]))
+                {
+                    return false;
+                }
+            }
+
+            return true;
+        }
+
+        private static int GetCommonPrefixLength(IReadOnlyList<string> values)
+        {
+            if (values.Count == 0)
+            {
+                return 0;
+            }
+
+            var limit = values.Min(static value => value.Length);
+            var index = 0;
+
+            while (index < limit)
+            {
+                var current = values[0][index];
+                for (var itemIndex = 1; itemIndex < values.Count; itemIndex++)
+                {
+                    if (values[itemIndex][index] != current)
+                    {
+                        return index;
+                    }
+                }
+
+                index++;
+            }
+
+            return index;
+        }
+
+        private static int GetCommonSuffixLength(IReadOnlyList<string> values, int protectedPrefixLength)
+        {
+            if (values.Count == 0)
+            {
+                return 0;
+            }
+
+            var limit = values.Min(value => value.Length - protectedPrefixLength);
+            var suffixLength = 0;
+
+            while (suffixLength < limit)
+            {
+                var current = values[0][^(suffixLength + 1)];
+                for (var itemIndex = 1; itemIndex < values.Count; itemIndex++)
+                {
+                    if (values[itemIndex][^(suffixLength + 1)] != current)
+                    {
+                        return suffixLength;
+                    }
+                }
+
+                suffixLength++;
+            }
+
+            return suffixLength;
         }
 
         private static string BuildTemporaryRenamePath(string originalPath)

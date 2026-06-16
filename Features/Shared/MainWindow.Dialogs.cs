@@ -99,6 +99,69 @@ namespace nuone_tools
                 MinHeight = 96,
             };
 
+            var isNodeDockerDeploy = existingItem is not null && IsDeployNodeDockerCommand(existingItem.Command);
+            var isFileBunkerUpload = existingItem is not null &&
+                string.Equals(existingItem.Command, FileBunkerUploadCommand, StringComparison.OrdinalIgnoreCase);
+            var isBuiltInTerminal = existingItem is not null && IsOpenBuiltInTerminalCommand(existingItem.Command);
+            var isExternalTerminal = existingItem is not null && IsOpenExternalTerminalCommand(existingItem.Command);
+            var isTerminal = isBuiltInTerminal || isExternalTerminal;
+            var nodeDockerDeployCheckBox = new CheckBox
+            {
+                Content = "Node.js Docker 部署",
+                IsChecked = isNodeDockerDeploy,
+            };
+            var terminalCheckBox = new CheckBox
+            {
+                Content = "終端機",
+                IsChecked = isTerminal,
+            };
+            var fileBunkerUploadCheckBox = new CheckBox
+            {
+                Content = "FileBunker 上傳",
+                IsChecked = isFileBunkerUpload,
+            };
+            var nodeDockerUserTextBox = new TextBox
+            {
+                Text = string.IsNullOrWhiteSpace(existingItem?.NodeDockerUser)
+                    ? DefaultNodeDockerUser
+                    : existingItem.NodeDockerUser,
+                PlaceholderText = "例如：admkuo",
+            };
+            var nodeDockerHostTextBox = new TextBox
+            {
+                Text = string.IsNullOrWhiteSpace(existingItem?.NodeDockerHost)
+                    ? DefaultNodeDockerHost
+                    : existingItem.NodeDockerHost,
+                PlaceholderText = "例如：docker05",
+            };
+            var nodeDockerRemoteDirectoryTextBox = new TextBox
+            {
+                Text = string.IsNullOrWhiteSpace(existingItem?.NodeDockerRemoteDirectory)
+                    ? DefaultNodeDockerRemoteDirectory
+                    : existingItem.NodeDockerRemoteDirectory,
+                PlaceholderText = "例如：~/temp",
+            };
+            var nodeDockerLaunchModeComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "外部視窗", Tag = NodeDockerLaunchMode.ExternalWindow },
+                    new ComboBoxItem { Content = "內建終端機", Tag = NodeDockerLaunchMode.BuiltInTerminal },
+                },
+            };
+            var nodeDockerBuiltInShellLabel = new TextBlock { Text = "內建 shell" };
+            var nodeDockerBuiltInShellComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "PowerShell", Tag = TerminalShellKind.PowerShell },
+                    new ComboBoxItem { Content = "Git Bash", Tag = TerminalShellKind.GitBash },
+                    new ComboBoxItem { Content = "cmd", Tag = TerminalShellKind.CommandPrompt },
+                },
+            };
+
             var iconGlyphTextBox = new TextBox
             {
                 Text = existingItem?.IconGlyph ?? ToolbarCommandItem.DefaultGlyph,
@@ -171,16 +234,287 @@ namespace nuone_tools
 
             RefreshPreview();
 
+            var nodeDockerSettingsPanel = new StackPanel
+            {
+                Spacing = 10,
+                Visibility = isNodeDockerDeploy ? Visibility.Visible : Visibility.Collapsed,
+            };
+            nodeDockerSettingsPanel.Children.Add(new TextBlock
+            {
+                Text = "部署設定",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            nodeDockerSettingsPanel.Children.Add(new TextBlock { Text = "執行入口" });
+            nodeDockerSettingsPanel.Children.Add(nodeDockerLaunchModeComboBox);
+            nodeDockerSettingsPanel.Children.Add(nodeDockerBuiltInShellLabel);
+            nodeDockerSettingsPanel.Children.Add(nodeDockerBuiltInShellComboBox);
+            nodeDockerSettingsPanel.Children.Add(new TextBlock { Text = "SSH 使用者" });
+            nodeDockerSettingsPanel.Children.Add(nodeDockerUserTextBox);
+            nodeDockerSettingsPanel.Children.Add(new TextBlock { Text = "Docker 主機" });
+            nodeDockerSettingsPanel.Children.Add(nodeDockerHostTextBox);
+            nodeDockerSettingsPanel.Children.Add(new TextBlock { Text = "遠端暫存目錄" });
+            nodeDockerSettingsPanel.Children.Add(nodeDockerRemoteDirectoryTextBox);
+            nodeDockerSettingsPanel.Children.Add(new TextBlock
+            {
+                Text = "按下工具列按鈕時會取目前 pane 選取的 zip，依這裡的設定上傳並執行 init.sh；可選外部視窗或 Nuone Tools 內建終端機。若 sudo 需要密碼，可在終端機中直接輸入。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+            });
+
+            var commandPanel = new StackPanel
+            {
+                Spacing = 6,
+            };
+            commandPanel.Children.Add(new TextBlock { Text = "Command" });
+            commandPanel.Children.Add(commandTextBox);
+
+            var terminalShellComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "PowerShell", Tag = TerminalShellKind.PowerShell },
+                    new ComboBoxItem { Content = "Git Bash", Tag = TerminalShellKind.GitBash },
+                    new ComboBoxItem { Content = "cmd", Tag = TerminalShellKind.CommandPrompt },
+                },
+            };
+            var terminalWorkingDirectoryModeComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "目前作用中的 pane", Tag = ToolbarWorkingDirectoryMode.ActivePane },
+                    new ComboBoxItem { Content = "左側 pane", Tag = ToolbarWorkingDirectoryMode.LeftPane },
+                    new ComboBoxItem { Content = "右側 pane", Tag = ToolbarWorkingDirectoryMode.RightPane },
+                    new ComboBoxItem { Content = "自訂路徑", Tag = ToolbarWorkingDirectoryMode.CustomPath },
+                },
+            };
+            var terminalCustomWorkingDirectoryTextBox = new TextBox
+            {
+                Text = existingItem?.TerminalCustomWorkingDirectory ?? _shortcutSettings.DefaultTerminalCustomWorkingDirectory,
+                PlaceholderText = @"例如：C:\trabajo 或 \\dsm\video",
+            };
+            var terminalLaunchArgumentsTextBox = new TextBox
+            {
+                Text = existingItem?.TerminalLaunchArguments ?? string.Empty,
+                PlaceholderText = @"例如：-d . -w 0",
+            };
+            var terminalTargetComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "外部終端機", Tag = OpenExternalTerminalCommand },
+                    new ComboBoxItem { Content = "內建終端機", Tag = OpenBuiltInTerminalCommand },
+                },
+            };
+
+            SelectComboBoxItemByTag(nodeDockerLaunchModeComboBox, existingItem?.NodeDockerLaunchMode ?? NodeDockerLaunchMode.ExternalWindow);
+            SelectComboBoxItemByTag(nodeDockerBuiltInShellComboBox, existingItem?.TerminalShellKind ?? _shortcutSettings.DefaultTerminalShellKind);
+            SelectComboBoxItemByTag(terminalShellComboBox, existingItem?.TerminalShellKind ?? _shortcutSettings.DefaultTerminalShellKind);
+            SelectComboBoxItemByTag(terminalWorkingDirectoryModeComboBox, existingItem?.TerminalWorkingDirectoryMode ?? _shortcutSettings.DefaultTerminalWorkingDirectoryMode);
+            SelectComboBoxItemByTag(terminalTargetComboBox, isBuiltInTerminal ? OpenBuiltInTerminalCommand : OpenExternalTerminalCommand);
+
+            var terminalSettingsPanel = new StackPanel
+            {
+                Spacing = 10,
+                Visibility = isTerminal ? Visibility.Visible : Visibility.Collapsed,
+            };
+            terminalSettingsPanel.Children.Add(new TextBlock
+            {
+                Text = "終端機設定",
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            terminalSettingsPanel.Children.Add(new TextBlock { Text = "終端機入口" });
+            terminalSettingsPanel.Children.Add(terminalTargetComboBox);
+            terminalSettingsPanel.Children.Add(new TextBlock { Text = "預設 shell" });
+            terminalSettingsPanel.Children.Add(terminalShellComboBox);
+            terminalSettingsPanel.Children.Add(new TextBlock { Text = "工作目錄" });
+            terminalSettingsPanel.Children.Add(terminalWorkingDirectoryModeComboBox);
+            terminalSettingsPanel.Children.Add(new TextBlock { Text = "自訂工作目錄" });
+            terminalSettingsPanel.Children.Add(terminalCustomWorkingDirectoryTextBox);
+            terminalSettingsPanel.Children.Add(new TextBlock { Text = "啟動參數" });
+            terminalSettingsPanel.Children.Add(terminalLaunchArgumentsTextBox);
+            terminalSettingsPanel.Children.Add(new TextBlock
+            {
+                Text = "按下工具列按鈕時，會直接切到內建終端機並開一個新 tab。可額外填 -d .、-d left、-d right、-d C:\\path、-w 0。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+            });
+
+            var builtInCommandHint = new TextBlock
+            {
+                Text = "這個模式會使用 Nuone Tools 內建的 Docker 部署流程，不需要另外填 command。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+                Visibility = isNodeDockerDeploy ? Visibility.Visible : Visibility.Collapsed,
+            };
+
+            var builtInTerminalHint = new TextBlock
+            {
+                Text = "這個模式會使用終端機內建流程，不需要另外填 command。可切換成外部 Windows Terminal 或 Nuone Tools 內建終端機。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+                Visibility = isTerminal ? Visibility.Visible : Visibility.Collapsed,
+            };
+
+            var fileBunkerUploadHint = new TextBlock
+            {
+                Text = "這個模式會直接使用目前 pane 選取的檔案，並套用設定頁裡的 FileBunker 設定上傳，不需要另外填 command。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+                Visibility = isFileBunkerUpload ? Visibility.Visible : Visibility.Collapsed,
+            };
+
+            void RefreshCommandMode()
+            {
+                var deployMode = nodeDockerDeployCheckBox.IsChecked == true;
+                var terminalMode = terminalCheckBox.IsChecked == true;
+                var fileBunkerUploadMode = fileBunkerUploadCheckBox.IsChecked == true;
+
+                nodeDockerSettingsPanel.Visibility = deployMode ? Visibility.Visible : Visibility.Collapsed;
+                terminalSettingsPanel.Visibility = terminalMode ? Visibility.Visible : Visibility.Collapsed;
+                commandPanel.Visibility = deployMode || terminalMode || fileBunkerUploadMode ? Visibility.Collapsed : Visibility.Visible;
+                builtInCommandHint.Visibility = deployMode ? Visibility.Visible : Visibility.Collapsed;
+                builtInTerminalHint.Visibility = terminalMode ? Visibility.Visible : Visibility.Collapsed;
+                fileBunkerUploadHint.Visibility = fileBunkerUploadMode ? Visibility.Visible : Visibility.Collapsed;
+                commandTextBox.IsReadOnly = deployMode || terminalMode || fileBunkerUploadMode;
+                terminalCustomWorkingDirectoryTextBox.Visibility =
+                    terminalWorkingDirectoryModeComboBox.SelectedItem is ComboBoxItem { Tag: ToolbarWorkingDirectoryMode.CustomPath }
+                        ? Visibility.Visible
+                        : Visibility.Collapsed;
+                var deployRunsInBuiltInTerminal =
+                    nodeDockerLaunchModeComboBox.SelectedItem is ComboBoxItem { Tag: NodeDockerLaunchMode.BuiltInTerminal };
+                nodeDockerBuiltInShellLabel.Visibility = deployMode && deployRunsInBuiltInTerminal
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                nodeDockerBuiltInShellComboBox.Visibility = deployMode && deployRunsInBuiltInTerminal
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+
+                if (deployMode)
+                {
+                    commandTextBox.Text = DeployNodeDockerCommand;
+                    if (string.IsNullOrWhiteSpace(titleTextBox.Text))
+                    {
+                        titleTextBox.Text = "deploy";
+                    }
+
+                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
+                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
+                    {
+                        iconGlyphTextBox.Text = "\uE7B8";
+                    }
+
+                    return;
+                }
+
+                if (terminalMode)
+                {
+                    nodeDockerDeployCheckBox.IsChecked = false;
+                    fileBunkerUploadCheckBox.IsChecked = false;
+                    commandTextBox.Text = terminalTargetComboBox.SelectedItem is ComboBoxItem { Tag: string terminalCommand }
+                        ? terminalCommand
+                        : OpenExternalTerminalCommand;
+                    if (string.IsNullOrWhiteSpace(titleTextBox.Text))
+                    {
+                        titleTextBox.Text = "terminal";
+                    }
+
+                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
+                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
+                    {
+                        iconGlyphTextBox.Text = "\uE756";
+                    }
+
+                    return;
+                }
+
+                if (fileBunkerUploadMode)
+                {
+                    nodeDockerDeployCheckBox.IsChecked = false;
+                    terminalCheckBox.IsChecked = false;
+                    commandTextBox.Text = FileBunkerUploadCommand;
+                    if (string.IsNullOrWhiteSpace(titleTextBox.Text))
+                    {
+                        titleTextBox.Text = "upload";
+                    }
+
+                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
+                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
+                    {
+                        iconGlyphTextBox.Text = "\uE898";
+                    }
+                }
+            }
+
+            nodeDockerDeployCheckBox.Checked += (_, _) =>
+            {
+                if (terminalCheckBox.IsChecked == true)
+                {
+                    terminalCheckBox.IsChecked = false;
+                }
+
+                if (fileBunkerUploadCheckBox.IsChecked == true)
+                {
+                    fileBunkerUploadCheckBox.IsChecked = false;
+                }
+
+                RefreshCommandMode();
+            };
+            nodeDockerDeployCheckBox.Unchecked += (_, _) => RefreshCommandMode();
+            nodeDockerLaunchModeComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
+            terminalCheckBox.Checked += (_, _) =>
+            {
+                if (nodeDockerDeployCheckBox.IsChecked == true)
+                {
+                    nodeDockerDeployCheckBox.IsChecked = false;
+                }
+
+                if (fileBunkerUploadCheckBox.IsChecked == true)
+                {
+                    fileBunkerUploadCheckBox.IsChecked = false;
+                }
+
+                RefreshCommandMode();
+            };
+            terminalCheckBox.Unchecked += (_, _) => RefreshCommandMode();
+            fileBunkerUploadCheckBox.Checked += (_, _) =>
+            {
+                if (nodeDockerDeployCheckBox.IsChecked == true)
+                {
+                    nodeDockerDeployCheckBox.IsChecked = false;
+                }
+
+                if (terminalCheckBox.IsChecked == true)
+                {
+                    terminalCheckBox.IsChecked = false;
+                }
+
+                RefreshCommandMode();
+            };
+            fileBunkerUploadCheckBox.Unchecked += (_, _) => RefreshCommandMode();
+            terminalTargetComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
+            terminalWorkingDirectoryModeComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
+            RefreshCommandMode();
+
             var panel = new StackPanel { Spacing = 14 };
             panel.Children.Add(new TextBlock
             {
-                Text = "設定工具列按鈕的名稱、圖示與 command。按下後會在目前作用中的 pane 路徑執行。",
+                Text = "設定工具列按鈕的名稱、圖示與 command。一般 command 會在目前作用中的 pane 路徑執行；終端機、部署與 FileBunker 上傳模式可直接走內建流程。",
                 TextWrapping = TextWrapping.Wrap,
             });
             panel.Children.Add(new TextBlock { Text = "名稱" });
             panel.Children.Add(titleTextBox);
-            panel.Children.Add(new TextBlock { Text = "Command" });
-            panel.Children.Add(commandTextBox);
+            panel.Children.Add(nodeDockerDeployCheckBox);
+            panel.Children.Add(terminalCheckBox);
+            panel.Children.Add(fileBunkerUploadCheckBox);
+            panel.Children.Add(nodeDockerSettingsPanel);
+            panel.Children.Add(terminalSettingsPanel);
+            panel.Children.Add(commandPanel);
+            panel.Children.Add(builtInCommandHint);
+            panel.Children.Add(builtInTerminalHint);
+            panel.Children.Add(fileBunkerUploadHint);
             panel.Children.Add(new TextBlock { Text = "Icon 路徑" });
             panel.Children.Add(iconPathRow);
             panel.Children.Add(new TextBlock { Text = "Glyph 後備圖示" });
@@ -195,7 +529,12 @@ namespace nuone_tools
             var dialog = new ContentDialog
             {
                 Title = existingItem is null ? "新增工具列按鈕" : "編輯工具列按鈕",
-                Content = panel,
+                Content = new ScrollViewer
+                {
+                    Content = panel,
+                    MaxHeight = 560,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                },
                 PrimaryButtonText = "確定",
                 CloseButtonText = "取消",
                 DefaultButton = ContentDialogButton.Primary,
@@ -210,13 +549,57 @@ namespace nuone_tools
             }
 
             var title = titleTextBox.Text.Trim();
-            var command = commandTextBox.Text.Trim();
+            var command = nodeDockerDeployCheckBox.IsChecked == true
+                ? DeployNodeDockerCommand
+                : terminalCheckBox.IsChecked == true
+                    ? terminalTargetComboBox.SelectedItem is ComboBoxItem { Tag: string terminalCommand }
+                        ? terminalCommand
+                        : OpenExternalTerminalCommand
+                : fileBunkerUploadCheckBox.IsChecked == true
+                    ? FileBunkerUploadCommand
+                    : commandTextBox.Text.Trim();
             var iconPath = iconPathTextBox.Text.Trim();
             var iconGlyph = iconGlyphTextBox.Text.Trim();
+            var nodeDockerUser = nodeDockerUserTextBox.Text.Trim();
+            var nodeDockerHost = nodeDockerHostTextBox.Text.Trim();
+            var nodeDockerRemoteDirectory = nodeDockerRemoteDirectoryTextBox.Text.Trim();
+            var nodeDockerLaunchMode = nodeDockerLaunchModeComboBox.SelectedItem is ComboBoxItem { Tag: NodeDockerLaunchMode launchMode }
+                ? launchMode
+                : NodeDockerLaunchMode.ExternalWindow;
+            var terminalShellKind = terminalShellComboBox.SelectedItem is ComboBoxItem { Tag: TerminalShellKind shellKind }
+                ? shellKind
+                : _shortcutSettings.DefaultTerminalShellKind;
+            if (nodeDockerLaunchMode == NodeDockerLaunchMode.BuiltInTerminal &&
+                nodeDockerBuiltInShellComboBox.SelectedItem is ComboBoxItem { Tag: TerminalShellKind deployShellKind })
+            {
+                terminalShellKind = deployShellKind;
+            }
+            var terminalWorkingDirectoryMode = terminalWorkingDirectoryModeComboBox.SelectedItem is ComboBoxItem { Tag: ToolbarWorkingDirectoryMode workingDirectoryMode }
+                ? workingDirectoryMode
+                : _shortcutSettings.DefaultTerminalWorkingDirectoryMode;
+            var terminalCustomWorkingDirectory = terminalCustomWorkingDirectoryTextBox.Text.Trim();
+            var terminalLaunchArguments = terminalLaunchArgumentsTextBox.Text.Trim();
 
             if (string.IsNullOrWhiteSpace(title) || string.IsNullOrWhiteSpace(command))
             {
                 await ShowMessageAsync("工具列按鈕無效", "名稱與 command 都必須填寫。");
+                return null;
+            }
+
+            if (IsDeployNodeDockerCommand(command) &&
+                (string.IsNullOrWhiteSpace(nodeDockerUser) ||
+                 string.IsNullOrWhiteSpace(nodeDockerHost) ||
+                 string.IsNullOrWhiteSpace(nodeDockerRemoteDirectory)))
+            {
+                await ShowMessageAsync("工具列按鈕無效", "Node.js Docker 部署必須填寫 SSH 使用者、Docker 主機與遠端暫存目錄。");
+                return null;
+            }
+
+            if ((IsOpenBuiltInTerminalCommand(command) || IsOpenExternalTerminalCommand(command)) &&
+                terminalWorkingDirectoryMode == ToolbarWorkingDirectoryMode.CustomPath &&
+                (string.IsNullOrWhiteSpace(terminalCustomWorkingDirectory) || !IsNavigableDirectoryPath(terminalCustomWorkingDirectory)))
+            {
+                await ShowMessageAsync("工具列按鈕無效", "終端機的自訂工作目錄不存在。");
                 return null;
             }
 
@@ -227,7 +610,29 @@ namespace nuone_tools
                 Command = command,
                 IconPath = iconPath,
                 IconGlyph = iconGlyph,
+                NodeDockerUser = nodeDockerUser,
+                NodeDockerHost = nodeDockerHost,
+                NodeDockerRemoteDirectory = nodeDockerRemoteDirectory,
+                NodeDockerLaunchMode = nodeDockerLaunchMode,
+                TerminalShellKind = terminalShellKind,
+                TerminalWorkingDirectoryMode = terminalWorkingDirectoryMode,
+                TerminalCustomWorkingDirectory = terminalCustomWorkingDirectory,
+                TerminalLaunchArguments = terminalLaunchArguments,
             };
+        }
+
+        private static void SelectComboBoxItemByTag(ComboBox comboBox, object tagValue)
+        {
+            foreach (var item in comboBox.Items.OfType<ComboBoxItem>())
+            {
+                if (Equals(item.Tag, tagValue))
+                {
+                    comboBox.SelectedItem = item;
+                    return;
+                }
+            }
+
+            comboBox.SelectedIndex = 0;
         }
 
         private async Task ShowMessageAsync(string title, string message)
@@ -242,6 +647,333 @@ namespace nuone_tools
             ApplyThemeToDialog(dialog);
 
             await dialog.ShowAsync();
+        }
+
+        private async Task<bool> ShowBackupAutomationEditorAsync(
+            BackupAutomationProfile profile,
+            string title = "編輯自動化工作")
+        {
+            var nameTextBox = new TextBox { Text = profile.Name };
+            var jobTypeComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "檔案備份", Tag = AutomationJobType.FileBackup },
+                    new ComboBoxItem { Content = "MongoDB 備份", Tag = AutomationJobType.MongoBackup },
+                },
+                SelectedIndex = profile.JobType == AutomationJobType.MongoBackup ? 1 : 0,
+            };
+            var sourcePathTextBox = new TextBox { Text = profile.SourcePath };
+            var destinationPathTextBox = new TextBox { Text = profile.DestinationPath };
+            var modeComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "備份複製", Tag = BackupAutomationMode.Copy },
+                    new ComboBoxItem { Content = "同步鏡像", Tag = BackupAutomationMode.Mirror },
+                },
+                SelectedIndex = profile.Mode == BackupAutomationMode.Mirror ? 1 : 0,
+            };
+            var mongoToolPathTextBox = new TextBox { Text = profile.MongoToolPath };
+            var mongoConnectionStringTextBox = new TextBox
+            {
+                Text = profile.MongoConnectionString,
+                TextWrapping = TextWrapping.Wrap,
+            };
+            var mongoDatabaseNameTextBox = new TextBox
+            {
+                Text = profile.MongoDatabaseName,
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                MinHeight = 64,
+            };
+            var mongoRetentionCountTextBox = new TextBox { Text = profile.MongoRetentionCountText };
+            var mongoUseArchiveCheckBox = new CheckBox { Content = "Archive", IsChecked = profile.MongoUseArchive };
+            var mongoUseGzipCheckBox = new CheckBox { Content = "GZip", IsChecked = profile.MongoUseGzip };
+            var scheduleTypeComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "每隔幾分鐘", Tag = AutomationScheduleType.Interval },
+                    new ComboBoxItem { Content = "每天固定時間", Tag = AutomationScheduleType.Daily },
+                    new ComboBoxItem { Content = "每週固定時間", Tag = AutomationScheduleType.Weekly },
+                },
+                SelectedIndex = profile.ScheduleType switch
+                {
+                    AutomationScheduleType.Daily => 1,
+                    AutomationScheduleType.Weekly => 2,
+                    _ => 0,
+                },
+            };
+            var intervalTextBox = new TextBox { Text = profile.IntervalMinutesText };
+            var scheduleTimeTextBox = new TextBox { Text = profile.ScheduleTimeText };
+            var monday = new CheckBox { Content = "週一", IsChecked = profile.WeeklyMondaySelected };
+            var tuesday = new CheckBox { Content = "週二", IsChecked = profile.WeeklyTuesdaySelected };
+            var wednesday = new CheckBox { Content = "週三", IsChecked = profile.WeeklyWednesdaySelected };
+            var thursday = new CheckBox { Content = "週四", IsChecked = profile.WeeklyThursdaySelected };
+            var friday = new CheckBox { Content = "週五", IsChecked = profile.WeeklyFridaySelected };
+            var saturday = new CheckBox { Content = "週六", IsChecked = profile.WeeklySaturdaySelected };
+            var sunday = new CheckBox { Content = "週日", IsChecked = profile.WeeklySundaySelected };
+            var runMissedCheckBox = new CheckBox
+            {
+                Content = "啟動 app 時補跑錯過的排程",
+                IsChecked = profile.RunMissedOnStartup,
+            };
+
+            var filePanel = new StackPanel { Spacing = 8 };
+            filePanel.Children.Add(new TextBlock { Text = "來源路徑" });
+            filePanel.Children.Add(sourcePathTextBox);
+            filePanel.Children.Add(new TextBlock { Text = "模式" });
+            filePanel.Children.Add(modeComboBox);
+
+            var mongoOptions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
+            mongoOptions.Children.Add(mongoUseArchiveCheckBox);
+            mongoOptions.Children.Add(mongoUseGzipCheckBox);
+
+            var mongoPanel = new StackPanel { Spacing = 8 };
+            mongoPanel.Children.Add(new TextBlock { Text = "mongodump 路徑" });
+            mongoPanel.Children.Add(mongoToolPathTextBox);
+            mongoPanel.Children.Add(new TextBlock { Text = "Mongo URI" });
+            mongoPanel.Children.Add(mongoConnectionStringTextBox);
+            mongoPanel.Children.Add(new TextBlock { Text = "資料庫名稱" });
+            mongoPanel.Children.Add(mongoDatabaseNameTextBox);
+            mongoPanel.Children.Add(new TextBlock { Text = "保留份數" });
+            mongoPanel.Children.Add(mongoRetentionCountTextBox);
+            mongoPanel.Children.Add(mongoOptions);
+
+            var weeklyPanel = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 10 };
+            weeklyPanel.Children.Add(monday);
+            weeklyPanel.Children.Add(tuesday);
+            weeklyPanel.Children.Add(wednesday);
+            weeklyPanel.Children.Add(thursday);
+            weeklyPanel.Children.Add(friday);
+            weeklyPanel.Children.Add(saturday);
+            weeklyPanel.Children.Add(sunday);
+
+            var intervalPanel = new StackPanel { Spacing = 8 };
+            intervalPanel.Children.Add(new TextBlock { Text = "間隔分鐘" });
+            intervalPanel.Children.Add(intervalTextBox);
+
+            var scheduledPanel = new StackPanel { Spacing = 8 };
+            scheduledPanel.Children.Add(new TextBlock { Text = "執行時間（HH:mm）" });
+            scheduledPanel.Children.Add(scheduleTimeTextBox);
+            scheduledPanel.Children.Add(weeklyPanel);
+
+            void RefreshVisibility()
+            {
+                var isMongo = jobTypeComboBox.SelectedIndex == 1;
+                filePanel.Visibility = isMongo ? Visibility.Collapsed : Visibility.Visible;
+                mongoPanel.Visibility = isMongo ? Visibility.Visible : Visibility.Collapsed;
+
+                var isInterval = scheduleTypeComboBox.SelectedIndex == 0;
+                intervalPanel.Visibility = isInterval ? Visibility.Visible : Visibility.Collapsed;
+                scheduledPanel.Visibility = isInterval ? Visibility.Collapsed : Visibility.Visible;
+                weeklyPanel.Visibility = scheduleTypeComboBox.SelectedIndex == 2
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+
+            jobTypeComboBox.SelectionChanged += (_, _) => RefreshVisibility();
+            scheduleTypeComboBox.SelectionChanged += (_, _) => RefreshVisibility();
+            RefreshVisibility();
+
+            var panel = new StackPanel { Spacing = 10, Width = 720 };
+            panel.Children.Add(new TextBlock { Text = "名稱" });
+            panel.Children.Add(nameTextBox);
+            panel.Children.Add(new TextBlock { Text = "工作類型" });
+            panel.Children.Add(jobTypeComboBox);
+            panel.Children.Add(new TextBlock { Text = "目的地" });
+            panel.Children.Add(destinationPathTextBox);
+            panel.Children.Add(filePanel);
+            panel.Children.Add(mongoPanel);
+            panel.Children.Add(new TextBlock { Text = "排程類型" });
+            panel.Children.Add(scheduleTypeComboBox);
+            panel.Children.Add(intervalPanel);
+            panel.Children.Add(scheduledPanel);
+            panel.Children.Add(runMissedCheckBox);
+
+            var dialog = new ContentDialog
+            {
+                Title = title,
+                Content = new ScrollViewer
+                {
+                    Content = panel,
+                    MaxHeight = 650,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                },
+                PrimaryButtonText = "儲存",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = RootLayout.XamlRoot,
+            };
+            ApplyThemeToDialog(dialog);
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return false;
+            }
+
+            var jobType = jobTypeComboBox.SelectedIndex == 1
+                ? AutomationJobType.MongoBackup
+                : AutomationJobType.FileBackup;
+            var scheduleType = scheduleTypeComboBox.SelectedIndex switch
+            {
+                1 => AutomationScheduleType.Daily,
+                2 => AutomationScheduleType.Weekly,
+                _ => AutomationScheduleType.Interval,
+            };
+            if (string.IsNullOrWhiteSpace(destinationPathTextBox.Text))
+            {
+                await ShowMessageAsync("自動化工作無效", "目的地必須填寫。");
+                return false;
+            }
+            if (jobType == AutomationJobType.FileBackup &&
+                (string.IsNullOrWhiteSpace(sourcePathTextBox.Text) ||
+                 (!File.Exists(sourcePathTextBox.Text.Trim()) && !Directory.Exists(sourcePathTextBox.Text.Trim()))))
+            {
+                await ShowMessageAsync("自動化工作無效", "來源路徑不存在。");
+                return false;
+            }
+            if (jobType == AutomationJobType.MongoBackup &&
+                string.IsNullOrWhiteSpace(mongoConnectionStringTextBox.Text))
+            {
+                await ShowMessageAsync("自動化工作無效", "Mongo URI 必須填寫。");
+                return false;
+            }
+            if (!int.TryParse(intervalTextBox.Text.Trim(), NumberStyles.Integer, CultureInfo.InvariantCulture, out var intervalMinutes) ||
+                intervalMinutes <= 0)
+            {
+                await ShowMessageAsync("自動化工作無效", "間隔分鐘必須是大於 0 的整數。");
+                return false;
+            }
+            if (scheduleType != AutomationScheduleType.Interval &&
+                !TryParseScheduleTimeText(scheduleTimeTextBox.Text.Trim(), out _))
+            {
+                await ShowMessageAsync("自動化工作無效", "時間格式必須是 HH:mm。");
+                return false;
+            }
+
+            _ = int.TryParse(
+                mongoRetentionCountTextBox.Text.Trim(),
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out var retentionCount);
+            retentionCount = retentionCount > 0 ? retentionCount : 7;
+
+            profile.Name = nameTextBox.Text.Trim();
+            profile.JobType = jobType;
+            profile.SourcePath = sourcePathTextBox.Text.Trim();
+            profile.DestinationPath = destinationPathTextBox.Text.Trim();
+            profile.Mode = modeComboBox.SelectedIndex == 1 ? BackupAutomationMode.Mirror : BackupAutomationMode.Copy;
+            profile.MongoToolPath = mongoToolPathTextBox.Text.Trim();
+            profile.MongoConnectionString = mongoConnectionStringTextBox.Text.Trim();
+            profile.MongoDatabaseName = mongoDatabaseNameTextBox.Text.Trim();
+            profile.MongoRetentionCount = retentionCount;
+            profile.MongoRetentionCountText = retentionCount.ToString(CultureInfo.InvariantCulture);
+            profile.MongoUseArchive = mongoUseArchiveCheckBox.IsChecked == true;
+            profile.MongoUseGzip = mongoUseGzipCheckBox.IsChecked == true;
+            profile.ScheduleType = scheduleType;
+            profile.IntervalMinutes = intervalMinutes;
+            profile.IntervalMinutesText = intervalMinutes.ToString(CultureInfo.InvariantCulture);
+            profile.ScheduleTimeText = scheduleTimeTextBox.Text.Trim();
+            profile.RunMissedOnStartup = runMissedCheckBox.IsChecked == true;
+            profile.WeeklyDaysMask = 0;
+            profile.SetWeekdaySelected(DayOfWeek.Monday, monday.IsChecked == true);
+            profile.SetWeekdaySelected(DayOfWeek.Tuesday, tuesday.IsChecked == true);
+            profile.SetWeekdaySelected(DayOfWeek.Wednesday, wednesday.IsChecked == true);
+            profile.SetWeekdaySelected(DayOfWeek.Thursday, thursday.IsChecked == true);
+            profile.SetWeekdaySelected(DayOfWeek.Friday, friday.IsChecked == true);
+            profile.SetWeekdaySelected(DayOfWeek.Saturday, saturday.IsChecked == true);
+            profile.SetWeekdaySelected(DayOfWeek.Sunday, sunday.IsChecked == true);
+            return true;
+        }
+
+        private async Task<bool> ShowAutoExtractProfileEditorAsync(
+            AutoExtractProfile profile,
+            string title = "編輯自動解壓")
+        {
+            var passwordValues = profile.Passwords
+                .Select(static item => item.Value.Trim())
+                .Where(static value => !string.IsNullOrWhiteSpace(value))
+                .ToList();
+            var nameTextBox = new TextBox { Text = profile.Name };
+            var watchPathTextBox = new TextBox { Text = profile.WatchPath };
+            var extractorPathTextBox = new TextBox { Text = profile.ExtractorPath };
+            var extensionFilterTextBox = new TextBox { Text = profile.ExtensionFilter };
+            var passwordsTextBox = new TextBox
+            {
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.NoWrap,
+                MinHeight = 160,
+                VerticalContentAlignment = VerticalAlignment.Top,
+            };
+            passwordsTextBox.Text = string.Join(Environment.NewLine, passwordValues);
+
+            var panel = new StackPanel { Spacing = 10, Width = 680 };
+            panel.Children.Add(new TextBlock { Text = "名稱" });
+            panel.Children.Add(nameTextBox);
+            panel.Children.Add(new TextBlock { Text = "監看目錄" });
+            panel.Children.Add(watchPathTextBox);
+            panel.Children.Add(new TextBlock { Text = "解壓工具路徑" });
+            panel.Children.Add(extractorPathTextBox);
+            panel.Children.Add(new TextBlock { Text = "副檔名篩選" });
+            panel.Children.Add(extensionFilterTextBox);
+            panel.Children.Add(new TextBlock { Text = "密碼清單（每行一組）" });
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"目前已載入 {passwordValues.Count} 組密碼",
+                Opacity = 0.78,
+            });
+            panel.Children.Add(new ScrollViewer
+            {
+                Content = passwordsTextBox,
+                MaxHeight = 240,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            });
+
+            var dialog = new ContentDialog
+            {
+                Title = title,
+                Content = panel,
+                PrimaryButtonText = "儲存",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = RootLayout.XamlRoot,
+            };
+            ApplyThemeToDialog(dialog);
+
+            if (await dialog.ShowAsync() != ContentDialogResult.Primary)
+            {
+                return false;
+            }
+
+            var watchPath = watchPathTextBox.Text.Trim();
+            if (string.IsNullOrWhiteSpace(watchPath) || !Directory.Exists(watchPath))
+            {
+                await ShowMessageAsync("自動解壓無效", "監看目錄不存在。");
+                return false;
+            }
+
+            profile.Name = nameTextBox.Text.Trim();
+            profile.WatchPath = watchPath;
+            profile.ExtractorPath = extractorPathTextBox.Text.Trim();
+            profile.ExtensionFilter = extensionFilterTextBox.Text.Trim();
+            profile.Passwords.Clear();
+            foreach (var password in passwordsTextBox.Text
+                .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Distinct(StringComparer.Ordinal))
+            {
+                profile.Passwords.Add(new AutoExtractPasswordItem
+                {
+                    Value = password,
+                    ParentProfile = profile,
+                });
+            }
+            return true;
         }
 
         private async Task<string?> ShowAutoExtractPasswordPromptAsync(string title, string message)

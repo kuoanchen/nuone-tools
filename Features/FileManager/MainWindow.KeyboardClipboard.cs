@@ -37,6 +37,18 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
+        internal void LeftPaneList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+        {
+            ActivatePane(LeftPane);
+            PrepareExternalFileDrag(LeftPane, e);
+        }
+
+        internal void RightPaneList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
+        {
+            ActivatePane(RightPane);
+            PrepareExternalFileDrag(RightPane, e);
+        }
+
         private void RootLayout_KeyDown(object sender, KeyRoutedEventArgs e)
         {
             if (e.Handled || _isSettingsDialogOpen)
@@ -92,6 +104,15 @@ namespace nuone_tools
                 _shortcutSettings = CloneShortcutSettings(_editingShortcutSettings);
                 SaveShortcutSettingsSafe();
                 CaptureHintTextBlock.Text = "已立即儲存快捷鍵。";
+                return;
+            }
+
+            if (_activeSection == AppSection.Terminal &&
+                IsControlModifierPressed() &&
+                e.Key == Windows.System.VirtualKey.C &&
+                TryInterruptActiveTerminal())
+            {
+                e.Handled = true;
                 return;
             }
 
@@ -324,6 +345,57 @@ namespace nuone_tools
             package.SetText(string.Join(Environment.NewLine, selectedEntries.Select(static entry => entry.FullPath)));
             Clipboard.SetContent(package);
             Clipboard.Flush();
+        }
+
+        private void PrepareExternalFileDrag(PaneViewModel pane, DragItemsStartingEventArgs e)
+        {
+            var draggedEntries = e.Items.OfType<FileEntry>().ToList();
+            if (draggedEntries.Count == 0)
+            {
+                draggedEntries = GetSelectedEntries(pane).ToList();
+            }
+
+            if (draggedEntries.Count == 0)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            var storageItems = ResolveStorageItemsForTransfer(draggedEntries);
+            if (storageItems.Count == 0)
+            {
+                e.Cancel = true;
+                return;
+            }
+
+            e.Data.RequestedOperation = DataPackageOperation.Copy;
+            e.Data.SetStorageItems(storageItems);
+            e.Data.SetText(string.Join(Environment.NewLine, draggedEntries.Select(static entry => entry.FullPath)));
+        }
+
+        private static List<IStorageItem> ResolveStorageItemsForTransfer(IEnumerable<FileEntry> entries)
+        {
+            var storageItems = new List<IStorageItem>();
+
+            foreach (var entry in entries)
+            {
+                try
+                {
+                    if (entry.IsDirectory)
+                    {
+                        storageItems.Add(StorageFolder.GetFolderFromPathAsync(entry.FullPath).AsTask().GetAwaiter().GetResult());
+                    }
+                    else
+                    {
+                        storageItems.Add(StorageFile.GetFileFromPathAsync(entry.FullPath).AsTask().GetAwaiter().GetResult());
+                    }
+                }
+                catch
+                {
+                }
+            }
+
+            return storageItems;
         }
 
         private async Task PasteClipboardItemsAsync(PaneViewModel targetPane)

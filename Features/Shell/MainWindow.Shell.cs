@@ -55,6 +55,13 @@ namespace nuone_tools
             SwitchToAppSection(AppSection.Automation);
         }
 
+        private void ShowTerminalApp_Click(object sender, RoutedEventArgs e)
+        {
+            EnsureTerminalTabExists();
+            SyncTerminalWorkingDirectoryFromActivePane();
+            SwitchToAppSection(AppSection.Terminal);
+        }
+
         private void OpenSettings_Click(object sender, RoutedEventArgs e)
         {
             ResetEditableShortcutSettings();
@@ -74,8 +81,10 @@ namespace nuone_tools
         {
             var isFileManager = _activeSection == AppSection.FileManager;
             var isAutomation = _activeSection == AppSection.Automation;
+            var isTerminal = _activeSection == AppSection.Terminal;
             FileManagerView.Visibility = isFileManager ? Visibility.Visible : Visibility.Collapsed;
             AutomationView.Visibility = isAutomation ? Visibility.Visible : Visibility.Collapsed;
+            TerminalView.Visibility = isTerminal ? Visibility.Visible : Visibility.Collapsed;
             SettingsView.Visibility = _activeSection == AppSection.Settings ? Visibility.Visible : Visibility.Collapsed;
 
             ApplyAppRailButtonState(
@@ -89,6 +98,12 @@ namespace nuone_tools
                 AutomationAppIcon,
                 AutomationAppText,
                 isAutomation);
+
+            ApplyAppRailButtonState(
+                TerminalAppButtonBorder,
+                TerminalAppIcon,
+                TerminalAppText,
+                isTerminal);
 
             ApplyAppRailButtonState(
                 SettingsAppButtonBorder,
@@ -116,8 +131,9 @@ namespace nuone_tools
             if (SharedStatusSectionText is null ||
                 SharedStatusPrimaryText is null ||
                 SharedStatusDetailText is null ||
-                SharedStatusBackgroundBorder is null ||
-                SharedStatusBackgroundText is null)
+                BackgroundWorkTopStatusText is null ||
+                BackgroundWorkHistoryCountBadge is null ||
+                BackgroundWorkHistoryCountText is null)
             {
                 return;
             }
@@ -126,9 +142,11 @@ namespace nuone_tools
             {
                 case AppSection.Automation:
                     {
-                        var totalJobs = BackupAutomations.Count;
-                        var enabledJobs = BackupAutomations.Count(profile => profile.IsEnabled);
-                        var runningJobs = BackupAutomations.Count(profile => profile.IsRunning);
+                        var totalJobs = BackupAutomations.Count + AutoExtractProfiles.Count;
+                        var enabledJobs = BackupAutomations.Count(profile => profile.IsEnabled) +
+                            AutoExtractProfiles.Count(profile => profile.IsEnabled);
+                        var runningJobs = BackupAutomations.Count(profile => profile.IsRunning) +
+                            AutoExtractProfiles.Count(profile => profile.IsRunning);
                         SharedStatusSectionText.Text = "自動化";
                         SharedStatusPrimaryText.Text = $"{totalJobs} 個工作 / {enabledJobs} 個已啟用";
                         SharedStatusDetailText.Text = runningJobs > 0
@@ -136,6 +154,11 @@ namespace nuone_tools
                             : "目前沒有執行中的工作";
                         break;
                     }
+                case AppSection.Terminal:
+                    SharedStatusSectionText.Text = "終端機";
+                    SharedStatusPrimaryText.Text = GetTerminalSharedStatusPrimaryText();
+                    SharedStatusDetailText.Text = GetTerminalSharedStatusDetailText();
+                    break;
                 case AppSection.Settings:
                     SharedStatusSectionText.Text = "設定";
                     SharedStatusPrimaryText.Text = $"目前分頁 · {GetSettingsSectionTitle(_activeSettingsSection)}";
@@ -155,14 +178,14 @@ namespace nuone_tools
             }
 
             var backgroundWorkSummary = BuildBackgroundWorkSummary();
-            SharedStatusBackgroundBorder.Visibility = backgroundWorkSummary is null
-                ? Visibility.Collapsed
-                : Visibility.Visible;
-            SharedStatusBackgroundText.Text = backgroundWorkSummary ?? string.Empty;
-            Grid.SetColumn(SharedStatusDetailText, backgroundWorkSummary is null ? 6 : 4);
-            SharedStatusDetailText.HorizontalAlignment = backgroundWorkSummary is null
-                ? HorizontalAlignment.Right
-                : HorizontalAlignment.Left;
+            BackgroundWorkTopStatusText.Text = backgroundWorkSummary ?? "目前沒有執行中的工作";
+            var historyCount = GetBackgroundWorkRecordCount();
+            BackgroundWorkHistoryCountText.Text = historyCount > 99
+                ? "99+"
+                : historyCount.ToString(CultureInfo.InvariantCulture);
+            BackgroundWorkHistoryCountBadge.Visibility = historyCount > 0
+                ? Visibility.Visible
+                : Visibility.Collapsed;
         }
 
         private Guid BeginBackgroundWork(string label)
@@ -171,6 +194,7 @@ namespace nuone_tools
             lock (_backgroundWorkLock)
             {
                 _backgroundWorks[workId] = label;
+                AddBackgroundWorkRecordLocked($"開始：{label}");
             }
 
             EnqueueSharedStatusBarRefresh();
@@ -181,10 +205,100 @@ namespace nuone_tools
         {
             lock (_backgroundWorkLock)
             {
-                _backgroundWorks.Remove(workId);
+                if (_backgroundWorks.Remove(workId, out var label))
+                {
+                    AddBackgroundWorkRecordLocked($"完成：{label}");
+                }
             }
 
             EnqueueSharedStatusBarRefresh();
+        }
+
+        private void BackgroundWorkNotification_Click(object sender, RoutedEventArgs e)
+        {
+            if (BackgroundWorkNotificationButton is null)
+            {
+                return;
+            }
+
+            var flyout = new Flyout
+            {
+                Placement = FlyoutPlacementMode.Bottom,
+            };
+            flyout.Content = BuildBackgroundWorkNotificationContent(flyout);
+            flyout.ShowAt(BackgroundWorkNotificationButton);
+        }
+
+        private FrameworkElement BuildBackgroundWorkNotificationContent(Flyout flyout)
+        {
+            var records = GetBackgroundWorkRecordsSnapshot();
+            var panel = new StackPanel
+            {
+                Width = 360,
+                Spacing = 12,
+            };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "背景工作記錄",
+                Foreground = new SolidColorBrush(GetBrushColor("TextPrimaryBrush", "#F6F2FF")),
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+
+            var listPanel = new StackPanel { Spacing = 8 };
+            if (records.Count == 0)
+            {
+                listPanel.Children.Add(new TextBlock
+                {
+                    Text = "尚無背景工作記錄。",
+                    Foreground = new SolidColorBrush(GetBrushColor("TextSecondaryBrush", "#B9AECF")),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+            }
+            else
+            {
+                foreach (var record in records.Take(100))
+                {
+                    listPanel.Children.Add(new Border
+                    {
+                        Padding = new Thickness(10, 8, 10, 8),
+                        Background = new SolidColorBrush(GetBrushColor("InputAltBrush", "#231E2B")),
+                        BorderBrush = new SolidColorBrush(GetBrushColor("PanelStrokeBrush", "#3A3146")),
+                        BorderThickness = new Thickness(1),
+                        CornerRadius = new CornerRadius(10),
+                        Child = new TextBlock
+                        {
+                            Text = record,
+                            Foreground = new SolidColorBrush(GetBrushColor("TextPrimaryBrush", "#F6F2FF")),
+                            FontSize = 12,
+                            TextWrapping = TextWrapping.Wrap,
+                        },
+                    });
+                }
+            }
+
+            panel.Children.Add(new ScrollViewer
+            {
+                Content = listPanel,
+                MaxHeight = 300,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            });
+
+            var clearButton = new Button
+            {
+                Content = "清除記錄",
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                IsEnabled = records.Count > 0,
+            };
+            clearButton.Click += (_, _) =>
+            {
+                ClearBackgroundWorkRecords();
+                flyout.Hide();
+            };
+            panel.Children.Add(clearButton);
+
+            return panel;
         }
 
         private void EnqueueSharedStatusBarRefresh()
@@ -233,7 +347,6 @@ namespace nuone_tools
                 SettingsSection.Appearance => "外觀",
                 SettingsSection.Shortcuts => "快捷鍵",
                 SettingsSection.Toolbar => "工具列",
-                SettingsSection.AutoExtract => "自動解壓",
                 _ => "一般",
             };
         }
@@ -257,6 +370,41 @@ namespace nuone_tools
             }
 
             return $"{labels[0]} 等 {labels.Count} 個背景工作";
+        }
+
+        private void AddBackgroundWorkRecordLocked(string message)
+        {
+            _backgroundWorkRecords.Insert(0, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}　{message}");
+            while (_backgroundWorkRecords.Count > 100)
+            {
+                _backgroundWorkRecords.RemoveAt(_backgroundWorkRecords.Count - 1);
+            }
+        }
+
+        private int GetBackgroundWorkRecordCount()
+        {
+            lock (_backgroundWorkLock)
+            {
+                return _backgroundWorkRecords.Count;
+            }
+        }
+
+        private List<string> GetBackgroundWorkRecordsSnapshot()
+        {
+            lock (_backgroundWorkLock)
+            {
+                return _backgroundWorkRecords.ToList();
+            }
+        }
+
+        private void ClearBackgroundWorkRecords()
+        {
+            lock (_backgroundWorkLock)
+            {
+                _backgroundWorkRecords.Clear();
+            }
+
+            UpdateSharedStatusBar();
         }
     }
 }

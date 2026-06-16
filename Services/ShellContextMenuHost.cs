@@ -65,6 +65,7 @@ namespace nuone_tools
         CopyToOtherPane,
         MoveToOtherPane,
         CreateAutomation,
+        DeployNodeDocker,
         Rename,
         CreateFolder,
         CopyPath,

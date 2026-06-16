@@ -1,37 +1,20 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
-using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
-using System.Runtime.CompilerServices;
-using System.Runtime.InteropServices.WindowsRuntime;
-using System.Security.Cryptography;
-using System.Text;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Threading;
 using System.Threading.Tasks;
-using System.Timers;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
-using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
-using Windows.ApplicationModel.DataTransfer;
-using Windows.Foundation;
-using Windows.Storage;
-using Windows.Storage.FileProperties;
-using Windows.Storage.Streams;
-using WinRT.Interop;
 
 namespace nuone_tools
 {
@@ -75,7 +58,7 @@ namespace nuone_tools
         private static readonly SolidColorBrush UnselectedItemBackgroundBrush = new(Colors.Transparent);
         private static readonly SolidColorBrush UnselectedItemBorderBrush = new(Colors.Transparent);
         private static readonly Thickness SelectedItemBorderThickness = new(1);
-        private static readonly Thickness UnselectedItemBorderThickness = new(0);
+        private static readonly Thickness UnselectedItemBorderThickness = new(1);
         private static readonly string ConfigDirectoryPath = Path.Combine(
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "nuone-tools",
@@ -106,12 +89,14 @@ namespace nuone_tools
         private ShortcutSettings _shortcutSettings = ShortcutSettings.CreateDefault();
         private ShortcutSettings _editingShortcutSettings = ShortcutSettings.CreateDefault();
         private AccountSettingsState _accountSettings = AccountSettingsState.CreateDefault();
+        private FileBunkerSettingsState _fileBunkerSettings = FileBunkerSettingsState.CreateDefault();
         private AppSection _activeSection = AppSection.FileManager;
         private SettingsSection _activeSettingsSection = SettingsSection.General;
         private ShortcutCaptureTarget _settingsCaptureTarget = ShortcutCaptureTarget.None;
         private bool _isSettingsDialogOpen;
         private bool _isUpdatingSettingsUi;
         private bool _isUpdatingAccountUi;
+        private bool _isUpdatingFileBunkerUi;
         private bool _isAccountLoginRunning;
         private CancellationTokenSource? _leftSelectionSizeCts;
         private CancellationTokenSource? _rightSelectionSizeCts;
@@ -124,7 +109,10 @@ namespace nuone_tools
         private readonly HashSet<Guid> _runningAutoExtractIds = new();
         private readonly object _backgroundWorkLock = new();
         private readonly Dictionary<Guid, string> _backgroundWorks = new();
+        private readonly List<string> _backgroundWorkRecords = new();
         private readonly HashSet<string> _hiddenDrivePaths = new(StringComparer.OrdinalIgnoreCase);
+        private TerminalTabSession? _selectedTerminalTab;
+        private int _nextTerminalTabNumber = 1;
 
         public string AppVersionText { get; } = GetAppVersionText();
 
@@ -138,6 +126,8 @@ namespace nuone_tools
 
         public ObservableCollection<ToolbarCommandItem> ToolbarCommands { get; } = new();
 
+        public ObservableCollection<TerminalTabSession> TerminalTabs { get; } = new();
+
         public PaneViewModel LeftPane { get; } = new("左側");
 
         public PaneViewModel RightPane { get; } = new("右側");
@@ -145,6 +135,11 @@ namespace nuone_tools
         public MainWindow()
         {
             InitializeComponent();
+
+            FileManagerPage.Owner = this;
+            AutomationPage.Owner = this;
+            SettingsPage.Owner = this;
+            TerminalPage.Owner = this;
 
             _activePane = LeftPane;
             _leftPaneWatcher = new PaneDirectoryWatcher(LeftPane, DispatcherQueue, RefreshPane, PaneWatcherDebounceInterval);
@@ -160,6 +155,7 @@ namespace nuone_tools
             LoadCustomGroups();
             LoadShortcutSettings();
             LoadAccountSettings();
+            LoadFileBunkerSettings();
             LoadBackupAutomations();
             LoadAutoExtractProfiles();
             LoadToolbarCommands();
@@ -169,6 +165,7 @@ namespace nuone_tools
             UpdateDriveSectionMenuState();
             ResetEditableShortcutSettings();
             UpdateAccountSettingsUi();
+            UpdateFileBunkerSettingsUi();
             RescheduleBackupAutomations();
             RescheduleAutoExtractProfiles();
 
@@ -184,6 +181,7 @@ namespace nuone_tools
             UpdateActivePaneVisuals();
             UpdateAppSectionVisuals();
             UpdateSettingsSectionVisuals();
+            UpdateTerminalUi();
             UpdateSharedStatusBar();
 
             _selectionFlyoutTimer = DispatcherQueue.CreateTimer();
@@ -200,6 +198,9 @@ namespace nuone_tools
             _rightSelectionSizeTimer.Interval = SelectionSizeDebounceInterval;
             _rightSelectionSizeTimer.IsRepeating = false;
             _rightSelectionSizeTimer.Tick += RightSelectionSizeTimer_Tick;
+
+            _terminalCursorTimer = DispatcherQueue.CreateTimer();
+            InitializeTerminalCursorTimer();
         }
 
         private static string GetAppVersionText()
@@ -235,10 +236,16 @@ namespace nuone_tools
             _leftSelectionSizeTimer.Tick -= LeftSelectionSizeTimer_Tick;
             _rightSelectionSizeTimer.Stop();
             _rightSelectionSizeTimer.Tick -= RightSelectionSizeTimer_Tick;
+            _terminalCursorTimer?.Stop();
+            if (_terminalCursorTimer is not null)
+            {
+                _terminalCursorTimer.Tick -= TerminalCursorTimer_Tick;
+            }
             _leftSelectionSizeCts?.Cancel();
             _leftSelectionSizeCts?.Dispose();
             _rightSelectionSizeCts?.Cancel();
             _rightSelectionSizeCts?.Dispose();
+            StopAllTerminalProcesses();
             LeftPane.PropertyChanged -= Pane_PropertyChanged;
             RightPane.PropertyChanged -= Pane_PropertyChanged;
             Closed -= MainWindow_Closed;

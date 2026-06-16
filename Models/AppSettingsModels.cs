@@ -39,6 +39,7 @@ namespace nuone_tools
     {
         FileManager,
         Automation,
+        Terminal,
         Settings,
     }
 
@@ -49,7 +50,6 @@ namespace nuone_tools
         Appearance,
         Shortcuts,
         Toolbar,
-        AutoExtract,
     }
 
     public enum ShortcutCaptureTarget
@@ -75,6 +75,19 @@ namespace nuone_tools
         Mirror,
     }
 
+    public enum AutomationJobType
+    {
+        FileBackup,
+        MongoBackup,
+    }
+
+    public enum AutomationScheduleType
+    {
+        Interval,
+        Daily,
+        Weekly,
+    }
+
     public sealed class ShortcutSettings
     {
         public const Windows.System.VirtualKey DefaultCopyToOtherPaneKey = Windows.System.VirtualKey.F5;
@@ -86,6 +99,9 @@ namespace nuone_tools
         public const bool DefaultShowSelectedFileSize = true;
         public const bool DefaultShowSelectedFolderSize = true;
         public const bool DefaultShowHiddenSystemItems = false;
+        public const TerminalShellKind DefaultTerminalShellKindValue = TerminalShellKind.PowerShell;
+        public const ToolbarWorkingDirectoryMode DefaultTerminalWorkingDirectoryModeValue = ToolbarWorkingDirectoryMode.ActivePane;
+        public const string DefaultTerminalCustomWorkingDirectoryValue = "";
 
         public Windows.System.VirtualKey CopyToOtherPaneKey { get; set; } = DefaultCopyToOtherPaneKey;
 
@@ -104,6 +120,12 @@ namespace nuone_tools
         public bool ShowSelectedFolderSize { get; set; } = DefaultShowSelectedFolderSize;
 
         public bool ShowHiddenSystemItems { get; set; } = DefaultShowHiddenSystemItems;
+
+        public TerminalShellKind DefaultTerminalShellKind { get; set; } = DefaultTerminalShellKindValue;
+
+        public ToolbarWorkingDirectoryMode DefaultTerminalWorkingDirectoryMode { get; set; } = DefaultTerminalWorkingDirectoryModeValue;
+
+        public string DefaultTerminalCustomWorkingDirectory { get; set; } = DefaultTerminalCustomWorkingDirectoryValue;
 
         public static ShortcutSettings CreateDefault()
         {
@@ -131,6 +153,12 @@ namespace nuone_tools
 
         public bool ShowHiddenSystemItems { get; set; } = ShortcutSettings.DefaultShowHiddenSystemItems;
 
+        public TerminalShellKind DefaultTerminalShellKind { get; set; } = ShortcutSettings.DefaultTerminalShellKindValue;
+
+        public ToolbarWorkingDirectoryMode DefaultTerminalWorkingDirectoryMode { get; set; } = ShortcutSettings.DefaultTerminalWorkingDirectoryModeValue;
+
+        public string DefaultTerminalCustomWorkingDirectory { get; set; } = ShortcutSettings.DefaultTerminalCustomWorkingDirectoryValue;
+
         public List<string> HiddenDrivePaths { get; set; } = new();
 
         public string LeftPanePath { get; set; } = string.Empty;
@@ -140,6 +168,8 @@ namespace nuone_tools
         public WindowPlacementConfig? WindowPlacement { get; set; }
 
         public AccountSettingsConfig Account { get; set; } = new();
+
+        public FileBunkerSettingsConfig FileBunker { get; set; } = new();
 
         public List<ToolbarCommandConfig> ToolbarCommands { get; set; } = new();
 
@@ -171,6 +201,23 @@ namespace nuone_tools
         public string LastStatusText { get; set; } = "尚未登入";
     }
 
+    public sealed class FileBunkerSettingsConfig
+    {
+        public string InputEndpoint { get; set; } = "https://filein.filebunker.com";
+
+        public string OutputEndpointBase { get; set; } = "https://out.filebunker.com";
+
+        public string ApiKey { get; set; } = string.Empty;
+
+        public int KeyLength { get; set; } = 64;
+
+        public string ClientId { get; set; } = string.Empty;
+
+        public int DaysToExpiration { get; set; } = 3650;
+
+        public int DaysToPurge { get; set; } = 20;
+    }
+
     public sealed class ToolbarCommandConfig
     {
         public Guid Id { get; set; }
@@ -182,6 +229,36 @@ namespace nuone_tools
         public string IconPath { get; set; } = string.Empty;
 
         public string IconGlyph { get; set; } = string.Empty;
+
+        public string NodeDockerUser { get; set; } = string.Empty;
+
+        public string NodeDockerHost { get; set; } = string.Empty;
+
+        public string NodeDockerRemoteDirectory { get; set; } = string.Empty;
+
+        public NodeDockerLaunchMode NodeDockerLaunchMode { get; set; } = NodeDockerLaunchMode.ExternalWindow;
+
+        public TerminalShellKind TerminalShellKind { get; set; } = TerminalShellKind.PowerShell;
+
+        public ToolbarWorkingDirectoryMode TerminalWorkingDirectoryMode { get; set; } = ToolbarWorkingDirectoryMode.ActivePane;
+
+        public string TerminalCustomWorkingDirectory { get; set; } = string.Empty;
+
+        public string TerminalLaunchArguments { get; set; } = string.Empty;
+    }
+
+    public enum NodeDockerLaunchMode
+    {
+        ExternalWindow,
+        BuiltInTerminal,
+    }
+
+    public enum ToolbarWorkingDirectoryMode
+    {
+        ActivePane,
+        LeftPane,
+        RightPane,
+        CustomPath,
     }
 
     public sealed class WindowPlacementConfig
@@ -201,13 +278,35 @@ namespace nuone_tools
 
         public string Name { get; set; } = string.Empty;
 
+        public AutomationJobType JobType { get; set; } = AutomationJobType.FileBackup;
+
         public string SourcePath { get; set; } = string.Empty;
 
         public string DestinationPath { get; set; } = string.Empty;
 
         public BackupAutomationMode Mode { get; set; } = BackupAutomationMode.Copy;
 
+        public string MongoToolPath { get; set; } = @"C:\Program Files\MongoDB\Tools\100\bin\mongodump.exe";
+
+        public string MongoConnectionString { get; set; } = string.Empty;
+
+        public string MongoDatabaseName { get; set; } = string.Empty;
+
+        public bool MongoUseGzip { get; set; } = true;
+
+        public bool MongoUseArchive { get; set; } = true;
+
+        public int MongoRetentionCount { get; set; } = 7;
+
+        public AutomationScheduleType ScheduleType { get; set; } = AutomationScheduleType.Interval;
+
         public int IntervalMinutes { get; set; } = 60;
+
+        public string ScheduleTimeText { get; set; } = "03:00";
+
+        public int WeeklyDaysMask { get; set; } = 62;
+
+        public bool RunMissedOnStartup { get; set; }
 
         public bool IsEnabled { get; set; } = true;
 
@@ -225,6 +324,8 @@ namespace nuone_tools
         public string WatchPath { get; set; } = string.Empty;
 
         public string ExtractorPath { get; set; } = string.Empty;
+
+        public string ExtensionFilter { get; set; } = string.Empty;
 
         public List<string> Passwords { get; set; } = new();
 
