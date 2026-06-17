@@ -69,6 +69,13 @@ namespace nuone_tools
                 return;
             }
 
+            if (MainWindow.IsWslPath(path) || MainWindow.IsSshPath(path))
+            {
+                StopWatching();
+                _watchedPath = string.Empty;
+                return;
+            }
+
             var normalizedPath = string.IsNullOrWhiteSpace(path) ? string.Empty : Path.GetFullPath(path);
             if (string.Equals(_watchedPath, normalizedPath, StringComparison.OrdinalIgnoreCase))
             {

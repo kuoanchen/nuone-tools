@@ -448,7 +448,7 @@
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis" />
                                     <Button Grid.Column="1"
-                                            Tag="{Binding LeftPane}"
+                                            Tag="{Binding}"
                                             Click="ClearPaneFilter_Click"
                                             Style="{StaticResource GhostButtonStyle}"
                                             Padding="8,4"
@@ -565,6 +565,26 @@
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
+
+                        <Border Grid.RowSpan="3"
+                                Background="#6A141119"
+                                CornerRadius="18"
+                                Visibility="{Binding LeftPane.LoadingVisibility}"
+                                IsHitTestVisible="{Binding LeftPane.IsLoading}">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Spacing="12">
+                                <ProgressRing Width="36"
+                                              Height="36"
+                                              IsActive="{Binding LeftPane.IsLoading}" />
+                                <TextBlock Text="{Binding LeftPane.LoadingText}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           TextAlignment="Center" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
 
@@ -610,7 +630,7 @@
                                                VerticalAlignment="Center"
                                                TextTrimming="CharacterEllipsis" />
                                     <Button Grid.Column="1"
-                                            Tag="{Binding RightPane}"
+                                            Tag="{Binding}"
                                             Click="ClearPaneFilter_Click"
                                             Style="{StaticResource GhostButtonStyle}"
                                             Padding="8,4"
@@ -727,6 +747,26 @@
                                 </DataTemplate>
                             </ListView.ItemTemplate>
                         </ListView>
+
+                        <Border Grid.RowSpan="3"
+                                Background="#6A141119"
+                                CornerRadius="18"
+                                Visibility="{Binding RightPane.LoadingVisibility}"
+                                IsHitTestVisible="{Binding RightPane.IsLoading}">
+                            <StackPanel HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        Spacing="12">
+                                <ProgressRing Width="36"
+                                              Height="36"
+                                              IsActive="{Binding RightPane.IsLoading}" />
+                                <TextBlock Text="{Binding RightPane.LoadingText}"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           HorizontalAlignment="Center"
+                                           TextAlignment="Center" />
+                            </StackPanel>
+                        </Border>
                     </Grid>
                 </Border>
             </Grid>

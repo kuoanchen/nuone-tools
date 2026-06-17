@@ -302,6 +302,68 @@ namespace nuone_tools
 
         }
 
+        private void LoadNotificationHistories()
+        {
+            lock (_notificationHistoryLock)
+            {
+                _localNotificationHistory.Clear();
+                _syncNotificationHistory.Clear();
+                _localNotificationHistory.AddRange(LoadNotificationHistoryFile(LocalNotificationHistoryPath, NotificationHistoryScope.LocalOnly));
+                _syncNotificationHistory.AddRange(LoadNotificationHistoryFile(SyncNotificationHistoryPath, NotificationHistoryScope.Sync));
+            }
+        }
+
+        private static List<NotificationHistoryRecord> LoadNotificationHistoryFile(string path, NotificationHistoryScope scope)
+        {
+            if (!File.Exists(path))
+            {
+                return new List<NotificationHistoryRecord>();
+            }
+
+            try
+            {
+                var records = JsonSerializer.Deserialize<List<NotificationHistoryRecord>>(File.ReadAllText(path), JsonOptions);
+                if (records is null)
+                {
+                    return new List<NotificationHistoryRecord>();
+                }
+
+                return records
+                    .Where(static record => !string.IsNullOrWhiteSpace(record.Summary))
+                    .Select(record => new NotificationHistoryRecord
+                    {
+                        Id = record.Id == Guid.Empty ? Guid.NewGuid() : record.Id,
+                        Scope = record.Scope,
+                        Category = record.Category?.Trim() ?? string.Empty,
+                        Summary = record.Summary?.Trim() ?? string.Empty,
+                        Details = record.Details ?? string.Empty,
+                        CreatedAtUtc = string.IsNullOrWhiteSpace(record.CreatedAtUtc)
+                            ? DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture)
+                            : record.CreatedAtUtc,
+                        DeviceName = record.DeviceName?.Trim() ?? string.Empty,
+                    })
+                    .Select(record =>
+                    {
+                        if (record.Scope == NotificationHistoryScope.LocalOnly && scope == NotificationHistoryScope.Sync)
+                        {
+                            record.Scope = NotificationHistoryScope.Sync;
+                        }
+                        else if (record.Scope == NotificationHistoryScope.Sync && scope == NotificationHistoryScope.LocalOnly)
+                        {
+                            record.Scope = NotificationHistoryScope.LocalOnly;
+                        }
+
+                        return record;
+                    })
+                    .Take(200)
+                    .ToList();
+            }
+            catch
+            {
+                return new List<NotificationHistoryRecord>();
+            }
+        }
+
         private async Task ExecuteToolbarCommandAsync(ToolbarCommandItem item)
         {
             if (string.IsNullOrWhiteSpace(item.Command))
@@ -630,6 +692,33 @@ namespace nuone_tools
 
             var json = JsonSerializer.Serialize(settings, JsonOptions);
             File.WriteAllText(SettingsConfigPath, json);
+        }
+
+        private void SaveNotificationHistories()
+        {
+            Directory.CreateDirectory(ConfigDirectoryPath);
+
+            List<NotificationHistoryRecord> localRecords;
+            List<NotificationHistoryRecord> syncRecords;
+            lock (_notificationHistoryLock)
+            {
+                localRecords = _localNotificationHistory.ToList();
+                syncRecords = _syncNotificationHistory.ToList();
+            }
+
+            File.WriteAllText(LocalNotificationHistoryPath, JsonSerializer.Serialize(localRecords, JsonOptions));
+            File.WriteAllText(SyncNotificationHistoryPath, JsonSerializer.Serialize(syncRecords, JsonOptions));
+        }
+
+        private void SaveNotificationHistoriesSafe()
+        {
+            try
+            {
+                SaveNotificationHistories();
+            }
+            catch
+            {
+            }
         }
 
         private WindowPlacementConfig BuildWindowPlacementConfig()

@@ -57,8 +57,10 @@ namespace nuone_tools
 
         private void ShowTerminalApp_Click(object sender, RoutedEventArgs e)
         {
-            EnsureTerminalTabExists();
-            SyncTerminalWorkingDirectoryFromActivePane();
+            var preferredWorkingDirectory = _shortcutSettings.DefaultTerminalWorkingDirectoryMode == ToolbarWorkingDirectoryMode.ActivePane
+                ? _activePane.CurrentPath?.Trim()
+                : null;
+            EnsureTerminalTabExists(preferredWorkingDirectory);
             SwitchToAppSection(AppSection.Terminal);
         }
 
@@ -201,13 +203,28 @@ namespace nuone_tools
             return workId;
         }
 
-        private void CompleteBackgroundWork(Guid workId)
+        private void CompleteBackgroundWork(
+            Guid workId,
+            string? completionRecord = null,
+            bool persistToLocalHistory = true)
         {
             lock (_backgroundWorkLock)
             {
                 if (_backgroundWorks.Remove(workId, out var label))
                 {
-                    AddBackgroundWorkRecordLocked($"完成：{label}");
+                    var recordText = string.IsNullOrWhiteSpace(completionRecord)
+                        ? $"完成：{label}"
+                        : completionRecord;
+                    AddBackgroundWorkRecordLocked(recordText);
+
+                    if (persistToLocalHistory)
+                    {
+                        AddNotificationHistoryRecord(
+                            NotificationHistoryScope.LocalOnly,
+                            "背景工作",
+                            recordText,
+                            recordText);
+                    }
                 }
             }
 
@@ -232,9 +249,12 @@ namespace nuone_tools
         private FrameworkElement BuildBackgroundWorkNotificationContent(Flyout flyout)
         {
             var records = GetBackgroundWorkRecordsSnapshot();
+            var localHistory = GetNotificationHistorySnapshot(NotificationHistoryScope.LocalOnly);
+            var syncHistory = GetNotificationHistorySnapshot(NotificationHistoryScope.Sync);
+            var entries = BuildNotificationListEntries(records, localHistory, syncHistory);
             var panel = new StackPanel
             {
-                Width = 360,
+                Width = 380,
                 Spacing = 12,
             };
 
@@ -246,42 +266,10 @@ namespace nuone_tools
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             });
 
-            var listPanel = new StackPanel { Spacing = 8 };
-            if (records.Count == 0)
-            {
-                listPanel.Children.Add(new TextBlock
-                {
-                    Text = "尚無背景工作記錄。",
-                    Foreground = new SolidColorBrush(GetBrushColor("TextSecondaryBrush", "#B9AECF")),
-                    TextWrapping = TextWrapping.Wrap,
-                });
-            }
-            else
-            {
-                foreach (var record in records.Take(100))
-                {
-                    listPanel.Children.Add(new Border
-                    {
-                        Padding = new Thickness(10, 8, 10, 8),
-                        Background = new SolidColorBrush(GetBrushColor("InputAltBrush", "#231E2B")),
-                        BorderBrush = new SolidColorBrush(GetBrushColor("PanelStrokeBrush", "#3A3146")),
-                        BorderThickness = new Thickness(1),
-                        CornerRadius = new CornerRadius(10),
-                        Child = new TextBlock
-                        {
-                            Text = record,
-                            Foreground = new SolidColorBrush(GetBrushColor("TextPrimaryBrush", "#F6F2FF")),
-                            FontSize = 12,
-                            TextWrapping = TextWrapping.Wrap,
-                        },
-                    });
-                }
-            }
-
             panel.Children.Add(new ScrollViewer
             {
-                Content = listPanel,
-                MaxHeight = 300,
+                Content = BuildNotificationSummaryList(flyout, entries),
+                MaxHeight = 360,
                 VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
             });
 
@@ -289,16 +277,386 @@ namespace nuone_tools
             {
                 Content = "清除記錄",
                 HorizontalAlignment = HorizontalAlignment.Stretch,
-                IsEnabled = records.Count > 0,
+                IsEnabled = entries.Count > 0,
             };
             clearButton.Click += (_, _) =>
             {
-                ClearBackgroundWorkRecords();
+                ClearAllNotificationRecords();
                 flyout.Hide();
             };
             panel.Children.Add(clearButton);
 
             return panel;
+        }
+
+        private static string NormalizeBackgroundWorkRecordForTextBox(string record)
+        {
+            return record
+                .Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n')
+                .Replace("\n", Environment.NewLine, StringComparison.Ordinal);
+        }
+
+        private FrameworkElement BuildNotificationSectionHeader(string title, int count)
+        {
+            var panel = new StackPanel
+            {
+                Spacing = 2,
+            };
+            panel.Children.Add(new TextBlock
+            {
+                Text = title,
+                Foreground = new SolidColorBrush(GetBrushColor("TextPrimaryBrush", "#F6F2FF")),
+                FontSize = 14,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            panel.Children.Add(new TextBlock
+            {
+                Text = count == 0 ? "目前沒有記錄" : $"{count.ToString(CultureInfo.InvariantCulture)} 筆",
+                Foreground = new SolidColorBrush(GetBrushColor("TextSecondaryBrush", "#B9AECF")),
+                FontSize = 11,
+            });
+            return panel;
+        }
+
+        private FrameworkElement BuildNotificationSummaryList(
+            Flyout flyout,
+            IReadOnlyList<NotificationListEntry> entries)
+        {
+            var host = new StackPanel
+            {
+                Spacing = 8,
+            };
+
+            if (entries.Count == 0)
+            {
+                host.Children.Add(new TextBlock
+                {
+                    Text = "尚無通知記錄。",
+                    Foreground = new SolidColorBrush(GetBrushColor("TextSecondaryBrush", "#B9AECF")),
+                    TextWrapping = TextWrapping.Wrap,
+                });
+                return host;
+            }
+
+            foreach (var entry in entries.Take(30))
+            {
+                host.Children.Add(BuildSummaryButton(entry, () =>
+                {
+                    flyout.Content = BuildNotificationDetailContent(flyout, entry);
+                }));
+            }
+
+            return host;
+        }
+
+        private Button BuildSummaryButton(NotificationListEntry entry, Action onClick)
+        {
+            var button = new Button
+            {
+                Padding = new Thickness(0),
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                HorizontalContentAlignment = HorizontalAlignment.Stretch,
+                Background = new SolidColorBrush(Colors.Transparent),
+                BorderBrush = new SolidColorBrush(Colors.Transparent),
+                BorderThickness = new Thickness(0),
+                Content = new Border
+                {
+                    Padding = new Thickness(10, 8, 10, 8),
+                    Background = new SolidColorBrush(GetBrushColor("InputAltBrush", "#231E2B")),
+                    BorderBrush = new SolidColorBrush(GetBrushColor("PanelStrokeBrush", "#3A3146")),
+                    BorderThickness = new Thickness(1),
+                    CornerRadius = new CornerRadius(10),
+                    Child = new TextBlock
+                    {
+                        Text = BuildNotificationSummaryText(entry),
+                        Foreground = new SolidColorBrush(GetBrushColor("TextPrimaryBrush", "#F6F2FF")),
+                        FontSize = 12,
+                        MaxLines = 3,
+                        TextTrimming = TextTrimming.CharacterEllipsis,
+                        TextWrapping = TextWrapping.Wrap,
+                    },
+                },
+            };
+            button.Click += (_, _) => onClick();
+            return button;
+        }
+
+        private FrameworkElement BuildNotificationDetailContent(Flyout flyout, NotificationListEntry entry)
+        {
+            var panel = new StackPanel
+            {
+                Width = 380,
+                Spacing = 12,
+            };
+
+            panel.Children.Add(new TextBlock
+            {
+                Text = "detail",
+                Foreground = new SolidColorBrush(GetBrushColor("TextPrimaryBrush", "#F6F2FF")),
+                FontSize = 18,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            });
+            panel.Children.Add(new ScrollViewer
+            {
+                Content = new TextBlock
+                {
+                    Text = entry.DialogText,
+                    Foreground = new SolidColorBrush(GetBrushColor("TextPrimaryBrush", "#F6F2FF")),
+                    FontSize = 12,
+                    IsTextSelectionEnabled = true,
+                    TextWrapping = TextWrapping.Wrap,
+                },
+                MaxHeight = 360,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            });
+
+            var actionPanel = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+            };
+            var backButton = new Button
+            {
+                Content = "返回 resumen",
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+            };
+            backButton.Click += (_, _) =>
+            {
+                flyout.Content = BuildBackgroundWorkNotificationContent(flyout);
+            };
+            var copyButton = new Button
+            {
+                Content = "複製 detail",
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+            };
+            copyButton.Click += (_, _) =>
+            {
+                CopyTextToClipboard(entry.DialogText);
+            };
+            actionPanel.Children.Add(backButton);
+            actionPanel.Children.Add(copyButton);
+            panel.Children.Add(actionPanel);
+
+            return panel;
+        }
+
+        private static string BuildNotificationSummaryText(NotificationListEntry entry)
+        {
+            return $"[{entry.ScopeLabel}] {entry.CardText}";
+        }
+
+        private List<NotificationListEntry> BuildNotificationListEntries(
+            IReadOnlyList<string> sessionRecords,
+            IReadOnlyList<NotificationHistoryRecord> localHistory,
+            IReadOnlyList<NotificationHistoryRecord> syncHistory)
+        {
+            var entries = new List<NotificationListEntry>();
+            foreach (var record in sessionRecords)
+            {
+                entries.Add(new NotificationListEntry
+                {
+                    ScopeLabel = "本次",
+                    Timestamp = ExtractSessionRecordTimestamp(record),
+                    CardText = record,
+                    DialogText = record,
+                });
+            }
+
+            foreach (var record in localHistory)
+            {
+                var dialogText = BuildNotificationHistoryDialogText(record);
+                entries.Add(new NotificationListEntry
+                {
+                    ScopeLabel = "本機",
+                    Timestamp = ParseNotificationTimestamp(record.CreatedAtUtc),
+                    CardText = BuildNotificationHistoryCardText(record),
+                    DialogText = dialogText,
+                });
+            }
+
+            foreach (var record in syncHistory)
+            {
+                var dialogText = BuildNotificationHistoryDialogText(record);
+                entries.Add(new NotificationListEntry
+                {
+                    ScopeLabel = "同步",
+                    Timestamp = ParseNotificationTimestamp(record.CreatedAtUtc),
+                    CardText = BuildNotificationHistoryCardText(record),
+                    DialogText = dialogText,
+                });
+            }
+
+            return entries
+                .OrderByDescending(static item => item.Timestamp)
+                .ToList();
+        }
+
+        private static string BuildNotificationHistoryCardText(NotificationHistoryRecord record)
+        {
+            var timestampText = FormatNotificationTimestamp(record.CreatedAtUtc);
+            var deviceText = string.IsNullOrWhiteSpace(record.DeviceName) ? string.Empty : $" [{record.DeviceName}]";
+            var categoryText = string.IsNullOrWhiteSpace(record.Category) ? string.Empty : $" · {record.Category}";
+            return $"{timestampText}{deviceText}{categoryText}{Environment.NewLine}{record.Summary}";
+        }
+
+        private static string BuildNotificationHistoryDialogText(NotificationHistoryRecord record)
+        {
+            var builder = new StringBuilder();
+            builder.Append("時間：");
+            builder.AppendLine(FormatNotificationTimestamp(record.CreatedAtUtc));
+
+            if (!string.IsNullOrWhiteSpace(record.DeviceName))
+            {
+                builder.Append("裝置：");
+                builder.AppendLine(record.DeviceName);
+            }
+
+            if (!string.IsNullOrWhiteSpace(record.Category))
+            {
+                builder.Append("分類：");
+                builder.AppendLine(record.Category);
+            }
+
+            builder.AppendLine();
+            builder.AppendLine(record.Summary);
+
+            if (!string.IsNullOrWhiteSpace(record.Details) &&
+                !string.Equals(record.Details.Trim(), record.Summary.Trim(), StringComparison.Ordinal))
+            {
+                builder.AppendLine();
+                builder.AppendLine(record.Details.Trim());
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        private static string FormatNotificationTimestamp(string? createdAtUtc)
+        {
+            if (ParseNotificationTimestamp(createdAtUtc) is DateTimeOffset parsed)
+            {
+                return parsed.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            }
+
+            return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+        }
+
+        private static DateTimeOffset ParseNotificationTimestamp(string? createdAtUtc)
+        {
+            if (DateTimeOffset.TryParse(createdAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
+            {
+                return parsed;
+            }
+
+            return DateTimeOffset.MinValue;
+        }
+
+        private static DateTimeOffset ExtractSessionRecordTimestamp(string record)
+        {
+            if (!string.IsNullOrWhiteSpace(record) &&
+                record.Length >= 19 &&
+                DateTimeOffset.TryParseExact(
+                    record[..19],
+                    "yyyy-MM-dd HH:mm:ss",
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AssumeLocal,
+                    out var parsed))
+            {
+                return parsed;
+            }
+
+            return DateTimeOffset.MinValue;
+        }
+
+        private void AddNotificationHistoryRecord(
+            NotificationHistoryScope scope,
+            string category,
+            string summary,
+            string details)
+        {
+            var normalizedSummary = NormalizeBackgroundWorkRecordForTextBox(summary).Trim();
+            if (string.IsNullOrWhiteSpace(normalizedSummary))
+            {
+                return;
+            }
+
+            var normalizedDetails = NormalizeBackgroundWorkRecordForTextBox(details).Trim();
+            var record = new NotificationHistoryRecord
+            {
+                Id = Guid.NewGuid(),
+                Scope = scope,
+                Category = category?.Trim() ?? string.Empty,
+                Summary = normalizedSummary,
+                Details = string.IsNullOrWhiteSpace(normalizedDetails) ? normalizedSummary : normalizedDetails,
+                CreatedAtUtc = DateTime.UtcNow.ToString("O", CultureInfo.InvariantCulture),
+                DeviceName = Environment.MachineName,
+            };
+
+            lock (_notificationHistoryLock)
+            {
+                var target = scope == NotificationHistoryScope.Sync
+                    ? _syncNotificationHistory
+                    : _localNotificationHistory;
+                target.Insert(0, record);
+                while (target.Count > 200)
+                {
+                    target.RemoveAt(target.Count - 1);
+                }
+            }
+
+            SaveNotificationHistoriesSafe();
+        }
+
+        private List<NotificationHistoryRecord> GetNotificationHistorySnapshot(NotificationHistoryScope scope)
+        {
+            lock (_notificationHistoryLock)
+            {
+                var source = scope == NotificationHistoryScope.Sync
+                    ? _syncNotificationHistory
+                    : _localNotificationHistory;
+                return source.ToList();
+            }
+        }
+
+        private void ClearNotificationHistory(NotificationHistoryScope scope)
+        {
+            lock (_notificationHistoryLock)
+            {
+                var target = scope == NotificationHistoryScope.Sync
+                    ? _syncNotificationHistory
+                    : _localNotificationHistory;
+                target.Clear();
+            }
+
+            SaveNotificationHistoriesSafe();
+        }
+
+        private void ClearAllNotificationRecords()
+        {
+            lock (_backgroundWorkLock)
+            {
+                _backgroundWorkRecords.Clear();
+            }
+
+            lock (_notificationHistoryLock)
+            {
+                _localNotificationHistory.Clear();
+                _syncNotificationHistory.Clear();
+            }
+
+            SaveNotificationHistoriesSafe();
+            UpdateSharedStatusBar();
+        }
+
+        private sealed class NotificationListEntry
+        {
+            public string ScopeLabel { get; init; } = string.Empty;
+
+            public DateTimeOffset Timestamp { get; init; }
+
+            public string CardText { get; init; } = string.Empty;
+
+            public string DialogText { get; init; } = string.Empty;
         }
 
         private void EnqueueSharedStatusBarRefresh()
@@ -370,6 +728,14 @@ namespace nuone_tools
             }
 
             return $"{labels[0]} 等 {labels.Count} 個背景工作";
+        }
+
+        private bool HasRunningBackgroundWork()
+        {
+            lock (_backgroundWorkLock)
+            {
+                return _backgroundWorks.Count > 0;
+            }
         }
 
         private void AddBackgroundWorkRecordLocked(string message)

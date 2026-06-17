@@ -37,6 +37,21 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
+        private sealed class SshEntrySnapshot
+        {
+            public string Name { get; init; } = string.Empty;
+
+            public string FullPath { get; init; } = string.Empty;
+
+            public bool IsDirectory { get; init; }
+
+            public string ModifiedText { get; init; } = string.Empty;
+
+            public long? SizeBytes { get; init; }
+        }
+
+        private static readonly object SshDebugLogLock = new();
+
         private void Pane_PropertyChanged(object? sender, PropertyChangedEventArgs e)
         {
             if (string.Equals(e.PropertyName, nameof(PaneViewModel.CurrentPath), StringComparison.Ordinal))
@@ -204,7 +219,617 @@ namespace nuone_tools
                 return false;
             }
 
-            return Directory.Exists(path) || TryEnumerateUncServerShares(path, out _);
+            return Directory.Exists(path) ||
+                IsSshPath(path) ||
+                TryEnumerateWslDistributions(path, out _) ||
+                TryEnumerateUncServerShares(path, out _);
+        }
+
+        internal static bool IsSshPath(string? path)
+        {
+            return TryParseSshPath(path, out _, out _);
+        }
+
+        internal static bool TryParseSshPath(string? path, out string connection, out string remotePath)
+        {
+            connection = string.Empty;
+            remotePath = string.Empty;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            const string prefix = "ssh://";
+            var trimmed = path.Trim();
+            if (!trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var remainder = trimmed[prefix.Length..].Trim();
+            if (string.IsNullOrWhiteSpace(remainder))
+            {
+                return false;
+            }
+
+            var slashIndex = remainder.IndexOf('/');
+            connection = slashIndex >= 0
+                ? remainder[..slashIndex].Trim()
+                : remainder.Trim();
+            if (string.IsNullOrWhiteSpace(connection))
+            {
+                return false;
+            }
+
+            remotePath = slashIndex >= 0
+                ? remainder[slashIndex..].Trim()
+                : ".";
+            if (string.IsNullOrWhiteSpace(remotePath))
+            {
+                remotePath = ".";
+            }
+
+            if (!string.Equals(remotePath, ".", StringComparison.Ordinal) &&
+                !remotePath.StartsWith("/", StringComparison.Ordinal))
+            {
+                remotePath = "/" + remotePath;
+            }
+
+            return true;
+        }
+
+        internal static string BuildSshPath(string connection, string remotePath)
+        {
+            var normalizedRemotePath = string.IsNullOrWhiteSpace(remotePath) ? "/" : remotePath.Trim();
+            if (!normalizedRemotePath.StartsWith("/", StringComparison.Ordinal))
+            {
+                normalizedRemotePath = "/" + normalizedRemotePath;
+            }
+
+            return string.Equals(normalizedRemotePath, "/", StringComparison.Ordinal)
+                ? $"ssh://{connection}/"
+                : $"ssh://{connection}{normalizedRemotePath}";
+        }
+
+        internal static string GetSshParentPath(string path)
+        {
+            if (!TryParseSshPath(path, out var connection, out var remotePath))
+            {
+                return path;
+            }
+
+            var normalizedRemotePath = remotePath.TrimEnd('/');
+            if (string.IsNullOrWhiteSpace(normalizedRemotePath) || string.Equals(normalizedRemotePath, string.Empty, StringComparison.Ordinal))
+            {
+                normalizedRemotePath = "/";
+            }
+
+            if (string.Equals(normalizedRemotePath, "/", StringComparison.Ordinal))
+            {
+                return BuildSshPath(connection, "/");
+            }
+
+            var lastSlash = normalizedRemotePath.LastIndexOf('/');
+            var parentPath = lastSlash <= 0
+                ? "/"
+                : normalizedRemotePath[..lastSlash];
+            return BuildSshPath(connection, parentPath);
+        }
+
+        internal static bool TryLoadSshDirectory(
+            string path,
+            out string normalizedPath,
+            out IReadOnlyList<FileEntry> entries,
+            out string errorMessage)
+        {
+            normalizedPath = path;
+            entries = Array.Empty<FileEntry>();
+            errorMessage = string.Empty;
+
+            if (!TryParseSshPath(path, out var connection, out var remotePath))
+            {
+                errorMessage = "SSH 路徑格式不正確。請使用 ssh://host/path。";
+                AppendSshDebugLog($"TryLoadSshDirectory parse-failed path={path}");
+                return false;
+            }
+
+            try
+            {
+                AppendSshDebugLog($"TryLoadSshDirectory start path={path} connection={connection} remotePath={remotePath}");
+                const string pathMarker = "__NUONE_PWD__";
+                const string entriesMarker = "__NUONE_ENTRIES__";
+                var script = new StringBuilder();
+                script.AppendLine("cd -- \"$1\" || exit 1");
+                script.Append("printf '%s\\n' '");
+                script.Append(pathMarker);
+                script.AppendLine("'");
+                script.AppendLine("pwd");
+                script.Append("printf '\\n%s\\n' '");
+                script.Append(entriesMarker);
+                script.AppendLine("'");
+                script.AppendLine("find . -mindepth 1 -maxdepth 1 -printf '%y\\t%f\\t%TY-%Tm-%Td %TH:%TM\\t%s\\n'");
+
+                using var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "ssh.exe",
+                        RedirectStandardInput = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    },
+                };
+                process.StartInfo.ArgumentList.Add("-T");
+                process.StartInfo.ArgumentList.Add("-o");
+                process.StartInfo.ArgumentList.Add("BatchMode=yes");
+                process.StartInfo.ArgumentList.Add(connection);
+                process.StartInfo.ArgumentList.Add("sh");
+                process.StartInfo.ArgumentList.Add("-s");
+                process.StartInfo.ArgumentList.Add("--");
+                process.StartInfo.ArgumentList.Add(remotePath);
+
+                if (!process.Start())
+                {
+                    errorMessage = "無法啟動 ssh.exe。";
+                    AppendSshDebugLog($"TryLoadSshDirectory start-process-failed connection={connection} remotePath={remotePath}");
+                    return false;
+                }
+
+                process.StandardInput.Write(script.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
+                process.StandardInput.Close();
+                var output = process.StandardOutput.ReadToEnd();
+                var stdError = process.StandardError.ReadToEnd().Trim();
+                AppendSshDebugLog(
+                    $"TryLoadSshDirectory started connection={connection} remotePath={remotePath} " +
+                    $"outputPreview={BuildLogPreview(output)} stderrPreview={BuildLogPreview(stdError)}");
+                if (!process.WaitForExit(8000))
+                {
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch
+                    {
+                    }
+
+                    errorMessage = "SSH 目錄讀取逾時。";
+                    AppendSshDebugLog($"TryLoadSshDirectory timeout connection={connection} remotePath={remotePath}");
+                    return false;
+                }
+
+                AppendSshDebugLog(
+                    $"TryLoadSshDirectory exit connection={connection} remotePath={remotePath} " +
+                    $"exitCode={process.ExitCode} stderrPreview={BuildLogPreview(stdError)} outputPreview={BuildLogPreview(output)}");
+
+                if (process.ExitCode != 0)
+                {
+                    errorMessage = string.IsNullOrWhiteSpace(stdError)
+                        ? $"SSH 命令失敗（ExitCode {process.ExitCode}）。"
+                        : stdError;
+                    AppendSshDebugLog($"TryLoadSshDirectory nonzero-exit error={errorMessage}");
+                    return false;
+                }
+
+                var normalizedOutput = output.Replace("\r\n", "\n", StringComparison.Ordinal);
+                var pathMarkerIndex = normalizedOutput.IndexOf($"{pathMarker}\n", StringComparison.Ordinal);
+                var entriesMarkerIndex = normalizedOutput.IndexOf($"\n{entriesMarker}\n", StringComparison.Ordinal);
+                if (pathMarkerIndex < 0 || entriesMarkerIndex < 0 || entriesMarkerIndex <= pathMarkerIndex)
+                {
+                    var outputPreview = normalizedOutput.Trim();
+                    if (outputPreview.Length > 240)
+                    {
+                        outputPreview = outputPreview[..240];
+                    }
+
+                    errorMessage = string.IsNullOrWhiteSpace(outputPreview)
+                        ? "SSH 回應格式無法辨識。"
+                        : $"SSH 回應格式無法辨識：{outputPreview}";
+                    AppendSshDebugLog($"TryLoadSshDirectory invalid-format error={errorMessage}");
+                    return false;
+                }
+
+                var canonicalPathStart = pathMarkerIndex + pathMarker.Length + 1;
+                var canonicalPath = normalizedOutput[canonicalPathStart..entriesMarkerIndex].Trim();
+                if (string.IsNullOrWhiteSpace(canonicalPath))
+                {
+                    errorMessage = "SSH 回應缺少遠端路徑。";
+                    AppendSshDebugLog("TryLoadSshDirectory missing-canonical-path");
+                    return false;
+                }
+
+                normalizedPath = BuildSshPath(connection, string.IsNullOrWhiteSpace(canonicalPath) ? remotePath : canonicalPath);
+
+                var result = new List<FileEntry>();
+                var entriesText = normalizedOutput[(entriesMarkerIndex + entriesMarker.Length + 2)..];
+                if (!string.IsNullOrWhiteSpace(entriesText))
+                {
+                    foreach (var rawLine in entriesText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var columns = rawLine.Split('\t');
+                        if (columns.Length < 4)
+                        {
+                            continue;
+                        }
+
+                        var entryType = columns[0];
+                        var name = columns[1];
+                        var modifiedText = columns[2];
+                        var isDirectory = string.Equals(entryType, "d", StringComparison.Ordinal);
+                        long? sizeBytes = long.TryParse(columns[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSize)
+                            ? parsedSize
+                            : null;
+                        var childRemotePath = string.Equals(canonicalPath, "/", StringComparison.Ordinal)
+                            ? $"/{name}"
+                            : $"{canonicalPath.TrimEnd('/')}/{name}";
+                        result.Add(FileEntry.FromRemoteEntry(
+                            name,
+                            BuildSshPath(connection, childRemotePath),
+                            isDirectory,
+                            modifiedText,
+                            sizeBytes));
+                    }
+                }
+
+                entries = result
+                    .OrderByDescending(static entry => entry.IsDirectory)
+                    .ThenBy(static entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                AppendSshDebugLog(
+                    $"TryLoadSshDirectory success normalizedPath={normalizedPath} entries={entries.Count}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                AppendSshDebugLog($"TryLoadSshDirectory exception {ex}");
+                return false;
+            }
+        }
+
+        internal static void AppendSshDebugLog(string message)
+        {
+            try
+            {
+                Directory.CreateDirectory(ConfigDirectoryPath);
+                var logPath = Path.Combine(ConfigDirectoryPath, "ssh-debug.log");
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}";
+                lock (SshDebugLogLock)
+                {
+                    File.AppendAllText(logPath, line, Encoding.UTF8);
+                }
+            }
+            catch
+            {
+            }
+        }
+
+        private static string BuildLogPreview(string? value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return "<empty>";
+            }
+
+            var normalized = value
+                .Replace("\r\n", "\\n", StringComparison.Ordinal)
+                .Replace("\n", "\\n", StringComparison.Ordinal)
+                .Replace("\r", "\\r", StringComparison.Ordinal)
+                .Trim();
+
+            return normalized.Length > 320
+                ? normalized[..320]
+                : normalized;
+        }
+
+        internal static bool IsWslVirtualRootPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var normalized = NormalizePath(path.Trim());
+            return string.Equals(normalized, @"\\wsl$", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(normalized, @"\\wsl.localhost", StringComparison.OrdinalIgnoreCase);
+        }
+
+        internal static bool IsWslPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var normalized = NormalizePath(path.Trim());
+            return normalized.StartsWith(@"\\wsl$\", StringComparison.OrdinalIgnoreCase) ||
+                normalized.StartsWith(@"\\wsl.localhost\", StringComparison.OrdinalIgnoreCase) ||
+                IsWslVirtualRootPath(normalized);
+        }
+
+        internal static bool IsWslDistributionPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var normalized = NormalizePath(path.Trim());
+            if (!normalized.StartsWith(@"\\wsl$\", StringComparison.OrdinalIgnoreCase) &&
+                !normalized.StartsWith(@"\\wsl.localhost\", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var segments = normalized[2..]
+                .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+            return segments.Length == 2;
+        }
+
+        internal static bool TryEnumerateWslDistributions(string? path, out IReadOnlyList<string> distributionPaths)
+        {
+            distributionPaths = Array.Empty<string>();
+            if (!IsWslVirtualRootPath(path))
+            {
+                return false;
+            }
+
+            var root = NormalizePath(path!.Trim());
+            var distributionNames = EnumerateWslDistributionNames();
+            if (distributionNames.Count == 0)
+            {
+                return false;
+            }
+
+            distributionPaths = distributionNames
+                .Select(name => $@"{root}\{name}")
+                .ToArray();
+            return true;
+        }
+
+        private static bool TryReadSshDirectorySnapshot(
+            string path,
+            out string normalizedPath,
+            out IReadOnlyList<SshEntrySnapshot> entries,
+            out string errorMessage)
+        {
+            normalizedPath = path;
+            entries = Array.Empty<SshEntrySnapshot>();
+            errorMessage = string.Empty;
+
+            if (!TryParseSshPath(path, out var connection, out var remotePath))
+            {
+                errorMessage = "SSH 路徑格式不正確。請使用 ssh://host/path。";
+                AppendSshDebugLog($"TryReadSshDirectorySnapshot parse-failed path={path}");
+                return false;
+            }
+
+            try
+            {
+                AppendSshDebugLog($"TryReadSshDirectorySnapshot start path={path} connection={connection} remotePath={remotePath}");
+                const string pathMarker = "__NUONE_PWD__";
+                const string entriesMarker = "__NUONE_ENTRIES__";
+                var script = new StringBuilder();
+                script.AppendLine("cd -- \"$1\" || exit 1");
+                script.Append("printf '%s\\n' '");
+                script.Append(pathMarker);
+                script.AppendLine("'");
+                script.AppendLine("pwd");
+                script.Append("printf '\\n%s\\n' '");
+                script.Append(entriesMarker);
+                script.AppendLine("'");
+                script.AppendLine("find . -mindepth 1 -maxdepth 1 -printf '%y\\t%f\\t%TY-%Tm-%Td %TH:%TM\\t%s\\n'");
+
+                using var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "ssh.exe",
+                        RedirectStandardInput = true,
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    },
+                };
+                process.StartInfo.ArgumentList.Add("-T");
+                process.StartInfo.ArgumentList.Add("-o");
+                process.StartInfo.ArgumentList.Add("BatchMode=yes");
+                process.StartInfo.ArgumentList.Add(connection);
+                process.StartInfo.ArgumentList.Add("sh");
+                process.StartInfo.ArgumentList.Add("-s");
+                process.StartInfo.ArgumentList.Add("--");
+                process.StartInfo.ArgumentList.Add(remotePath);
+
+                if (!process.Start())
+                {
+                    errorMessage = "無法啟動 ssh.exe。";
+                    AppendSshDebugLog($"TryReadSshDirectorySnapshot start-process-failed connection={connection} remotePath={remotePath}");
+                    return false;
+                }
+
+                process.StandardInput.Write(script.ToString().Replace("\r\n", "\n", StringComparison.Ordinal));
+                process.StandardInput.Close();
+                var output = process.StandardOutput.ReadToEnd();
+                var stdError = process.StandardError.ReadToEnd().Trim();
+                AppendSshDebugLog(
+                    $"TryReadSshDirectorySnapshot started connection={connection} remotePath={remotePath} " +
+                    $"outputPreview={BuildLogPreview(output)} stderrPreview={BuildLogPreview(stdError)}");
+
+                if (!process.WaitForExit(8000))
+                {
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch
+                    {
+                    }
+
+                    errorMessage = "SSH 目錄讀取逾時。";
+                    AppendSshDebugLog($"TryReadSshDirectorySnapshot timeout connection={connection} remotePath={remotePath}");
+                    return false;
+                }
+
+                AppendSshDebugLog(
+                    $"TryReadSshDirectorySnapshot exit connection={connection} remotePath={remotePath} " +
+                    $"exitCode={process.ExitCode} stderrPreview={BuildLogPreview(stdError)} outputPreview={BuildLogPreview(output)}");
+
+                if (process.ExitCode != 0)
+                {
+                    errorMessage = string.IsNullOrWhiteSpace(stdError)
+                        ? $"SSH 命令失敗（ExitCode {process.ExitCode}）。"
+                        : stdError;
+                    AppendSshDebugLog($"TryReadSshDirectorySnapshot nonzero-exit error={errorMessage}");
+                    return false;
+                }
+
+                var normalizedOutput = output.Replace("\r\n", "\n", StringComparison.Ordinal);
+                var pathMarkerIndex = normalizedOutput.IndexOf($"{pathMarker}\n", StringComparison.Ordinal);
+                var entriesMarkerIndex = normalizedOutput.IndexOf($"\n{entriesMarker}\n", StringComparison.Ordinal);
+                if (pathMarkerIndex < 0 || entriesMarkerIndex < 0 || entriesMarkerIndex <= pathMarkerIndex)
+                {
+                    var outputPreview = normalizedOutput.Trim();
+                    if (outputPreview.Length > 240)
+                    {
+                        outputPreview = outputPreview[..240];
+                    }
+
+                    errorMessage = string.IsNullOrWhiteSpace(outputPreview)
+                        ? "SSH 回應格式無法辨識。"
+                        : $"SSH 回應格式無法辨識：{outputPreview}";
+                    AppendSshDebugLog($"TryReadSshDirectorySnapshot invalid-format error={errorMessage}");
+                    return false;
+                }
+
+                var canonicalPathStart = pathMarkerIndex + pathMarker.Length + 1;
+                var canonicalPath = normalizedOutput[canonicalPathStart..entriesMarkerIndex].Trim();
+                if (string.IsNullOrWhiteSpace(canonicalPath))
+                {
+                    errorMessage = "SSH 回應缺少遠端路徑。";
+                    AppendSshDebugLog("TryReadSshDirectorySnapshot missing-canonical-path");
+                    return false;
+                }
+
+                normalizedPath = BuildSshPath(connection, string.IsNullOrWhiteSpace(canonicalPath) ? remotePath : canonicalPath);
+
+                var result = new List<SshEntrySnapshot>();
+                var entriesText = normalizedOutput[(entriesMarkerIndex + entriesMarker.Length + 2)..];
+                if (!string.IsNullOrWhiteSpace(entriesText))
+                {
+                    foreach (var rawLine in entriesText.Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries))
+                    {
+                        var columns = rawLine.Split('\t');
+                        if (columns.Length < 4)
+                        {
+                            continue;
+                        }
+
+                        var entryType = columns[0];
+                        var name = columns[1];
+                        var modifiedText = columns[2];
+                        var isDirectory = string.Equals(entryType, "d", StringComparison.Ordinal);
+                        long? sizeBytes = long.TryParse(columns[3], NumberStyles.Integer, CultureInfo.InvariantCulture, out var parsedSize)
+                            ? parsedSize
+                            : null;
+                        var childRemotePath = string.Equals(canonicalPath, "/", StringComparison.Ordinal)
+                            ? $"/{name}"
+                            : $"{canonicalPath.TrimEnd('/')}/{name}";
+
+                        result.Add(new SshEntrySnapshot
+                        {
+                            Name = name,
+                            FullPath = BuildSshPath(connection, childRemotePath),
+                            IsDirectory = isDirectory,
+                            ModifiedText = modifiedText,
+                            SizeBytes = sizeBytes,
+                        });
+                    }
+                }
+
+                entries = result
+                    .OrderByDescending(static entry => entry.IsDirectory)
+                    .ThenBy(static entry => entry.Name, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+                AppendSshDebugLog(
+                    $"TryReadSshDirectorySnapshot success normalizedPath={normalizedPath} entries={entries.Count}");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                errorMessage = ex.Message;
+                AppendSshDebugLog($"TryReadSshDirectorySnapshot exception {ex}");
+                return false;
+            }
+        }
+
+        private static IReadOnlyList<string> EnumerateWslDistributionNames()
+        {
+            try
+            {
+                using var process = new Process
+                {
+                    StartInfo = new ProcessStartInfo
+                    {
+                        FileName = "wsl.exe",
+                        Arguments = "-l -q",
+                        RedirectStandardOutput = true,
+                        RedirectStandardError = true,
+                        UseShellExecute = false,
+                        CreateNoWindow = true,
+                    },
+                };
+
+                if (!process.Start())
+                {
+                    return Array.Empty<string>();
+                }
+
+                var output = process.StandardOutput.ReadToEnd();
+                if (!process.WaitForExit(3000))
+                {
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch
+                    {
+                    }
+
+                    return Array.Empty<string>();
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    return Array.Empty<string>();
+                }
+
+                return output
+                    .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries)
+                    .Select(static line => SanitizeWslDistributionName(line))
+                    .Where(static line => !string.IsNullOrWhiteSpace(line))
+                    .Distinct(StringComparer.OrdinalIgnoreCase)
+                    .OrderBy(static line => line, StringComparer.OrdinalIgnoreCase)
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<string>();
+            }
+        }
+
+        private static string SanitizeWslDistributionName(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            return value
+                .Trim()
+                .Trim('\uFEFF', '\0')
+                .Replace("\0", string.Empty, StringComparison.Ordinal);
         }
 
         internal static bool TryEnumerateUncServerShares(string? path, out IReadOnlyList<string> sharePaths)
@@ -312,12 +937,25 @@ namespace nuone_tools
 
         private void OpenInPane(PaneViewModel pane, string path)
         {
+            if (IsSshPath(path))
+            {
+                _ = OpenSshPathInPaneAsync(pane, path, rememberCurrent: true);
+                ActivatePane(pane);
+                return;
+            }
+
             pane.NavigateTo(path);
             ActivatePane(pane);
         }
 
         private void RefreshPane(PaneViewModel pane)
         {
+            if (IsSshPath(pane.CurrentPath))
+            {
+                _ = OpenSshPathInPaneAsync(pane, pane.CurrentPath, rememberCurrent: false);
+                return;
+            }
+
             pane.Refresh();
             LoadDriveCards();
         }
@@ -337,6 +975,13 @@ namespace nuone_tools
 
         private void NavigateUp(PaneViewModel pane)
         {
+            if (IsSshPath(pane.CurrentPath))
+            {
+                _ = OpenSshPathInPaneAsync(pane, GetSshParentPath(pane.CurrentPath), rememberCurrent: true);
+                ActivatePane(pane);
+                return;
+            }
+
             pane.NavigateUp();
         }
 
@@ -363,7 +1008,67 @@ namespace nuone_tools
                 return;
             }
 
+            if (IsSshPath(requestedPath))
+            {
+                await OpenSshPathInPaneAsync(pane, requestedPath, rememberCurrent: true);
+                ActivatePane(pane);
+                return;
+            }
+
             OpenInPane(pane, requestedPath);
+        }
+
+        private async Task OpenSshPathInPaneAsync(PaneViewModel pane, string path, bool rememberCurrent)
+        {
+            ActivatePane(pane);
+            var loadingPath = path.Trim();
+            var requestVersion = 0;
+            AppendSshDebugLog($"OpenSshPathInPaneAsync start pane={pane.Name} path={loadingPath} rememberCurrent={rememberCurrent}");
+            await EnqueueOnUiAsync(() =>
+            {
+                requestVersion = pane.BeginLoad(loadingPath, "讀取遠端 Linux 目錄中...");
+                AppendSshDebugLog($"OpenSshPathInPaneAsync begin-load pane={pane.Name} path={loadingPath} requestVersion={requestVersion}");
+            });
+
+            try
+            {
+                var loadResult = await Task.Run(() =>
+                {
+                    if (!TryReadSshDirectorySnapshot(loadingPath, out var normalizedPath, out var entries, out var errorMessage))
+                    {
+                        throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorMessage)
+                            ? "無法載入遠端 Linux 目錄。"
+                            : errorMessage);
+                    }
+
+                    return (normalizedPath, entries);
+                });
+
+                await EnqueueOnUiAsync(() =>
+                {
+                    var uiEntries = loadResult.entries
+                        .Select(entry => FileEntry.FromRemoteEntry(
+                            entry.Name,
+                            entry.FullPath,
+                            entry.IsDirectory,
+                            entry.ModifiedText,
+                            entry.SizeBytes))
+                        .ToArray();
+
+                    AppendSshDebugLog(
+                        $"OpenSshPathInPaneAsync apply-success pane={pane.Name} path={loadingPath} " +
+                        $"normalizedPath={loadResult.normalizedPath} requestVersion={requestVersion} entries={uiEntries.Length}");
+                    pane.ApplyLoadedEntries(loadResult.normalizedPath, uiEntries, rememberCurrent, requestVersion);
+                    LoadDriveCards();
+                });
+            }
+            catch (Exception ex)
+            {
+                AppendSshDebugLog(
+                    $"OpenSshPathInPaneAsync apply-error pane={pane.Name} path={loadingPath} " +
+                    $"requestVersion={requestVersion} error={ex}");
+                await EnqueueOnUiAsync(() => pane.ApplyLoadError(loadingPath, ex.Message, requestVersion));
+            }
         }
 
         private void ActivatePane(PaneViewModel pane)

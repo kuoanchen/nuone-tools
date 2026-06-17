@@ -49,6 +49,10 @@ namespace nuone_tools
         private FileEntry? _selectedItem;
         private string _filterQuery = string.Empty;
         private string _filterModeText = string.Empty;
+        private bool _isLoading;
+        private string _loadingText = "載入中...";
+        private int _loadRequestVersion;
+        private int _overlayRequestVersion;
 
         public PaneViewModel(string name)
         {
@@ -76,6 +80,22 @@ namespace nuone_tools
             : Visibility.Visible;
 
         public bool HasActiveFilter => !string.IsNullOrWhiteSpace(FilterQuery);
+
+        public bool IsLoading
+        {
+            get => _isLoading;
+            private set => SetProperty(ref _isLoading, value);
+        }
+
+        public Visibility LoadingVisibility => IsLoading
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        public string LoadingText
+        {
+            get => _loadingText;
+            private set => SetProperty(ref _loadingText, value);
+        }
 
         public string CurrentPath
         {
@@ -189,6 +209,31 @@ namespace nuone_tools
                 return;
             }
 
+            if (MainWindow.IsSshPath(CurrentPath))
+            {
+                NavigateTo(MainWindow.GetSshParentPath(CurrentPath));
+                return;
+            }
+
+            if (MainWindow.IsWslVirtualRootPath(CurrentPath))
+            {
+                Load(CurrentPath, rememberCurrent: false);
+                return;
+            }
+
+            if (MainWindow.IsWslPath(CurrentPath))
+            {
+                var trimmedPath = MainWindow.NormalizePath(CurrentPath);
+                var segments = trimmedPath[2..]
+                    .Split(new[] { Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar }, StringSplitOptions.RemoveEmptyEntries);
+
+                if (segments.Length == 2)
+                {
+                    NavigateTo($@"\\{segments[0]}");
+                    return;
+                }
+            }
+
             var parent = Directory.GetParent(CurrentPath);
             if (parent is not null)
             {
@@ -205,7 +250,9 @@ namespace nuone_tools
             while (_history.Count > 0)
             {
                 var previous = _history.Pop();
-                if (Directory.Exists(previous) || MainWindow.TryEnumerateUncServerShares(previous, out _))
+                if (Directory.Exists(previous) ||
+                    MainWindow.IsSshPath(previous) ||
+                    MainWindow.TryEnumerateUncServerShares(previous, out _))
                 {
                     Load(previous, rememberCurrent: false);
                     return;
@@ -241,10 +288,118 @@ namespace nuone_tools
             ApplyFilter();
         }
 
+        public int BeginLoad(string path, string loadingText)
+        {
+            _loadRequestVersion++;
+            _overlayRequestVersion++;
+            EditablePath = path;
+            LoadingText = loadingText;
+            IsLoading = true;
+            OnPropertyChanged(nameof(LoadingVisibility));
+            MainWindow.AppendSshDebugLog(
+                $"Pane.BeginLoad pane={Name} path={path} requestVersion={_loadRequestVersion} loadingText={loadingText}");
+            return _loadRequestVersion;
+        }
+
+        public void ApplyLoadedEntries(string path, IReadOnlyList<FileEntry> entries, bool rememberCurrent, int requestVersion)
+        {
+            if (requestVersion != _loadRequestVersion)
+            {
+                MainWindow.AppendSshDebugLog(
+                    $"Pane.ApplyLoadedEntries skipped pane={Name} path={path} requestVersion={requestVersion} currentVersion={_loadRequestVersion}");
+                return;
+            }
+
+            if (rememberCurrent && !string.IsNullOrWhiteSpace(CurrentPath) && !MainWindow.PathEquals(CurrentPath, path))
+            {
+                _history.Push(CurrentPath);
+            }
+
+            CurrentPath = path;
+            EditablePath = CurrentPath;
+            _allItems.Clear();
+            _allItems.AddRange(entries);
+            FilterQuery = string.Empty;
+            ApplyFilter();
+            IsLoading = false;
+            OnPropertyChanged(nameof(LoadingVisibility));
+            MainWindow.AppendSshDebugLog(
+                $"Pane.ApplyLoadedEntries applied pane={Name} path={path} requestVersion={requestVersion} entries={entries.Count} rememberCurrent={rememberCurrent}");
+        }
+
+        public void ApplyLoadError(string path, string message, int requestVersion)
+        {
+            if (requestVersion != _loadRequestVersion)
+            {
+                MainWindow.AppendSshDebugLog(
+                    $"Pane.ApplyLoadError skipped pane={Name} path={path} requestVersion={requestVersion} currentVersion={_loadRequestVersion} message={message}");
+                return;
+            }
+
+            _allItems.Clear();
+            Items.Clear();
+            FilterQuery = string.Empty;
+            FilterModeText = string.Empty;
+            OnPropertyChanged(nameof(FilterVisibility));
+            UpdateSelection(Array.Empty<FileEntry>());
+            CurrentPath = path;
+            EditablePath = path;
+            StatusText = "無法載入";
+            SummaryText = message;
+            IsLoading = false;
+            OnPropertyChanged(nameof(LoadingVisibility));
+            MainWindow.AppendSshDebugLog(
+                $"Pane.ApplyLoadError applied pane={Name} path={path} requestVersion={requestVersion} message={message}");
+        }
+
+        public int BeginOverlay(string loadingText)
+        {
+            _overlayRequestVersion++;
+            LoadingText = loadingText;
+            IsLoading = true;
+            OnPropertyChanged(nameof(LoadingVisibility));
+            MainWindow.AppendSshDebugLog(
+                $"Pane.BeginOverlay pane={Name} overlayVersion={_overlayRequestVersion} loadingText={loadingText}");
+            return _overlayRequestVersion;
+        }
+
+        public void EndOverlay(int overlayVersion)
+        {
+            if (overlayVersion != _overlayRequestVersion)
+            {
+                MainWindow.AppendSshDebugLog(
+                    $"Pane.EndOverlay skipped pane={Name} overlayVersion={overlayVersion} currentOverlayVersion={_overlayRequestVersion}");
+                return;
+            }
+
+            IsLoading = false;
+            OnPropertyChanged(nameof(LoadingVisibility));
+            MainWindow.AppendSshDebugLog(
+                $"Pane.EndOverlay applied pane={Name} overlayVersion={overlayVersion}");
+        }
+
         private void Load(string path, bool rememberCurrent = true)
         {
+            _loadRequestVersion++;
+            IsLoading = false;
+            OnPropertyChanged(nameof(LoadingVisibility));
+            MainWindow.AppendSshDebugLog(
+                $"Pane.Load start pane={Name} path={path} rememberCurrent={rememberCurrent} version={_loadRequestVersion}");
+
             try
             {
+                if (MainWindow.IsSshPath(path))
+                {
+                    LoadSshDirectory(path, rememberCurrent);
+                    return;
+                }
+
+                if (MainWindow.TryEnumerateWslDistributions(path, out var distributionPaths))
+                {
+                    LoadWslRoot(path, distributionPaths, rememberCurrent);
+                    return;
+                }
+
                 if (MainWindow.TryEnumerateUncServerShares(path, out var sharePaths))
                 {
                     LoadUncServerRoot(path, sharePaths, rememberCurrent);
@@ -292,7 +447,41 @@ namespace nuone_tools
                 EditablePath = path;
                 StatusText = "無法載入";
                 SummaryText = ex.Message;
+                MainWindow.AppendSshDebugLog(
+                    $"Pane.Load exception pane={Name} path={path} version={_loadRequestVersion} error={ex}");
             }
+        }
+
+        private void LoadSshDirectory(string path, bool rememberCurrent)
+        {
+            if (!MainWindow.TryLoadSshDirectory(path, out var normalizedPath, out var entries, out var errorMessage))
+            {
+                throw new InvalidOperationException(string.IsNullOrWhiteSpace(errorMessage)
+                    ? "無法載入遠端 Linux 目錄。"
+                    : errorMessage);
+            }
+
+            ApplyLoadedEntries(normalizedPath, entries, rememberCurrent, _loadRequestVersion);
+        }
+
+        private void LoadWslRoot(string path, IReadOnlyList<string> distributionPaths, bool rememberCurrent)
+        {
+            if (rememberCurrent && !string.IsNullOrWhiteSpace(CurrentPath) && !MainWindow.PathEquals(CurrentPath, path))
+            {
+                _history.Push(CurrentPath);
+            }
+
+            CurrentPath = MainWindow.NormalizePath(path);
+            EditablePath = CurrentPath;
+            _allItems.Clear();
+
+            foreach (var distributionPath in distributionPaths)
+            {
+                _allItems.Add(FileEntry.FromNetworkShare(distributionPath));
+            }
+
+            FilterQuery = string.Empty;
+            ApplyFilter();
         }
 
         private void LoadUncServerRoot(string path, IReadOnlyList<string> sharePaths, bool rememberCurrent)

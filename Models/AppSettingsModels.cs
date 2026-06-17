@@ -69,6 +69,12 @@ namespace nuone_tools
         Light,
     }
 
+    public enum NotificationHistoryScope
+    {
+        LocalOnly,
+        Sync,
+    }
+
     public enum BackupAutomationMode
     {
         Copy,
@@ -216,6 +222,23 @@ namespace nuone_tools
         public int DaysToExpiration { get; set; } = 3650;
 
         public int DaysToPurge { get; set; } = 20;
+    }
+
+    public sealed class NotificationHistoryRecord
+    {
+        public Guid Id { get; set; }
+
+        public NotificationHistoryScope Scope { get; set; } = NotificationHistoryScope.LocalOnly;
+
+        public string Category { get; set; } = string.Empty;
+
+        public string Summary { get; set; } = string.Empty;
+
+        public string Details { get; set; } = string.Empty;
+
+        public string CreatedAtUtc { get; set; } = string.Empty;
+
+        public string DeviceName { get; set; } = string.Empty;
     }
 
     public sealed class ToolbarCommandConfig

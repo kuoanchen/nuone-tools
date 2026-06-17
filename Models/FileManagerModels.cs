@@ -155,15 +155,46 @@ namespace nuone_tools
         public static FileEntry FromNetworkShare(string sharePath)
         {
             var visual = FileVisual.ForDirectory();
+            var isWslDistribution = MainWindow.IsWslDistributionPath(sharePath);
 
             return new FileEntry
             {
                 Name = MainWindow.GetDisplayName(sharePath),
                 FullPath = sharePath,
                 IsDirectory = true,
-                Kind = "分享",
+                Kind = isWslDistribution ? "Linux" : "分享",
                 ModifiedText = "--",
                 SizeText = "--",
+                Glyph = visual.Glyph,
+                AccentColor = visual.Brush,
+            };
+        }
+
+        public static FileEntry FromRemoteEntry(
+            string name,
+            string fullPath,
+            bool isDirectory,
+            string modifiedText,
+            long? sizeBytes)
+        {
+            var visual = isDirectory
+                ? FileVisual.ForDirectory()
+                : FileVisual.ForFile(Path.GetExtension(name));
+
+            return new FileEntry
+            {
+                Name = name,
+                FullPath = fullPath,
+                IsDirectory = isDirectory,
+                Kind = isDirectory
+                    ? "Linux"
+                    : (string.IsNullOrWhiteSpace(Path.GetExtension(name))
+                        ? "檔案"
+                        : Path.GetExtension(name).TrimStart('.').ToUpperInvariant()),
+                ModifiedText = string.IsNullOrWhiteSpace(modifiedText) ? "--" : modifiedText,
+                SizeText = isDirectory
+                    ? "--"
+                    : (sizeBytes.HasValue ? MainWindow.FormatSize(sizeBytes.Value) : "--"),
                 Glyph = visual.Glyph,
                 AccentColor = visual.Brush,
             };
