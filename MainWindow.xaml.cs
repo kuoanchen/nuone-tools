@@ -111,8 +111,8 @@ namespace nuone_tools
         private readonly HashSet<Guid> _runningAutoExtractIds = new();
         private readonly object _backgroundWorkLock = new();
         private readonly object _notificationHistoryLock = new();
-        private readonly Dictionary<Guid, string> _backgroundWorks = new();
-        private readonly List<string> _backgroundWorkRecords = new();
+        private readonly Dictionary<Guid, BackgroundWorkState> _backgroundWorks = new();
+        private readonly List<BackgroundWorkRecord> _backgroundWorkRecords = new();
         private readonly List<NotificationHistoryRecord> _localNotificationHistory = new();
         private readonly List<NotificationHistoryRecord> _syncNotificationHistory = new();
         private readonly HashSet<string> _hiddenDrivePaths = new(StringComparer.OrdinalIgnoreCase);

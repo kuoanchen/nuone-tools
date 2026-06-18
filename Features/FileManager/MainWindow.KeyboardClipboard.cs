@@ -440,10 +440,11 @@ namespace nuone_tools
             }
 
             var move = packageView.RequestedOperation == DataPackageOperation.Move;
-            var backgroundLabel = sourcePaths.Count == 1
-                ? $"{(move ? "貼上搬移" : "貼上複製")} {Path.GetFileName(sourcePaths[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))} 中"
-                : $"{(move ? "貼上搬移" : "貼上複製")} {sourcePaths.Count} 個項目中";
-            var backgroundWorkId = BeginBackgroundWork(backgroundLabel);
+            var actionLabel = move ? "貼上搬移" : "貼上複製";
+            var backgroundLabel = BuildTransferBackgroundLabel(sourcePaths, actionLabel);
+            var backgroundDetails = BuildTransferBackgroundDetails(sourcePaths, targetDirectory, actionLabel);
+            var completionLabel = $"完成：{BuildTransferBackgroundLabel(sourcePaths, actionLabel, includeInProgressSuffix: false)}";
+            var backgroundWorkId = BeginBackgroundWork(backgroundLabel, backgroundDetails);
 
             try
             {
@@ -472,7 +473,7 @@ namespace nuone_tools
             }
             finally
             {
-                CompleteBackgroundWork(backgroundWorkId);
+                CompleteBackgroundWork(backgroundWorkId, completionLabel, backgroundDetails);
             }
         }
 

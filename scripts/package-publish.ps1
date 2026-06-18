@@ -24,6 +24,42 @@ function Resolve-ProjectValue {
     return ''
 }
 
+function Resolve-ExpandedProjectValue {
+    param(
+        [xml]$ProjectXml,
+        [string]$Name,
+        [hashtable]$Cache = $null,
+        [System.Collections.Generic.HashSet[string]]$Stack = $null
+    )
+
+    if ($null -eq $Cache) {
+        $Cache = @{}
+    }
+
+    if ($Cache.ContainsKey($Name)) {
+        return [string]$Cache[$Name]
+    }
+
+    if ($null -eq $Stack) {
+        $Stack = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    }
+
+    if (-not $Stack.Add($Name)) {
+        return Resolve-ProjectValue -ProjectXml $ProjectXml -Name $Name
+    }
+
+    $value = Resolve-ProjectValue -ProjectXml $ProjectXml -Name $Name
+    while ($value -match '\$\(([^)]+)\)') {
+        $referencedName = $matches[1]
+        $referencedValue = Resolve-ExpandedProjectValue -ProjectXml $ProjectXml -Name $referencedName -Cache $Cache -Stack $Stack
+        $value = $value.Replace('$(' + $referencedName + ')', $referencedValue)
+    }
+
+    $null = $Stack.Remove($Name)
+    $Cache[$Name] = $value
+    return $value
+}
+
 function Expand-PublishPath {
     param(
         [string]$RawPath,
@@ -45,8 +81,9 @@ if (-not (Test-Path $projectPath)) {
 }
 
 [xml]$projectXml = Get-Content -Path $projectPath
-$version = Resolve-ProjectValue -ProjectXml $projectXml -Name 'Version'
-$targetFramework = Resolve-ProjectValue -ProjectXml $projectXml -Name 'TargetFramework'
+$projectPropertyCache = @{}
+$version = Resolve-ExpandedProjectValue -ProjectXml $projectXml -Name 'Version' -Cache $projectPropertyCache
+$targetFramework = Resolve-ExpandedProjectValue -ProjectXml $projectXml -Name 'TargetFramework' -Cache $projectPropertyCache
 
 if ([string]::IsNullOrWhiteSpace($version)) {
     throw '無法從 nuone-tools.csproj 讀取 Version。'

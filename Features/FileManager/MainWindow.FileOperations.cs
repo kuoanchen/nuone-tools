@@ -659,10 +659,11 @@ namespace nuone_tools
                 return;
             }
 
-            var backgroundLabel = sourcePaths.Count == 1
-                ? $"{(move ? "搬移" : "複製")} {Path.GetFileName(sourcePaths[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))} 中"
-                : $"{(move ? "搬移" : "複製")} {sourcePaths.Count} 個項目中";
-            var backgroundWorkId = BeginBackgroundWork(backgroundLabel);
+            var actionLabel = move ? "搬移" : "複製";
+            var backgroundLabel = BuildTransferBackgroundLabel(sourcePaths, actionLabel);
+            var backgroundDetails = BuildTransferBackgroundDetails(sourcePaths, targetDirectory, actionLabel);
+            var completionLabel = $"完成：{BuildTransferBackgroundLabel(sourcePaths, actionLabel, includeInProgressSuffix: false)}";
+            var backgroundWorkId = BeginBackgroundWork(backgroundLabel, backgroundDetails);
 
             try
             {
@@ -691,8 +692,53 @@ namespace nuone_tools
             }
             finally
             {
-                CompleteBackgroundWork(backgroundWorkId);
+                CompleteBackgroundWork(backgroundWorkId, completionLabel, backgroundDetails);
             }
+        }
+
+        private static string BuildTransferBackgroundLabel(
+            IReadOnlyList<string> sourcePaths,
+            string actionLabel,
+            bool includeInProgressSuffix = true)
+        {
+            var countText = sourcePaths.Count == 1
+                ? Path.GetFileName(sourcePaths[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))
+                : $"{sourcePaths.Count} 個項目";
+            return includeInProgressSuffix
+                ? $"{actionLabel} {countText} 中"
+                : $"{actionLabel} {countText}";
+        }
+
+        private static string BuildTransferBackgroundDetails(
+            IReadOnlyList<string> sourcePaths,
+            string targetDirectory,
+            string actionLabel)
+        {
+            var builder = new StringBuilder();
+            builder.Append("動作：");
+            builder.AppendLine(actionLabel);
+            builder.AppendLine();
+            builder.Append("目的地：");
+            builder.AppendLine(targetDirectory);
+
+            builder.AppendLine();
+            builder.AppendLine("項目：");
+
+            foreach (var sourcePath in sourcePaths)
+            {
+                var trimmedSourcePath = sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+                var itemName = Path.GetFileName(trimmedSourcePath);
+                var destinationPath = Path.Combine(targetDirectory, itemName);
+
+                builder.Append("- ");
+                builder.AppendLine(itemName);
+                builder.Append("  從：");
+                builder.AppendLine(trimmedSourcePath);
+                builder.Append("  到：");
+                builder.AppendLine(destinationPath);
+            }
+
+            return builder.ToString().TrimEnd();
         }
 
         private static bool TryGetPath(object sender, out string path)
@@ -792,10 +838,16 @@ namespace nuone_tools
             pane.SelectedItem = pane.Items.FirstOrDefault(item => PathEquals(item.FullPath, path));
         }
 
-        private static void OpenPath(string path)
+        private void OpenPath(string path)
         {
             if (!Directory.Exists(path) && !File.Exists(path))
             {
+                return;
+            }
+
+            if (IsPowerShellScript(path))
+            {
+                OpenPowerShellScriptInTerminal(path);
                 return;
             }
 
@@ -804,6 +856,26 @@ namespace nuone_tools
                 FileName = path,
                 UseShellExecute = true,
             });
+        }
+
+        private static bool IsPowerShellScript(string path)
+        {
+            return File.Exists(path) &&
+                string.Equals(Path.GetExtension(path), ".ps1", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void OpenPowerShellScriptInTerminal(string scriptPath)
+        {
+            var fullScriptPath = Path.GetFullPath(scriptPath);
+            var workingDirectory = Path.GetDirectoryName(fullScriptPath);
+            if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
+            {
+                workingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            }
+
+            var escapedScriptPath = fullScriptPath.Replace("\"", "\"\"", StringComparison.Ordinal);
+            var command = $"powershell.exe -NoLogo -NoExit -ExecutionPolicy Bypass -File \"{escapedScriptPath}\"";
+            OpenBuiltInTerminalTabAndRunCommand(TerminalShellKind.PowerShell, workingDirectory, command);
         }
 
         private async Task OpenFileWithLoadingAsync(PaneViewModel pane, string path)
@@ -829,6 +901,10 @@ namespace nuone_tools
                 if (IsSshPath(path))
                 {
                     await OpenRemoteFileWithLocalAppAsync(path);
+                }
+                else if (IsPowerShellScript(path))
+                {
+                    await EnqueueOnUiAsync(() => OpenPath(path));
                 }
                 else
                 {

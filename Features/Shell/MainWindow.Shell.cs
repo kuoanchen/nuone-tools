@@ -194,13 +194,15 @@ namespace nuone_tools
                 : Visibility.Collapsed;
         }
 
-        private Guid BeginBackgroundWork(string label)
+        private Guid BeginBackgroundWork(string label, string? details = null)
         {
             var workId = Guid.NewGuid();
             lock (_backgroundWorkLock)
             {
-                _backgroundWorks[workId] = label;
-                AddBackgroundWorkRecordLocked($"開始：{label}");
+                _backgroundWorks[workId] = new BackgroundWorkState(
+                    label,
+                    string.IsNullOrWhiteSpace(details) ? label : details.Trim());
+                AddBackgroundWorkRecordLocked($"開始：{label}", details);
             }
 
             EnqueueSharedStatusBarRefresh();
@@ -210,16 +212,20 @@ namespace nuone_tools
         private void CompleteBackgroundWork(
             Guid workId,
             string? completionRecord = null,
+            string? completionDetails = null,
             bool persistToLocalHistory = true)
         {
             lock (_backgroundWorkLock)
             {
-                if (_backgroundWorks.Remove(workId, out var label))
+                if (_backgroundWorks.Remove(workId, out var work))
                 {
                     var recordText = string.IsNullOrWhiteSpace(completionRecord)
-                        ? $"完成：{NormalizeBackgroundWorkCompletionLabel(label)}"
+                        ? $"完成：{NormalizeBackgroundWorkCompletionLabel(work.Label)}"
                         : completionRecord;
-                    AddBackgroundWorkRecordLocked(recordText);
+                    var recordDetails = string.IsNullOrWhiteSpace(completionDetails)
+                        ? (string.IsNullOrWhiteSpace(work.Details) ? recordText : work.Details)
+                        : completionDetails.Trim();
+                    AddBackgroundWorkRecordLocked(recordText, recordDetails);
 
                     if (persistToLocalHistory)
                     {
@@ -227,7 +233,7 @@ namespace nuone_tools
                             NotificationHistoryScope.LocalOnly,
                             "背景工作",
                             recordText,
-                            recordText);
+                            recordDetails);
                     }
                 }
             }
@@ -464,19 +470,33 @@ namespace nuone_tools
         }
 
         private List<NotificationListEntry> BuildNotificationListEntries(
-            IReadOnlyList<string> sessionRecords,
+            IReadOnlyList<BackgroundWorkRecord> sessionRecords,
             IReadOnlyList<NotificationHistoryRecord> localHistory,
             IReadOnlyList<NotificationHistoryRecord> syncHistory)
         {
             var entries = new List<NotificationListEntry>();
             foreach (var record in sessionRecords)
             {
+                var timestampText = record.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                var summary = $"{timestampText}　{record.Summary}";
+                var detailBuilder = new StringBuilder();
+                detailBuilder.Append("時間：");
+                detailBuilder.AppendLine(timestampText);
+                detailBuilder.AppendLine();
+                detailBuilder.AppendLine(record.Summary);
+
+                if (!string.Equals(record.Details.Trim(), record.Summary.Trim(), StringComparison.Ordinal))
+                {
+                    detailBuilder.AppendLine();
+                    detailBuilder.AppendLine(record.Details.Trim());
+                }
+
                 entries.Add(new NotificationListEntry
                 {
                     ScopeLabel = "本次",
-                    Timestamp = ExtractSessionRecordTimestamp(record),
-                    CardText = record,
-                    DialogText = record,
+                    Timestamp = record.Timestamp,
+                    CardText = summary,
+                    DialogText = detailBuilder.ToString().TrimEnd(),
                 });
             }
 
@@ -561,23 +581,6 @@ namespace nuone_tools
         private static DateTimeOffset ParseNotificationTimestamp(string? createdAtUtc)
         {
             if (DateTimeOffset.TryParse(createdAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
-            {
-                return parsed;
-            }
-
-            return DateTimeOffset.MinValue;
-        }
-
-        private static DateTimeOffset ExtractSessionRecordTimestamp(string record)
-        {
-            if (!string.IsNullOrWhiteSpace(record) &&
-                record.Length >= 19 &&
-                DateTimeOffset.TryParseExact(
-                    record[..19],
-                    "yyyy-MM-dd HH:mm:ss",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeLocal,
-                    out var parsed))
             {
                 return parsed;
             }
@@ -676,6 +679,17 @@ namespace nuone_tools
             public string DialogText { get; init; } = string.Empty;
         }
 
+        private sealed record BackgroundWorkState(string Label, string Details);
+
+        private sealed class BackgroundWorkRecord
+        {
+            public DateTimeOffset Timestamp { get; init; }
+
+            public string Summary { get; init; } = string.Empty;
+
+            public string Details { get; init; } = string.Empty;
+        }
+
         private void EnqueueSharedStatusBarRefresh()
         {
             if (DispatcherQueue.HasThreadAccess)
@@ -731,7 +745,9 @@ namespace nuone_tools
             List<string> labels;
             lock (_backgroundWorkLock)
             {
-                labels = _backgroundWorks.Values.ToList();
+                labels = _backgroundWorks.Values
+                    .Select(static work => work.Label)
+                    .ToList();
             }
 
             if (labels.Count == 0)
@@ -755,9 +771,23 @@ namespace nuone_tools
             }
         }
 
-        private void AddBackgroundWorkRecordLocked(string message)
+        private void AddBackgroundWorkRecordLocked(string summary, string? details = null)
         {
-            _backgroundWorkRecords.Insert(0, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}　{message}");
+            var normalizedSummary = NormalizeBackgroundWorkRecordForTextBox(summary).Trim();
+            if (string.IsNullOrWhiteSpace(normalizedSummary))
+            {
+                return;
+            }
+
+            var normalizedDetails = NormalizeBackgroundWorkRecordForTextBox(details ?? string.Empty).Trim();
+            _backgroundWorkRecords.Insert(0, new BackgroundWorkRecord
+            {
+                Timestamp = DateTimeOffset.Now,
+                Summary = normalizedSummary,
+                Details = string.IsNullOrWhiteSpace(normalizedDetails)
+                    ? normalizedSummary
+                    : normalizedDetails,
+            });
             while (_backgroundWorkRecords.Count > 100)
             {
                 _backgroundWorkRecords.RemoveAt(_backgroundWorkRecords.Count - 1);
@@ -772,7 +802,7 @@ namespace nuone_tools
             }
         }
 
-        private List<string> GetBackgroundWorkRecordsSnapshot()
+        private List<BackgroundWorkRecord> GetBackgroundWorkRecordsSnapshot()
         {
             lock (_backgroundWorkLock)
             {
