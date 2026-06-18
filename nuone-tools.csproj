@@ -4,10 +4,11 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>nuone_tools</RootNamespace>
-    <Version>1.202606.1</Version>
-    <AssemblyVersion>1.2026.6.1</AssemblyVersion>
-    <FileVersion>1.2026.6.1</FileVersion>
-    <InformationalVersion>1.202606.1</InformationalVersion>
+    <AppVersion>1.2026.6.2</AppVersion>
+    <Version>$(AppVersion)</Version>
+    <AssemblyVersion>$(AppVersion)</AssemblyVersion>
+    <FileVersion>$(AppVersion)</FileVersion>
+    <InformationalVersion>$(AppVersion)</InformationalVersion>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\AppIcon.ico</ApplicationIcon>
     <Platforms>x86;x64;ARM64</Platforms>
@@ -34,6 +35,19 @@
   <ItemGroup>
     <Manifest Include="$(ApplicationManifest)" />
   </ItemGroup>
+
+  <Target Name="SyncVersionManifests" BeforeTargets="PrepareForBuild">
+    <XmlPoke
+      XmlInputPath="$(MSBuildProjectDirectory)\app.manifest"
+      Query="/asmv1:assembly/asmv1:assemblyIdentity/@version"
+      Value="$(AppVersion)"
+      Namespaces="&lt;Namespace Prefix='asmv1' Uri='urn:schemas-microsoft-com:asm.v1'/&gt;" />
+    <XmlPoke
+      XmlInputPath="$(MSBuildProjectDirectory)\Package.appxmanifest"
+      Query="/pkg:Package/pkg:Identity/@Version"
+      Value="$(AppVersion)"
+      Namespaces="&lt;Namespace Prefix='pkg' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
+  </Target>
 
   <!--
     Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging

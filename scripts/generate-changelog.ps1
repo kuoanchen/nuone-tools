@@ -21,6 +21,57 @@ $currentDate = Get-Date -Format 'yyyy-MM-dd'
 $previousTag = Get-PreviousVersionTag
 $commits = Get-GitCommits -SinceRef $previousTag
 
+function Get-ChangelogBody {
+    param(
+        [string]$Content
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Content)) {
+        return ''
+    }
+
+    return (($Content -replace '^\uFEFF', '').Trim() -replace '^# Changelog\r?\n\r?\n', '').Trim()
+}
+
+function Remove-VersionSection {
+    param(
+        [string]$Body,
+        [string]$Version
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Body)) {
+        return ''
+    }
+
+    $pattern = '(?ms)^## ' + [regex]::Escape($Version) + ' \([^)]+\)\r?\n.*?(?=^## |\z)'
+    return ([regex]::Replace($Body, $pattern, '')).Trim()
+}
+
+function Remove-UnresolvedVersionSections {
+    param(
+        [string]$Body
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Body)) {
+        return ''
+    }
+
+    return ([regex]::Replace($Body, '(?ms)^## \$\([^)]+\) \([^)]+\)\r?\n.*?(?=^## |\z)', '')).Trim()
+}
+
+function Get-GitFileContent {
+    param(
+        [string]$RepositoryRoot,
+        [string]$RepositoryRelativePath
+    )
+
+    try {
+        return (& git -C $RepositoryRoot show ("HEAD:" + $RepositoryRelativePath) 2>$null | Out-String)
+    } catch {
+        return ''
+    }
+}
+
 $lines = New-Object System.Collections.Generic.List[string]
 $lines.Add('# Changelog')
 $lines.Add('')
@@ -46,7 +97,25 @@ if ($commits.Count -eq 0) {
     }
 }
 
-$content = ($lines -join [Environment]::NewLine).TrimEnd() + [Environment]::NewLine
+$currentSection = (($lines | Select-Object -Skip 2) -join [Environment]::NewLine).Trim()
+$workingTreeBody = if (Test-Path $resolvedOutputPath) {
+    Get-ChangelogBody -Content (Get-Content -Path $resolvedOutputPath -Raw)
+} else {
+    ''
+}
+$trackedBody = Get-ChangelogBody -Content (Get-GitFileContent -RepositoryRoot $repoRoot -RepositoryRelativePath 'CHANGELOG.md')
+$historyCandidates = @(
+    Remove-UnresolvedVersionSections -Body (Remove-VersionSection -Body $workingTreeBody -Version $metadata.Version)
+    Remove-UnresolvedVersionSections -Body (Remove-VersionSection -Body $trackedBody -Version $metadata.Version)
+) | Where-Object { -not [string]::IsNullOrWhiteSpace($_) }
+$historyBody = ($historyCandidates | Sort-Object Length -Descending | Select-Object -First 1)
+
+$content = '# Changelog' + [Environment]::NewLine + [Environment]::NewLine + $currentSection
+if (-not [string]::IsNullOrWhiteSpace($historyBody)) {
+    $content += [Environment]::NewLine + [Environment]::NewLine + $historyBody.Trim()
+}
+
+$content = $content.TrimEnd() + [Environment]::NewLine
 Set-Content -Path $resolvedOutputPath -Value $content -Encoding UTF8
 
 Write-Host "已產生 CHANGELOG：$resolvedOutputPath"
