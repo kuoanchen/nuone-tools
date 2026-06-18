@@ -69,6 +69,13 @@ namespace nuone_tools
                 return;
             }
 
+            if (MainWindow.IsWslPath(path) || MainWindow.IsSshPath(path))
+            {
+                StopWatching();
+                _watchedPath = string.Empty;
+                return;
+            }
+
             var normalizedPath = string.IsNullOrWhiteSpace(path) ? string.Empty : Path.GetFullPath(path);
             if (string.Equals(_watchedPath, normalizedPath, StringComparison.OrdinalIgnoreCase))
             {
@@ -90,12 +97,9 @@ namespace nuone_tools
                     IncludeSubdirectories = false,
                     NotifyFilter = NotifyFilters.FileName
                         | NotifyFilters.DirectoryName
-                        | NotifyFilters.LastWrite
-                        | NotifyFilters.CreationTime
-                        | NotifyFilters.Size,
+                        | NotifyFilters.CreationTime,
                     EnableRaisingEvents = true,
                 };
-                _watcher.Changed += Watcher_Changed;
                 _watcher.Created += Watcher_Changed;
                 _watcher.Deleted += Watcher_Changed;
                 _watcher.Renamed += Watcher_Renamed;
@@ -204,7 +208,6 @@ namespace nuone_tools
             }
 
             _watcher.EnableRaisingEvents = false;
-            _watcher.Changed -= Watcher_Changed;
             _watcher.Created -= Watcher_Changed;
             _watcher.Deleted -= Watcher_Changed;
             _watcher.Renamed -= Watcher_Renamed;

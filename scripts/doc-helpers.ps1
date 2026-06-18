@@ -35,10 +35,86 @@ function Get-ProjectProperty {
     return ''
 }
 
+function Resolve-ProjectProperty {
+    param(
+        [Parameter(Mandatory = $true)]
+        [xml]$ProjectXml,
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+        [hashtable]$Cache = $null,
+        [System.Collections.Generic.HashSet[string]]$Stack = $null
+    )
+
+    if ($null -eq $Cache) {
+        $Cache = @{}
+    }
+
+    if ($Cache.ContainsKey($Name)) {
+        return [string]$Cache[$Name]
+    }
+
+    if ($null -eq $Stack) {
+        $Stack = [System.Collections.Generic.HashSet[string]]::new([System.StringComparer]::OrdinalIgnoreCase)
+    }
+
+    if (-not $Stack.Add($Name)) {
+        return Get-ProjectProperty -ProjectXml $ProjectXml -Name $Name
+    }
+
+    $value = Get-ProjectProperty -ProjectXml $ProjectXml -Name $Name
+    while ($value -match '\$\(([^)]+)\)') {
+        $referencedName = $matches[1]
+        $referencedValue = Resolve-ProjectProperty -ProjectXml $ProjectXml -Name $referencedName -Cache $Cache -Stack $Stack
+        $value = $value.Replace('$(' + $referencedName + ')', $referencedValue)
+    }
+
+    $null = $Stack.Remove($Name)
+    $Cache[$Name] = $value
+    return $value
+}
+
+function Convert-AssemblyVersionToDisplayVersion {
+    param(
+        [string]$AssemblyVersion
+    )
+
+    if ([string]::IsNullOrWhiteSpace($AssemblyVersion)) {
+        return ''
+    }
+
+    $parts = $AssemblyVersion.Split('.')
+    if ($parts.Length -ne 4) {
+        return $AssemblyVersion
+    }
+
+    $major = 0
+    $year = 0
+    $month = 0
+    $revision = 0
+    if (-not [int]::TryParse($parts[0], [ref]$major)) {
+        return $AssemblyVersion
+    }
+
+    if (-not [int]::TryParse($parts[1], [ref]$year)) {
+        return $AssemblyVersion
+    }
+
+    if (-not [int]::TryParse($parts[2], [ref]$month)) {
+        return $AssemblyVersion
+    }
+
+    if (-not [int]::TryParse($parts[3], [ref]$revision)) {
+        return $AssemblyVersion
+    }
+
+    return '{0}.{1}{2:00}.{3}' -f $major, $year, $month, $revision
+}
+
 function Get-ProjectMetadata {
     $projectXml = Get-ProjectXml
     $repoRoot = Get-RepoRoot
     $originUrl = ''
+    $cache = @{}
 
     try {
         $originUrl = (git -C $repoRoot remote get-url origin 2>$null | Select-Object -First 1)
@@ -46,15 +122,21 @@ function Get-ProjectMetadata {
         $originUrl = ''
     }
 
+    $assemblyVersion = Resolve-ProjectProperty -ProjectXml $projectXml -Name 'AssemblyVersion' -Cache $cache
+    $version = Resolve-ProjectProperty -ProjectXml $projectXml -Name 'Version' -Cache $cache
+    if ([string]::IsNullOrWhiteSpace($version) -or $version -eq $assemblyVersion) {
+        $version = Convert-AssemblyVersionToDisplayVersion -AssemblyVersion $assemblyVersion
+    }
+
     return [ordered]@{
-        Name                 = Get-ProjectProperty -ProjectXml $projectXml -Name 'RootNamespace'
-        Version              = Get-ProjectProperty -ProjectXml $projectXml -Name 'Version'
-        AssemblyVersion      = Get-ProjectProperty -ProjectXml $projectXml -Name 'AssemblyVersion'
-        FileVersion          = Get-ProjectProperty -ProjectXml $projectXml -Name 'FileVersion'
-        InformationalVersion = Get-ProjectProperty -ProjectXml $projectXml -Name 'InformationalVersion'
-        TargetFramework      = Get-ProjectProperty -ProjectXml $projectXml -Name 'TargetFramework'
-        Platforms            = Get-ProjectProperty -ProjectXml $projectXml -Name 'Platforms'
-        RuntimeIdentifiers   = Get-ProjectProperty -ProjectXml $projectXml -Name 'RuntimeIdentifiers'
+        Name                 = Resolve-ProjectProperty -ProjectXml $projectXml -Name 'RootNamespace' -Cache $cache
+        Version              = $version
+        AssemblyVersion      = $assemblyVersion
+        FileVersion          = Resolve-ProjectProperty -ProjectXml $projectXml -Name 'FileVersion' -Cache $cache
+        InformationalVersion = Resolve-ProjectProperty -ProjectXml $projectXml -Name 'InformationalVersion' -Cache $cache
+        TargetFramework      = Resolve-ProjectProperty -ProjectXml $projectXml -Name 'TargetFramework' -Cache $cache
+        Platforms            = Resolve-ProjectProperty -ProjectXml $projectXml -Name 'Platforms' -Cache $cache
+        RuntimeIdentifiers   = Resolve-ProjectProperty -ProjectXml $projectXml -Name 'RuntimeIdentifiers' -Cache $cache
         RepositoryUrl        = Convert-GitRemoteToHttps -RemoteUrl $originUrl
     }
 }
@@ -189,7 +271,7 @@ function Get-OrderedCommitGroups {
 function Get-PreviousVersionTag {
     $repoRoot = Get-RepoRoot
     try {
-        $tag = git -C $repoRoot tag --sort=-creatordate | Select-Object -Skip 1 -First 1
+        $tag = git -C $repoRoot tag --sort=-creatordate | Select-Object -First 1
         if ($null -eq $tag) {
             return ''
         }

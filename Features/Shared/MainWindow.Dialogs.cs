@@ -676,6 +676,20 @@ namespace nuone_tools
                 },
                 SelectedIndex = profile.Mode == BackupAutomationMode.Mirror ? 1 : 0,
             };
+            var excludedFolderNamesTextBox = new TextBox
+            {
+                AcceptsReturn = true,
+                TextWrapping = TextWrapping.Wrap,
+                MinHeight = 96,
+                VerticalContentAlignment = VerticalAlignment.Top,
+                PlaceholderText = ".vs, .vscode, bin, obj, packages, node_modules",
+                Text = FormatExcludedFolderNamesForEditor(profile.ExcludedFolderNamesText),
+            };
+            var logDirectoryPathTextBox = new TextBox
+            {
+                Text = profile.LogDirectoryPath,
+                PlaceholderText = @"例如：\\dsm\server\backup\logs\ser6",
+            };
             var mongoToolPathTextBox = new TextBox { Text = profile.MongoToolPath };
             var mongoConnectionStringTextBox = new TextBox
             {
@@ -728,6 +742,28 @@ namespace nuone_tools
             filePanel.Children.Add(sourcePathTextBox);
             filePanel.Children.Add(new TextBlock { Text = "模式" });
             filePanel.Children.Add(modeComboBox);
+            filePanel.Children.Add(new TextBlock { Text = "排除資料夾名稱（可用逗號或換行分隔）" });
+            filePanel.Children.Add(new ScrollViewer
+            {
+                Content = excludedFolderNamesTextBox,
+                MaxHeight = 140,
+                HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+            });
+            filePanel.Children.Add(new TextBlock
+            {
+                Text = "比對的是資料夾名稱本身，適合排除 .vs、bin、obj、packages、node_modules 這類開發產物目錄。",
+                Opacity = 0.78,
+                TextWrapping = TextWrapping.Wrap,
+            });
+            filePanel.Children.Add(new TextBlock { Text = "Log 輸出目錄（選填）" });
+            filePanel.Children.Add(logDirectoryPathTextBox);
+            filePanel.Children.Add(new TextBlock
+            {
+                Text = "若有填寫，每次執行都會輸出一份帶時間戳的備份記錄檔。",
+                Opacity = 0.78,
+                TextWrapping = TextWrapping.Wrap,
+            });
 
             var mongoOptions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
             mongoOptions.Children.Add(mongoUseArchiveCheckBox);
@@ -868,6 +904,8 @@ namespace nuone_tools
             profile.SourcePath = sourcePathTextBox.Text.Trim();
             profile.DestinationPath = destinationPathTextBox.Text.Trim();
             profile.Mode = modeComboBox.SelectedIndex == 1 ? BackupAutomationMode.Mirror : BackupAutomationMode.Copy;
+            profile.ExcludedFolderNamesText = FormatExcludedFolderNamesForStorage(excludedFolderNamesTextBox.Text);
+            profile.LogDirectoryPath = logDirectoryPathTextBox.Text.Trim();
             profile.MongoToolPath = mongoToolPathTextBox.Text.Trim();
             profile.MongoConnectionString = mongoConnectionStringTextBox.Text.Trim();
             profile.MongoDatabaseName = mongoDatabaseNameTextBox.Text.Trim();
@@ -889,6 +927,28 @@ namespace nuone_tools
             profile.SetWeekdaySelected(DayOfWeek.Saturday, saturday.IsChecked == true);
             profile.SetWeekdaySelected(DayOfWeek.Sunday, sunday.IsChecked == true);
             return true;
+        }
+
+        private static string FormatExcludedFolderNamesForEditor(string rawValue)
+        {
+            return string.Join(
+                Environment.NewLine,
+                SplitExcludedFolderNames(rawValue));
+        }
+
+        private static string FormatExcludedFolderNamesForStorage(string rawValue)
+        {
+            return string.Join(
+                Environment.NewLine,
+                SplitExcludedFolderNames(rawValue));
+        }
+
+        private static IEnumerable<string> SplitExcludedFolderNames(string rawValue)
+        {
+            return (rawValue ?? string.Empty)
+                .Split(new[] { ',', ';', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(static item => !string.IsNullOrWhiteSpace(item))
+                .Distinct(StringComparer.OrdinalIgnoreCase);
         }
 
         private async Task<bool> ShowAutoExtractProfileEditorAsync(

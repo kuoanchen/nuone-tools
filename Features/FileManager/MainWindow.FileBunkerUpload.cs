@@ -43,6 +43,7 @@ namespace nuone_tools
             }
 
             var backgroundWorkId = BeginBackgroundWork($"上傳檔案到 FileBunker 中（{selectedFiles.Count}）");
+            string? completionRecord = null;
 
             try
             {
@@ -65,6 +66,16 @@ namespace nuone_tools
                 {
                     CopyTextToClipboard(string.Join(Environment.NewLine, uploadedUrls));
                 }
+
+                completionRecord = BuildFileBunkerBackgroundWorkRecord(
+                    selectedFiles.Count,
+                    uploadedUrls,
+                    failedFiles);
+                AddNotificationHistoryRecord(
+                    NotificationHistoryScope.Sync,
+                    "FileBunker",
+                    BuildFileBunkerNotificationSummary(uploadedUrls.Count, failedFiles.Count),
+                    completionRecord);
 
                 if (failedFiles.Count == 0)
                 {
@@ -93,7 +104,7 @@ namespace nuone_tools
             }
             finally
             {
-                CompleteBackgroundWork(backgroundWorkId);
+                CompleteBackgroundWork(backgroundWorkId, completionRecord, persistToLocalHistory: false);
             }
         }
 
@@ -213,6 +224,54 @@ namespace nuone_tools
             {
                 CopyTextToClipboard(urlsText);
             }
+        }
+
+        private static string BuildFileBunkerBackgroundWorkRecord(
+            int totalFiles,
+            IReadOnlyList<string> uploadedUrls,
+            IReadOnlyList<string> failedFiles)
+        {
+            var record = new StringBuilder();
+            record.Append("完成：上傳檔案到 FileBunker 中（");
+            record.Append(totalFiles.ToString(CultureInfo.InvariantCulture));
+            record.Append('）');
+
+            if (uploadedUrls.Count > 0)
+            {
+                record.AppendLine();
+                record.Append("成功：");
+                record.Append(uploadedUrls.Count.ToString(CultureInfo.InvariantCulture));
+                record.AppendLine(" 個");
+                record.AppendLine("連結：");
+                foreach (var url in uploadedUrls)
+                {
+                    record.AppendLine(url);
+                }
+            }
+
+            if (failedFiles.Count > 0)
+            {
+                record.AppendLine();
+                record.Append("失敗：");
+                record.Append(failedFiles.Count.ToString(CultureInfo.InvariantCulture));
+                record.AppendLine(" 個");
+                foreach (var failedFile in failedFiles)
+                {
+                    record.AppendLine(failedFile);
+                }
+            }
+
+            return record.ToString().TrimEnd();
+        }
+
+        private static string BuildFileBunkerNotificationSummary(int uploadedCount, int failedCount)
+        {
+            if (failedCount <= 0)
+            {
+                return uploadedCount == 1 ? "FileBunker 已上傳 1 個檔案" : $"FileBunker 已上傳 {uploadedCount.ToString(CultureInfo.InvariantCulture)} 個檔案";
+            }
+
+            return $"FileBunker 上傳完成，成功 {uploadedCount.ToString(CultureInfo.InvariantCulture)} 個，失敗 {failedCount.ToString(CultureInfo.InvariantCulture)} 個";
         }
 
         private static string BuildFileBunkerUploadErrorMessage(System.Net.HttpStatusCode statusCode, string responseBody)

@@ -65,6 +65,8 @@ namespace nuone_tools
             "config");
         private static readonly string LegacyGroupsConfigPath = Path.Combine(ConfigDirectoryPath, "groups.json");
         private static readonly string SettingsConfigPath = Path.Combine(ConfigDirectoryPath, "settings.json");
+        private static readonly string LocalNotificationHistoryPath = Path.Combine(ConfigDirectoryPath, "local-notification-history.json");
+        private static readonly string SyncNotificationHistoryPath = Path.Combine(ConfigDirectoryPath, "sync-notification-history.json");
         private static readonly HttpClient SharedHttpClient = new();
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
         private static readonly TimeSpan PaneWatcherDebounceInterval = TimeSpan.FromMilliseconds(450);
@@ -108,8 +110,11 @@ namespace nuone_tools
         private readonly Dictionary<Guid, CancellationTokenSource> _autoExtractCancellationTokens = new();
         private readonly HashSet<Guid> _runningAutoExtractIds = new();
         private readonly object _backgroundWorkLock = new();
+        private readonly object _notificationHistoryLock = new();
         private readonly Dictionary<Guid, string> _backgroundWorks = new();
         private readonly List<string> _backgroundWorkRecords = new();
+        private readonly List<NotificationHistoryRecord> _localNotificationHistory = new();
+        private readonly List<NotificationHistoryRecord> _syncNotificationHistory = new();
         private readonly HashSet<string> _hiddenDrivePaths = new(StringComparer.OrdinalIgnoreCase);
         private TerminalTabSession? _selectedTerminalTab;
         private int _nextTerminalTabNumber = 1;
@@ -145,6 +150,7 @@ namespace nuone_tools
             _leftPaneWatcher = new PaneDirectoryWatcher(LeftPane, DispatcherQueue, RefreshPane, PaneWatcherDebounceInterval);
             _rightPaneWatcher = new PaneDirectoryWatcher(RightPane, DispatcherQueue, RefreshPane, PaneWatcherDebounceInterval);
             ExtendsContentIntoTitleBar = true;
+            SetTitleBar(TopTitleBar);
             TrySetWindowIcon();
 
             ApplyInitialWindowPlacement();
@@ -159,6 +165,7 @@ namespace nuone_tools
             LoadBackupAutomations();
             LoadAutoExtractProfiles();
             LoadToolbarCommands();
+            LoadNotificationHistories();
             ApplyThemePreference();
             ApplySettingsToPanes();
             LoadDriveCards();
@@ -176,8 +183,9 @@ namespace nuone_tools
             RightPane.PropertyChanged += Pane_PropertyChanged;
             Closed += MainWindow_Closed;
 
-            LeftPane.NavigateTo(leftDefault);
-            RightPane.NavigateTo(rightDefault);
+            OpenInPane(LeftPane, leftDefault);
+            OpenInPane(RightPane, rightDefault);
+            _activePane = LeftPane;
             UpdateActivePaneVisuals();
             UpdateAppSectionVisuals();
             UpdateSettingsSectionVisuals();

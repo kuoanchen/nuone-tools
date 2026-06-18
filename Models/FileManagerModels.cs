@@ -30,7 +30,6 @@ using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
 using Windows.Storage;
 using Windows.Storage.FileProperties;
-using Windows.Storage.Streams;
 using WinRT.Interop;
 
 namespace nuone_tools
@@ -155,15 +154,46 @@ namespace nuone_tools
         public static FileEntry FromNetworkShare(string sharePath)
         {
             var visual = FileVisual.ForDirectory();
+            var isWslDistribution = MainWindow.IsWslDistributionPath(sharePath);
 
             return new FileEntry
             {
                 Name = MainWindow.GetDisplayName(sharePath),
                 FullPath = sharePath,
                 IsDirectory = true,
-                Kind = "分享",
+                Kind = isWslDistribution ? "Linux" : "分享",
                 ModifiedText = "--",
                 SizeText = "--",
+                Glyph = visual.Glyph,
+                AccentColor = visual.Brush,
+            };
+        }
+
+        public static FileEntry FromRemoteEntry(
+            string name,
+            string fullPath,
+            bool isDirectory,
+            string modifiedText,
+            long? sizeBytes)
+        {
+            var visual = isDirectory
+                ? FileVisual.ForDirectory()
+                : FileVisual.ForFile(Path.GetExtension(name));
+
+            return new FileEntry
+            {
+                Name = name,
+                FullPath = fullPath,
+                IsDirectory = isDirectory,
+                Kind = isDirectory
+                    ? "Linux"
+                    : (string.IsNullOrWhiteSpace(Path.GetExtension(name))
+                        ? "檔案"
+                        : Path.GetExtension(name).TrimStart('.').ToUpperInvariant()),
+                ModifiedText = string.IsNullOrWhiteSpace(modifiedText) ? "--" : modifiedText,
+                SizeText = isDirectory
+                    ? "--"
+                    : (sizeBytes.HasValue ? MainWindow.FormatSize(sizeBytes.Value) : "--"),
                 Glyph = visual.Glyph,
                 AccentColor = visual.Brush,
             };
@@ -188,11 +218,13 @@ namespace nuone_tools
 
         public Task EnsureShellIconAsync()
         {
-            if (IsDirectory || string.IsNullOrWhiteSpace(FullPath))
+            if (string.IsNullOrWhiteSpace(FullPath) || !IsLocalFileSystemPath(FullPath))
             {
+                MainWindow.AppendDebugLog("icon-debug.log", $"skip non-local-or-empty path={FullPath}");
                 return Task.CompletedTask;
             }
 
+            MainWindow.AppendDebugLog("icon-debug.log", $"ensure start path={FullPath} isDirectory={IsDirectory}");
             return _iconLoadTask ??= LoadShellIconAsync();
         }
 
@@ -200,25 +232,52 @@ namespace nuone_tools
         {
             try
             {
-                var file = await StorageFile.GetFileFromPathAsync(FullPath);
-                using var thumbnail = await file.GetThumbnailAsync(
-                    ThumbnailMode.ListView,
-                    32,
-                    ThumbnailOptions.UseCurrentScale);
+                MainWindow.AppendDebugLog("icon-debug.log", $"load start path={FullPath} isDirectory={IsDirectory}");
+                StorageItemThumbnail? thumbnail = null;
+
+                if (IsDirectory && Directory.Exists(FullPath))
+                {
+                    var folder = await StorageFolder.GetFolderFromPathAsync(FullPath);
+                    thumbnail = await folder.GetThumbnailAsync(
+                        ThumbnailMode.SingleItem,
+                        32,
+                        ThumbnailOptions.UseCurrentScale);
+                }
+                else if (!IsDirectory && File.Exists(FullPath))
+                {
+                    var file = await StorageFile.GetFileFromPathAsync(FullPath);
+                    thumbnail = await file.GetThumbnailAsync(
+                        ThumbnailMode.SingleItem,
+                        32,
+                        ThumbnailOptions.UseCurrentScale);
+                }
 
                 if (thumbnail is null || thumbnail.Size == 0)
                 {
+                    MainWindow.AppendDebugLog("icon-debug.log", $"load empty-thumbnail path={FullPath}");
                     return;
                 }
 
-                var bitmap = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
-                await bitmap.SetSourceAsync(thumbnail);
-                IconImageSource = bitmap;
+                using (thumbnail)
+                {
+                    var bitmapImage = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage();
+                    await bitmapImage.SetSourceAsync(thumbnail);
+                    IconImageSource = bitmapImage;
+                }
+
+                MainWindow.AppendDebugLog("icon-debug.log", $"load success path={FullPath}");
             }
-            catch
+            catch (Exception ex)
             {
-                // Keep the extension-based glyph when Windows cannot provide an icon.
+                MainWindow.AppendDebugLog("icon-debug.log", $"load error path={FullPath} error={ex}");
             }
+        }
+
+        private static bool IsLocalFileSystemPath(string path)
+        {
+            return !MainWindow.IsSshPath(path) &&
+                !MainWindow.IsWslPath(path) &&
+                !MainWindow.IsWslVirtualRootPath(path);
         }
     }
 

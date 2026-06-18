@@ -1,3 +1,4 @@
+using System;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -122,9 +123,31 @@ namespace nuone_tools.Views
 
         private async void FileEntryIconPresenter_Loaded(object sender, RoutedEventArgs e)
         {
-            if (sender is FrameworkElement { DataContext: FileEntry entry })
+            try
             {
-                await entry.EnsureShellIconAsync();
+                if (sender is FrameworkElement { DataContext: FileEntry entry })
+                {
+                    await entry.EnsureShellIconAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                MainWindow.AppendDebugLog("icon-debug.log", $"presenter loaded error={ex}");
+            }
+        }
+
+        private async void FileEntryIconPresenter_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+        {
+            try
+            {
+                if (args.NewValue is FileEntry entry)
+                {
+                    await entry.EnsureShellIconAsync();
+                }
+            }
+            catch (Exception ex)
+            {
+                MainWindow.AppendDebugLog("icon-debug.log", $"presenter datacontext error={ex}");
             }
         }
 

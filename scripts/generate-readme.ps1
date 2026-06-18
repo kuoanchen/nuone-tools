@@ -33,7 +33,7 @@ $resolvedOutputPath = if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 
 $changelogPath = Join-Path $repoRoot 'CHANGELOG.md'
 $changelogContent = if (Test-Path $changelogPath) {
-    ((Get-Content -Path $changelogPath -Raw).Trim() -replace '^# Changelog\r?\n\r?\n', '')
+    (((Get-Content -Path $changelogPath -Raw) -replace '^\uFEFF', '').Trim() -replace '^# Changelog\r?\n\r?\n', '')
 } else {
     '尚未產生 CHANGELOG.md，請先執行 scripts\generate-changelog.ps1。'
 }

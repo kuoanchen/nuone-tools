@@ -1,7 +1,7 @@
 ﻿# Nuone Tools
 
-![Version](https://img.shields.io/badge/version-1.202606.1-blue.svg?cacheSeconds=2592000)
-![AssemblyVersion](https://img.shields.io/badge/assembly-1.2026.6.1-purple.svg?cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-1.202606.2-blue.svg?cacheSeconds=2592000)
+![AssemblyVersion](https://img.shields.io/badge/assembly-1.2026.6.2-purple.svg?cacheSeconds=2592000)
 ![TargetFramework](https://img.shields.io/badge/framework-net8.0-windows10.0.19041.0-0a7ea4.svg?cacheSeconds=2592000)
 
 WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動化、批次重新命名、工具列命令與原生 Windows Shell 操作流程。
@@ -10,10 +10,10 @@ WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動
 
 - 專案名稱：Nuone Tools
 - RootNamespace：`nuone_tools`
-- Version：`1.202606.1`
-- AssemblyVersion：`1.2026.6.1`
-- FileVersion：`1.2026.6.1`
-- InformationalVersion：`1.202606.1`
+- Version：`1.202606.2`
+- AssemblyVersion：`1.2026.6.2`
+- FileVersion：`1.2026.6.2`
+- InformationalVersion：`1.2026.6.2`
 - TargetFramework：`net8.0-windows10.0.19041.0`
 - Platforms：`x86;x64;ARM64`
 - RuntimeIdentifiers：`win-x86;win-x64;win-arm64`
@@ -48,6 +48,17 @@ WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動
   - 依序產生 changelog 與 readme
 
 ## Changelog
+
+## 1.202606.2 (2026-06-18)
+
+### 新功能
+
+* 強化自動化備份與檔案管理狀態呈現 ([6e4b02d](https://github.com/kuoanchen/nuone-tools/commit/6e4b02d1d14cfc5a3526f26ea326b9ed81cca9a3))
+  - 擴充自動化備份設定，加入排除資料夾名稱與 log 輸出目錄，並記錄更完整的執行結果與背景工作摘要
+* 擴充雙窗格檔案管理與通知紀錄能力 ([90356b8](https://github.com/kuoanchen/nuone-tools/commit/90356b8509b25a91c598fbbfcf908b0f6e5bd688))
+  - 新增 SSH 與 WSL 路徑瀏覽、遠端目錄讀取與偵錯紀錄，強化雙窗格導覽與重新整理流程
+* 重構主視窗並新增終端機與模組化功能頁面 ([7aa205c](https://github.com/kuoanchen/nuone-tools/commit/7aa205cca0df371dc7b00ca8b9eaa3bbd230e49a))
+  - 將 MainWindow 拆分為 Automation、FileManager、Settings、Terminal 等獨立 View 與對應綁定
 
 ## 1.202606.1 (2026-06-12)
 

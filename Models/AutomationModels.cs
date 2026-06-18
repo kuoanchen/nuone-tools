@@ -42,6 +42,8 @@ namespace nuone_tools
         private string _sourcePath = string.Empty;
         private string _destinationPath = string.Empty;
         private BackupAutomationMode _mode = BackupAutomationMode.Copy;
+        private string _excludedFolderNamesText = string.Empty;
+        private string _logDirectoryPath = string.Empty;
         private string _mongoToolPath = @"C:\Program Files\MongoDB\Tools\100\bin\mongodump.exe";
         private string _mongoConnectionString = string.Empty;
         private string _mongoDatabaseName = string.Empty;
@@ -113,6 +115,18 @@ namespace nuone_tools
                     OnPropertyChanged(nameof(JobTypeText));
                 }
             }
+        }
+
+        public string ExcludedFolderNamesText
+        {
+            get => _excludedFolderNamesText;
+            set => SetProperty(ref _excludedFolderNamesText, value);
+        }
+
+        public string LogDirectoryPath
+        {
+            get => _logDirectoryPath;
+            set => SetProperty(ref _logDirectoryPath, value);
         }
 
         public string MongoToolPath
@@ -260,6 +274,7 @@ namespace nuone_tools
                 {
                     OnPropertyChanged(nameof(StatusText));
                     OnPropertyChanged(nameof(StateText));
+                    OnPropertyChanged(nameof(RunningIndicatorVisibility));
                     OnPropertyChanged(nameof(CanEdit));
                     OnPropertyChanged(nameof(CanToggleEnabled));
                     OnPropertyChanged(nameof(CanStart));
@@ -316,6 +331,8 @@ namespace nuone_tools
                 : "檔案備份";
 
         public string StateText => IsRunning ? "執行中" : IsEnabled ? "已啟用" : "已停用";
+
+        public Visibility RunningIndicatorVisibility => IsRunning ? Visibility.Visible : Visibility.Collapsed;
 
         public string ScheduleDescription => ScheduleType switch
         {
@@ -553,6 +570,7 @@ namespace nuone_tools
                 {
                     OnPropertyChanged(nameof(StatusText));
                     OnPropertyChanged(nameof(StateText));
+                    OnPropertyChanged(nameof(RunningIndicatorVisibility));
                     OnPropertyChanged(nameof(CanEdit));
                     OnPropertyChanged(nameof(CanToggleEnabled));
                     OnPropertyChanged(nameof(CanStart));
@@ -587,6 +605,8 @@ namespace nuone_tools
                 : "已停用";
 
         public string StateText => IsRunning ? "執行中" : IsEnabled ? "已啟用" : "已停用";
+
+        public Visibility RunningIndicatorVisibility => IsRunning ? Visibility.Visible : Visibility.Collapsed;
 
         public string TriggerText => $"監看 {MainWindow.GetAutoExtractExtensionSummary(ExtensionFilter)}";
 

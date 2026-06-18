@@ -90,6 +90,11 @@ namespace nuone_tools
             var selectedEntries = GetSelectedEntries(pane);
             pane.UpdateSelectionText(BuildSelectionSummary(selectedEntries));
 
+            if (MainWindow.IsSshPath(pane.CurrentPath))
+            {
+                return;
+            }
+
             var shouldCalculateFileSize = _shortcutSettings.ShowSelectedFileSize;
             var shouldCalculateFolderSize = _shortcutSettings.ShowSelectedFolderSize;
             var selectedFiles = shouldCalculateFileSize
@@ -242,7 +247,7 @@ namespace nuone_tools
                 return;
             }
 
-            OpenSelectedInExplorer();
+            _ = OpenFileWithLoadingAsync(pane, entry.FullPath);
         }
 
         private void HandleItemTapped(PaneViewModel pane, FrameworkElement? element)
@@ -270,6 +275,11 @@ namespace nuone_tools
         {
             var entry = element?.DataContext as FileEntry;
             if (entry is null)
+            {
+                return;
+            }
+
+            if (IsSshPath(entry.FullPath) || IsSshPath(pane.CurrentPath))
             {
                 return;
             }
@@ -340,14 +350,27 @@ namespace nuone_tools
 
         private void OpenSelected_Click(object sender, RoutedEventArgs e)
         {
-            OpenSelectedInExplorer();
+            _ = OpenSelectedEntriesAsync();
         }
 
         internal void OpenPath_Click(object sender, RoutedEventArgs e)
         {
             if (TryGetPath(sender, out var path))
             {
-                OpenPath(path);
+                if (IsSshPath(path))
+                {
+                    if (TryParseSshPath(path, out _, out var remotePath) &&
+                        !string.Equals(remotePath, "/", StringComparison.Ordinal))
+                    {
+                        _ = OpenFileWithLoadingAsync(_activePane, path);
+                        return;
+                    }
+
+                    OpenInPane(_activePane, path);
+                    return;
+                }
+
+                _ = OpenFileWithLoadingAsync(_activePane, path);
             }
         }
 
@@ -409,6 +432,12 @@ namespace nuone_tools
 
         private async Task DeletePathAsync(string path, PaneViewModel pane)
         {
+            if (IsSshPath(path))
+            {
+                await ShowMessageAsync("遠端 Linux", "遠端 Linux 路徑目前先支援瀏覽。");
+                return;
+            }
+
             var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
             var confirmed = await ConfirmAsync("刪除項目", $"確定要刪除「{name}」嗎？");
             if (!confirmed)
@@ -612,6 +641,12 @@ namespace nuone_tools
                 .Where(path => Directory.Exists(path) || File.Exists(path))
                 .ToList();
 
+            if (paths.Any(IsSshPath) || IsSshPath(sourcePane.CurrentPath) || IsSshPath(targetPane.CurrentPath))
+            {
+                await ShowMessageAsync("遠端 Linux", "遠端 Linux 路徑目前先支援瀏覽。");
+                return;
+            }
+
             if (sourcePaths.Count == 0)
             {
                 return;
@@ -730,6 +765,12 @@ namespace nuone_tools
         {
             ActivatePane(pane);
 
+            if (IsSshPath(path))
+            {
+                OpenInPane(pane, path);
+                return;
+            }
+
             if (Directory.Exists(path))
             {
                 OpenInPane(pane, path);
@@ -765,9 +806,177 @@ namespace nuone_tools
             });
         }
 
+        private async Task OpenFileWithLoadingAsync(PaneViewModel pane, string path)
+        {
+            var fileName = IsSshPath(path)
+                ? (TryParseSshPath(path, out _, out var remotePath)
+                    ? Path.GetFileName(remotePath.TrimEnd('/'))
+                    : string.Empty)
+                : Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                fileName = "檔案";
+            }
+
+            var overlayVersion = 0;
+            await EnqueueOnUiAsync(() =>
+            {
+                overlayVersion = pane.BeginOverlay($"開啟 {fileName} 中...");
+            });
+
+            try
+            {
+                if (IsSshPath(path))
+                {
+                    await OpenRemoteFileWithLocalAppAsync(path);
+                }
+                else
+                {
+                    await Task.Run(() => OpenPath(path));
+                }
+            }
+            finally
+            {
+                await EnqueueOnUiAsync(() => pane.EndOverlay(overlayVersion));
+            }
+        }
+
+        private async Task OpenSelectedEntriesAsync()
+        {
+            var selectedEntries = GetSelectedEntriesInDisplayOrder(_activePane);
+            if (selectedEntries.Count == 0)
+            {
+                return;
+            }
+
+            foreach (var entry in selectedEntries)
+            {
+                if (entry.IsDirectory)
+                {
+                    OpenInPane(_activePane, entry.FullPath);
+                    continue;
+                }
+
+                await OpenFileWithLoadingAsync(_activePane, entry.FullPath);
+            }
+        }
+
+        private async Task OpenRemoteFileWithLocalAppAsync(string sshPath)
+        {
+            if (!TryParseSshPath(sshPath, out var connection, out var remotePath))
+            {
+                await ShowMessageAsync("遠端 Linux", "SSH 路徑格式不正確。");
+                return;
+            }
+
+            var remoteFileName = Path.GetFileName(remotePath.TrimEnd('/'));
+            if (string.IsNullOrWhiteSpace(remoteFileName))
+            {
+                await ShowMessageAsync("遠端 Linux", "這個路徑不是可開啟的遠端檔案。");
+                return;
+            }
+
+            var backgroundWorkId = BeginBackgroundWork($"下載並開啟 {remoteFileName} 中");
+
+            try
+            {
+                var localPath = await DownloadRemoteFileToTempAsync(connection, remotePath, remoteFileName);
+                OpenPath(localPath);
+            }
+            catch (Exception ex)
+            {
+                await ShowMessageAsync("開啟遠端檔案失敗", ex.Message);
+            }
+            finally
+            {
+                CompleteBackgroundWork(backgroundWorkId);
+            }
+        }
+
+        private static async Task<string> DownloadRemoteFileToTempAsync(
+            string connection,
+            string remotePath,
+            string remoteFileName)
+        {
+            var safeConnection = string.Concat(connection.Select(static character =>
+                char.IsLetterOrDigit(character) || character is '.' or '-' or '_'
+                    ? character
+                    : '_'));
+            var tempDirectory = Path.Combine(Path.GetTempPath(), "nuone-tools", "remote-open", safeConnection);
+            Directory.CreateDirectory(tempDirectory);
+
+            var extension = Path.GetExtension(remoteFileName);
+            var baseName = string.IsNullOrWhiteSpace(extension)
+                ? remoteFileName
+                : Path.GetFileNameWithoutExtension(remoteFileName);
+            var localPath = Path.Combine(
+                tempDirectory,
+                $"{baseName}-{DateTime.Now:yyyyMMddHHmmss}{extension}");
+
+            var remoteCommand = $"sh -lc {QuoteBashSingle($"cat -- {QuoteBashSingle(remotePath)}")}";
+
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "ssh.exe",
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                },
+            };
+            process.StartInfo.ArgumentList.Add("-T");
+            process.StartInfo.ArgumentList.Add("-o");
+            process.StartInfo.ArgumentList.Add("BatchMode=yes");
+            process.StartInfo.ArgumentList.Add(connection);
+            process.StartInfo.ArgumentList.Add(remoteCommand);
+
+            if (!process.Start())
+            {
+                throw new InvalidOperationException("無法啟動 ssh.exe。");
+            }
+
+            await using (var fileStream = new FileStream(localPath, FileMode.Create, FileAccess.Write, FileShare.Read))
+            {
+                var copyTask = process.StandardOutput.BaseStream.CopyToAsync(fileStream);
+                var stdErrorTask = process.StandardError.ReadToEndAsync();
+                await copyTask;
+                var stdError = (await stdErrorTask).Trim();
+
+                if (!process.WaitForExit(8000))
+                {
+                    try
+                    {
+                        process.Kill(entireProcessTree: true);
+                    }
+                    catch
+                    {
+                    }
+
+                    throw new InvalidOperationException("下載遠端檔案逾時。");
+                }
+
+                if (process.ExitCode != 0)
+                {
+                    throw new InvalidOperationException(string.IsNullOrWhiteSpace(stdError)
+                        ? $"SSH 命令失敗（ExitCode {process.ExitCode}）。"
+                        : stdError);
+                }
+            }
+
+            return localPath;
+        }
+
         private async Task CreateFolderAsync(PaneViewModel pane)
         {
             ActivatePane(pane);
+
+             if (IsSshPath(pane.CurrentPath))
+            {
+                await ShowMessageAsync("遠端 Linux", "遠端 Linux 路徑目前先支援瀏覽。");
+                return;
+            }
 
             var folderName = await PromptForTextAsync("新增資料夾", "輸入資料夾名稱", "New Folder");
             if (string.IsNullOrWhiteSpace(folderName))
@@ -816,8 +1025,15 @@ namespace nuone_tools
 
         private async Task RenameSinglePathAsync(string path, PaneViewModel pane)
         {
+            if (IsSshPath(path) || IsSshPath(pane.CurrentPath))
+            {
+                await ShowMessageAsync("遠端 Linux", "遠端 Linux 路徑目前先支援瀏覽。");
+                return;
+            }
+
             var currentName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
-            var newName = await PromptForTextAsync("重新命名", "輸入新的名稱", currentName);
+            var isFile = File.Exists(path);
+            var newName = await ShowRenameSinglePathDialogAsync(currentName, isFile);
             if (string.IsNullOrWhiteSpace(newName) || string.Equals(newName, currentName, StringComparison.Ordinal))
             {
                 return;
@@ -848,6 +1064,83 @@ namespace nuone_tools
             {
                 await ShowMessageAsync("重新命名失敗", ex.Message);
             }
+        }
+
+        private async Task<string?> ShowRenameSinglePathDialogAsync(string currentName, bool isFile)
+        {
+            var extension = isFile ? Path.GetExtension(currentName) : string.Empty;
+            var baseName = isFile ? Path.GetFileNameWithoutExtension(currentName) : currentName;
+            var includeExtensionCheckBox = new CheckBox
+            {
+                Content = "包含副檔名",
+                IsChecked = false,
+                Visibility = isFile && !string.IsNullOrEmpty(extension) ? Visibility.Visible : Visibility.Collapsed,
+            };
+            var textBox = new TextBox
+            {
+                Text = currentName,
+                SelectionStart = 0,
+                SelectionLength = currentName.Length,
+            };
+
+            void ApplySelectionMode()
+            {
+                if (!isFile || string.IsNullOrEmpty(extension))
+                {
+                    textBox.Text = currentName;
+                    textBox.SelectionStart = 0;
+                    textBox.SelectionLength = currentName.Length;
+                    return;
+                }
+
+                var includeExtension = includeExtensionCheckBox.IsChecked == true;
+                var desiredText = includeExtension ? currentName : baseName;
+                if (!string.Equals(textBox.Text, desiredText, StringComparison.Ordinal))
+                {
+                    textBox.Text = desiredText;
+                }
+
+                textBox.SelectionStart = 0;
+                textBox.SelectionLength = textBox.Text.Length;
+            }
+
+            includeExtensionCheckBox.Checked += (_, _) => ApplySelectionMode();
+            includeExtensionCheckBox.Unchecked += (_, _) => ApplySelectionMode();
+
+            var panel = new StackPanel { Spacing = 10 };
+            panel.Children.Add(new TextBlock { Text = "輸入新的名稱" });
+            panel.Children.Add(textBox);
+            if (includeExtensionCheckBox.Visibility == Visibility.Visible)
+            {
+                panel.Children.Add(includeExtensionCheckBox);
+            }
+
+            ApplySelectionMode();
+
+            var dialog = new ContentDialog
+            {
+                Title = "重新命名",
+                Content = panel,
+                PrimaryButtonText = "確定",
+                CloseButtonText = "取消",
+                DefaultButton = ContentDialogButton.Primary,
+                XamlRoot = RootLayout.XamlRoot,
+            };
+            ApplyThemeToDialog(dialog);
+
+            var result = await dialog.ShowAsync();
+            if (result != ContentDialogResult.Primary)
+            {
+                return null;
+            }
+
+            var value = textBox.Text.Trim();
+            if (!isFile || string.IsNullOrEmpty(extension) || includeExtensionCheckBox.IsChecked == true)
+            {
+                return value;
+            }
+
+            return $"{value}{extension}";
         }
 
         private async Task BatchRenameSelectedAsync(PaneViewModel pane, IReadOnlyList<FileEntry> selectedEntries)

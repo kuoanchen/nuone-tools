@@ -69,6 +69,12 @@ namespace nuone_tools
         Light,
     }
 
+    public enum NotificationHistoryScope
+    {
+        LocalOnly,
+        Sync,
+    }
+
     public enum BackupAutomationMode
     {
         Copy,
@@ -218,6 +224,23 @@ namespace nuone_tools
         public int DaysToPurge { get; set; } = 20;
     }
 
+    public sealed class NotificationHistoryRecord
+    {
+        public Guid Id { get; set; }
+
+        public NotificationHistoryScope Scope { get; set; } = NotificationHistoryScope.LocalOnly;
+
+        public string Category { get; set; } = string.Empty;
+
+        public string Summary { get; set; } = string.Empty;
+
+        public string Details { get; set; } = string.Empty;
+
+        public string CreatedAtUtc { get; set; } = string.Empty;
+
+        public string DeviceName { get; set; } = string.Empty;
+    }
+
     public sealed class ToolbarCommandConfig
     {
         public Guid Id { get; set; }
@@ -285,6 +308,10 @@ namespace nuone_tools
         public string DestinationPath { get; set; } = string.Empty;
 
         public BackupAutomationMode Mode { get; set; } = BackupAutomationMode.Copy;
+
+        public string ExcludedFolderNamesText { get; set; } = string.Empty;
+
+        public string LogDirectoryPath { get; set; } = string.Empty;
 
         public string MongoToolPath { get; set; } = @"C:\Program Files\MongoDB\Tools\100\bin\mongodump.exe";
 

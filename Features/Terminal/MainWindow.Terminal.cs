@@ -80,7 +80,11 @@ namespace nuone_tools
 
         internal void TerminalHost_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            _ = TerminalHost.Focus(FocusState.Pointer);
+            e.Handled = true;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                _ = TerminalHost.Focus(FocusState.Programmatic);
+            });
         }
 
         internal void TerminalHost_GotFocus(object sender, RoutedEventArgs e)
@@ -269,37 +273,10 @@ namespace nuone_tools
 
             _isTerminalCursorVisible = true;
             RequestTerminalRender();
-            var processToken = session.ProcessToken;
             _ = SendTerminalRawInputAsync("\u0003");
             session.StatusText = $"已送出中斷訊號 · {session.WorkingDirectory}";
             UpdateTerminalUi();
-            _ = EnsureTerminalInterruptCompletesAsync(session, processToken);
             return true;
-        }
-
-        private async Task EnsureTerminalInterruptCompletesAsync(TerminalTabSession session, Guid processToken)
-        {
-            await Task.Delay(900);
-
-            if (session.ProcessToken != processToken ||
-                session.Process is null ||
-                session.Process.HasExited)
-            {
-                return;
-            }
-
-            await EnqueueOnUiAsync(() =>
-            {
-                if (session.ProcessToken != processToken ||
-                    session.Process is null ||
-                    session.Process.HasExited)
-                {
-                    return;
-                }
-
-                AppendTerminalOutputLine(session, "[system] Ctrl+C 未停止目前程序，已重新啟動此終端機。");
-                RestartTerminalProcess(session);
-            });
         }
 
         private async Task PasteClipboardToTerminalAsync()
@@ -378,7 +355,7 @@ namespace nuone_tools
             return (GetKeyState((int)key) & 0x8000) != 0;
         }
 
-        private void EnsureTerminalTabExists()
+        private void EnsureTerminalTabExists(string? workingDirectoryOverride = null)
         {
             if (TerminalTabs.Count > 0)
             {
@@ -390,7 +367,7 @@ namespace nuone_tools
                 return;
             }
 
-            AddTerminalTab(GetDefaultTerminalShellKind(), true);
+            AddTerminalTab(GetDefaultTerminalShellKind(), true, workingDirectoryOverride);
         }
 
         private void AddTerminalTab(TerminalShellKind shellKind, bool shouldSelect, string? workingDirectoryOverride = null)
@@ -960,26 +937,18 @@ namespace nuone_tools
         private void RenderTerminalOutput(string output)
         {
             var shouldAutoScrollToBottom = IsTerminalScrollNearBottom();
-            var screen = BuildTerminalScreen(output);
+            var terminalScreen = BuildTerminalScreen(output);
             TerminalOutputTextBlock.Blocks.Clear();
 
             var paragraph = new Paragraph();
-            AppendScreenRuns(paragraph, screen);
+            var showCursor = _selectedTerminalTab?.IsRunning == true && _isTerminalHostFocused && _isTerminalCursorVisible;
+            AppendScreenRuns(paragraph, terminalScreen, showCursor);
 
             if (paragraph.Inlines.Count == 0)
             {
                 paragraph.Inlines.Add(new Run
                 {
                     Text = string.Empty,
-                    Foreground = new SolidColorBrush(ParseColor("#F2F2F2")),
-                });
-            }
-
-            if (_selectedTerminalTab?.IsRunning == true && _isTerminalHostFocused && _isTerminalCursorVisible)
-            {
-                paragraph.Inlines.Add(new Run
-                {
-                    Text = "\u2588",
                     Foreground = new SolidColorBrush(ParseColor("#F2F2F2")),
                 });
             }
@@ -998,8 +967,9 @@ namespace nuone_tools
             return TerminalOutputScrollViewer.ScrollableHeight - TerminalOutputScrollViewer.VerticalOffset <= bottomThreshold;
         }
 
-        private static void AppendScreenRuns(Paragraph paragraph, List<List<TerminalCell>> screen)
+        private static void AppendScreenRuns(Paragraph paragraph, TerminalScreenState terminalScreen, bool showCursor)
         {
+            var screen = terminalScreen.Rows;
             if (screen.Count == 0)
             {
                 return;
@@ -1007,7 +977,11 @@ namespace nuone_tools
 
             for (var rowIndex = 0; rowIndex < screen.Count; rowIndex++)
             {
-                var line = TrimTrailingEmptyCells(screen[rowIndex]);
+                var line = MaterializeLineForRender(
+                    screen[rowIndex],
+                    rowIndex == terminalScreen.CursorRow ? terminalScreen.CursorColumn : -1,
+                    showCursor && rowIndex == terminalScreen.CursorRow);
+
                 if (line.Count == 0)
                 {
                     if (rowIndex < screen.Count - 1)
@@ -1067,17 +1041,19 @@ namespace nuone_tools
             });
         }
 
-        private static List<List<TerminalCell>> BuildTerminalScreen(string output)
+        private static TerminalScreenState BuildTerminalScreen(string output)
         {
             var screen = new List<List<TerminalCell>> { new() };
             if (string.IsNullOrEmpty(output))
             {
-                return screen;
+                return new TerminalScreenState(screen, 0, 0);
             }
 
             var row = 0;
             var column = 0;
             var state = new TerminalColorState();
+            var savedRow = 0;
+            var savedColumn = 0;
 
             for (var index = 0; index < output.Length; index++)
             {
@@ -1089,7 +1065,7 @@ namespace nuone_tools
                         continue;
                     }
 
-                    if (TryConsumeCsi(output, ref index, screen, ref row, ref column, state))
+                    if (TryConsumeCsi(output, ref index, screen, ref row, ref column, ref savedRow, ref savedColumn, state))
                     {
                         continue;
                     }
@@ -1115,16 +1091,23 @@ namespace nuone_tools
                             RemoveCharacter(screen[row], column);
                         }
                         break;
+                    case '\t':
+                        var nextTabStop = ((column / 4) + 1) * 4;
+                        while (column < nextTabStop)
+                        {
+                            WriteCharacter(screen, ref row, ref column, ' ', state.ForegroundHex);
+                        }
+                        break;
                     case '\a':
                     case '\0':
                         break;
                     default:
-                        WriteCharacter(screen, row, ref column, character, state.ForegroundHex);
+                        WriteCharacter(screen, ref row, ref column, character, state.ForegroundHex);
                         break;
                 }
             }
 
-            return screen;
+            return new TerminalScreenState(screen, row, column);
         }
 
         private static bool TryConsumeOsc(string text, ref int index)
@@ -1161,6 +1144,8 @@ namespace nuone_tools
             List<List<TerminalCell>> screen,
             ref int row,
             ref int column,
+            ref int savedRow,
+            ref int savedColumn,
             TerminalColorState state)
         {
             if (index + 1 >= text.Length || text[index + 1] != '[')
@@ -1192,7 +1177,7 @@ namespace nuone_tools
                     return true;
                 case 'K':
                     EnsureRow(screen, row);
-                    ClearToLineEnd(screen[row], column);
+                    ClearLine(screen[row], column, ParseCsiInt(parameters.ElementAtOrDefault(0), 0));
                     return true;
                 case 'J':
                     if (ParseCsiInt(parameters.ElementAtOrDefault(0), 0) == 2)
@@ -1203,11 +1188,28 @@ namespace nuone_tools
                         column = 0;
                     }
                     return true;
+                case 's':
+                    savedRow = row;
+                    savedColumn = column;
+                    return true;
+                case 'u':
+                    row = Math.Max(0, savedRow);
+                    column = Math.Max(0, savedColumn);
+                    EnsureRow(screen, row);
+                    return true;
                 case 'C':
                     column += Math.Max(1, ParseCsiInt(parameters.ElementAtOrDefault(0), 1));
                     return true;
                 case 'D':
                     column = Math.Max(0, column - Math.Max(1, ParseCsiInt(parameters.ElementAtOrDefault(0), 1)));
+                    return true;
+                case 'P':
+                    EnsureRow(screen, row);
+                    DeleteCharacters(screen[row], column, Math.Max(1, ParseCsiInt(parameters.ElementAtOrDefault(0), 1)));
+                    return true;
+                case '@':
+                    EnsureRow(screen, row);
+                    InsertBlankCharacters(screen[row], column, Math.Max(1, ParseCsiInt(parameters.ElementAtOrDefault(0), 1)));
                     return true;
                 case 'G':
                     column = Math.Max(0, ParseCsiInt(parameters.ElementAtOrDefault(0), 1) - 1);
@@ -1281,11 +1283,17 @@ namespace nuone_tools
 
         private static void WriteCharacter(
             List<List<TerminalCell>> screen,
-            int row,
+            ref int row,
             ref int column,
             char character,
             string foregroundHex)
         {
+            if (column >= TerminalDefaultColumns)
+            {
+                row++;
+                column = 0;
+            }
+
             EnsureRow(screen, row);
             var line = screen[row];
             while (line.Count < column)
@@ -1326,6 +1334,31 @@ namespace nuone_tools
             return end == line.Count ? line : line.Take(end).ToList();
         }
 
+        private static List<TerminalCell> MaterializeLineForRender(List<TerminalCell> line, int cursorColumn, bool showCursor)
+        {
+            var renderedLine = TrimTrailingEmptyCells(line).ToList();
+            if (!showCursor || cursorColumn < 0)
+            {
+                return renderedLine;
+            }
+
+            while (renderedLine.Count < cursorColumn)
+            {
+                renderedLine.Add(new TerminalCell(' ', TerminalColorState.DefaultForegroundHex));
+            }
+
+            if (renderedLine.Count == cursorColumn)
+            {
+                renderedLine.Add(new TerminalCell('\u2588', TerminalColorState.DefaultForegroundHex));
+            }
+            else
+            {
+                renderedLine[cursorColumn] = new TerminalCell('\u2588', renderedLine[cursorColumn].ForegroundHex);
+            }
+
+            return renderedLine;
+        }
+
         private static void ClearToLineEnd(List<TerminalCell> line, int column)
         {
             if (column < 0)
@@ -1342,6 +1375,61 @@ namespace nuone_tools
             while (line.Count > 0 && line[^1].Character == ' ')
             {
                 line.RemoveAt(line.Count - 1);
+            }
+        }
+
+        private static void ClearLine(List<TerminalCell> line, int column, int mode)
+        {
+            switch (mode)
+            {
+                case 1:
+                    if (line.Count == 0)
+                    {
+                        return;
+                    }
+
+                    var clearTo = Math.Min(Math.Max(column, 0), line.Count - 1);
+                    for (var i = 0; i <= clearTo; i++)
+                    {
+                        line[i] = new TerminalCell(' ', TerminalColorState.DefaultForegroundHex);
+                    }
+                    break;
+                case 2:
+                    line.Clear();
+                    break;
+                default:
+                    ClearToLineEnd(line, column);
+                    break;
+            }
+        }
+
+        private static void DeleteCharacters(List<TerminalCell> line, int column, int count)
+        {
+            if (column < 0 || column >= line.Count || count <= 0)
+            {
+                return;
+            }
+
+            var deleteCount = Math.Min(count, line.Count - column);
+            line.RemoveRange(column, deleteCount);
+        }
+
+        private static void InsertBlankCharacters(List<TerminalCell> line, int column, int count)
+        {
+            if (count <= 0)
+            {
+                return;
+            }
+
+            column = Math.Max(0, column);
+            while (line.Count < column)
+            {
+                line.Add(new TerminalCell(' ', TerminalColorState.DefaultForegroundHex));
+            }
+
+            for (var i = 0; i < count; i++)
+            {
+                line.Insert(Math.Min(column, line.Count), new TerminalCell(' ', TerminalColorState.DefaultForegroundHex));
             }
         }
 
@@ -1413,6 +1501,11 @@ namespace nuone_tools
                 ForegroundHex = DefaultForegroundHex;
             }
         }
+
+        private readonly record struct TerminalScreenState(
+            List<List<TerminalCell>> Rows,
+            int CursorRow,
+            int CursorColumn);
 
         private readonly record struct TerminalCell(char Character, string ForegroundHex);
     }

@@ -194,6 +194,7 @@ namespace nuone_tools
 
             ToolbarCommands.Add(item);
             SaveToolbarCommandsSafe();
+            AddSyncSettingsNotification("工具列設定已更新", $"新增工具列按鈕：{item.Title}");
         }
 
         internal async void EditToolbarCommand_Click(object sender, RoutedEventArgs e)
@@ -222,6 +223,7 @@ namespace nuone_tools
             item.TerminalCustomWorkingDirectory = editedItem.TerminalCustomWorkingDirectory;
             item.TerminalLaunchArguments = editedItem.TerminalLaunchArguments;
             SaveToolbarCommandsSafe();
+            AddSyncSettingsNotification("工具列設定已更新", $"編輯工具列按鈕：{item.Title}");
         }
 
         internal async void DeleteToolbarCommand_Click(object sender, RoutedEventArgs e)
@@ -239,6 +241,7 @@ namespace nuone_tools
 
             ToolbarCommands.Remove(item);
             SaveToolbarCommandsSafe();
+            AddSyncSettingsNotification("工具列設定已更新", $"刪除工具列按鈕：{item.Title}");
         }
 
         internal void ToolbarCommandsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
@@ -426,6 +429,7 @@ namespace nuone_tools
             _shortcutSettings.ThemeMode = themeMode;
             ApplyThemePreference();
             SaveShortcutSettingsSafe();
+            AddSyncSettingsNotification("外觀設定已更新", $"主題模式：{themeMode}");
         }
 
         private void ApplyThemePreference()
@@ -630,6 +634,9 @@ namespace nuone_tools
             _editingShortcutSettings.ShowHiddenSystemItems = ShowHiddenSystemItemsToggle.IsOn;
             _shortcutSettings.ShowHiddenSystemItems = ShowHiddenSystemItemsToggle.IsOn;
             SaveShortcutSettingsSafe();
+            AddSyncSettingsNotification(
+                "一般設定已更新",
+                $"顯示隱藏與系統項目：{(ShowHiddenSystemItemsToggle.IsOn ? "開啟" : "關閉")}");
             ApplySettingsToPanes();
             RefreshPane(LeftPane);
             RefreshPane(RightPane);
@@ -646,6 +653,9 @@ namespace nuone_tools
             _editingShortcutSettings.ShowSelectedFileSize = ShowSelectedFileSizeToggle.IsOn;
             _shortcutSettings.ShowSelectedFileSize = ShowSelectedFileSizeToggle.IsOn;
             SaveShortcutSettingsSafe();
+            AddSyncSettingsNotification(
+                "一般設定已更新",
+                $"顯示已選檔案大小：{(ShowSelectedFileSizeToggle.IsOn ? "開啟" : "關閉")}");
             RefreshSelectionSizeDisplays();
             CaptureHintTextBlock.Text = "已立即儲存檔案大小顯示設定。";
         }
@@ -660,6 +670,9 @@ namespace nuone_tools
             _editingShortcutSettings.ShowSelectedFolderSize = ShowSelectedFolderSizeToggle.IsOn;
             _shortcutSettings.ShowSelectedFolderSize = ShowSelectedFolderSizeToggle.IsOn;
             SaveShortcutSettingsSafe();
+            AddSyncSettingsNotification(
+                "一般設定已更新",
+                $"顯示已選資料夾大小：{(ShowSelectedFolderSizeToggle.IsOn ? "開啟" : "關閉")}");
             RefreshSelectionSizeDisplays();
             CaptureHintTextBlock.Text = "已立即儲存資料夾大小顯示設定。";
         }
@@ -679,6 +692,7 @@ namespace nuone_tools
             _editingShortcutSettings.DefaultTerminalShellKind = shellKind;
             _shortcutSettings.DefaultTerminalShellKind = shellKind;
             SaveShortcutSettingsSafe();
+            AddSyncSettingsNotification("終端機設定已更新", $"預設 shell：{shellKind}");
             CaptureHintTextBlock.Text = "已立即儲存內建終端機預設 shell。";
         }
 
@@ -698,6 +712,7 @@ namespace nuone_tools
             _shortcutSettings.DefaultTerminalWorkingDirectoryMode = workingDirectoryMode;
             UpdateDefaultTerminalCustomWorkingDirectoryVisibility();
             SaveShortcutSettingsSafe();
+            AddSyncSettingsNotification("終端機設定已更新", $"預設工作目錄模式：{workingDirectoryMode}");
             CaptureHintTextBlock.Text = "已立即儲存內建終端機預設工作目錄。";
         }
 
@@ -874,6 +889,7 @@ namespace nuone_tools
                 SaveShortcutSettingsSafe();
                 UpdateAccountSettingsUi();
                 UpdateSharedStatusBar();
+                AddSyncSettingsNotification("帳號設定已更新", $"登入 Nuone 帳號：{_accountSettings.UserDisplayName}");
             }
             catch (Exception ex)
             {
@@ -912,6 +928,12 @@ namespace nuone_tools
             SaveShortcutSettingsSafe();
             UpdateAccountSettingsUi();
             UpdateSharedStatusBar();
+            AddSyncSettingsNotification("帳號設定已更新", "已清除本機登入狀態");
+        }
+
+        private void AddSyncSettingsNotification(string summary, string details)
+        {
+            AddNotificationHistoryRecord(NotificationHistoryScope.Sync, "設定", summary, details);
         }
 
         private void SaveSettingsPage_Click(object sender, RoutedEventArgs e)
