@@ -80,7 +80,11 @@ namespace nuone_tools
 
         internal void TerminalHost_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
-            _ = TerminalHost.Focus(FocusState.Pointer);
+            e.Handled = true;
+            DispatcherQueue.TryEnqueue(() =>
+            {
+                _ = TerminalHost.Focus(FocusState.Programmatic);
+            });
         }
 
         internal void TerminalHost_GotFocus(object sender, RoutedEventArgs e)

@@ -812,6 +812,8 @@ namespace nuone_tools
                     SourcePath = profile.SourcePath,
                     DestinationPath = profile.DestinationPath,
                     Mode = profile.Mode,
+                    ExcludedFolderNamesText = profile.ExcludedFolderNamesText,
+                    LogDirectoryPath = profile.LogDirectoryPath,
                     MongoToolPath = profile.MongoToolPath,
                     MongoConnectionString = profile.MongoConnectionString,
                     MongoDatabaseName = profile.MongoDatabaseName,

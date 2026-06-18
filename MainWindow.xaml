@@ -181,6 +181,13 @@
                             <FontIcon Glyph="&#xE9F5;"
                                       FontSize="13"
                                       Foreground="{StaticResource TextSecondaryBrush}" />
+                            <ProgressRing x:Name="BackgroundWorkTopProgressRing"
+                                          Width="12"
+                                          Height="12"
+                                          IsActive="True"
+                                          Visibility="Collapsed"
+                                          Foreground="{StaticResource TextSecondaryBrush}"
+                                          VerticalAlignment="Center" />
                             <TextBlock x:Name="BackgroundWorkTopStatusText"
                                        Text="目前沒有執行中的工作"
                                        Foreground="{StaticResource TextSecondaryBrush}"

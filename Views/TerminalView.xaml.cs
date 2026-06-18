@@ -14,6 +14,10 @@ namespace nuone_tools.Views
             InitializeComponent();
             TerminalOutputScrollViewer.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(TerminalOutput_KeyDown), true);
             TerminalOutputTextBlock.AddHandler(UIElement.KeyDownEvent, new KeyEventHandler(TerminalOutput_KeyDown), true);
+            TerminalOutputScrollViewer.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(TerminalOutput_PointerPressed), true);
+            TerminalOutputTextBlock.AddHandler(UIElement.PointerPressedEvent, new PointerEventHandler(TerminalOutput_PointerPressed), true);
+            TerminalOutputScrollViewer.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(TerminalOutput_PointerReleased), true);
+            TerminalOutputTextBlock.AddHandler(UIElement.PointerReleasedEvent, new PointerEventHandler(TerminalOutput_PointerReleased), true);
         }
 
         public MainWindow? Owner
@@ -89,6 +93,16 @@ namespace nuone_tools.Views
         private void TerminalOutput_KeyDown(object sender, KeyRoutedEventArgs e)
         {
             Owner?.TerminalHost_KeyDown(sender, e);
+        }
+
+        private void TerminalOutput_PointerPressed(object sender, PointerRoutedEventArgs e)
+        {
+            Owner?.TerminalHost_PointerPressed(sender, e);
+        }
+
+        private void TerminalOutput_PointerReleased(object sender, PointerRoutedEventArgs e)
+        {
+            Owner?.TerminalHost_PointerPressed(sender, e);
         }
 
         private void TerminalShellComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)

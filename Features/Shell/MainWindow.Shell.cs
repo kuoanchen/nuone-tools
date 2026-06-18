@@ -134,6 +134,7 @@ namespace nuone_tools
                 SharedStatusPrimaryText is null ||
                 SharedStatusDetailText is null ||
                 BackgroundWorkTopStatusText is null ||
+                BackgroundWorkTopProgressRing is null ||
                 BackgroundWorkHistoryCountBadge is null ||
                 BackgroundWorkHistoryCountText is null)
             {
@@ -181,6 +182,9 @@ namespace nuone_tools
 
             var backgroundWorkSummary = BuildBackgroundWorkSummary();
             BackgroundWorkTopStatusText.Text = backgroundWorkSummary ?? "目前沒有執行中的工作";
+            BackgroundWorkTopProgressRing.Visibility = HasRunningBackgroundWork()
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             var historyCount = GetBackgroundWorkRecordCount();
             BackgroundWorkHistoryCountText.Text = historyCount > 99
                 ? "99+"
@@ -213,7 +217,7 @@ namespace nuone_tools
                 if (_backgroundWorks.Remove(workId, out var label))
                 {
                     var recordText = string.IsNullOrWhiteSpace(completionRecord)
-                        ? $"完成：{label}"
+                        ? $"完成：{NormalizeBackgroundWorkCompletionLabel(label)}"
                         : completionRecord;
                     AddBackgroundWorkRecordLocked(recordText);
 
@@ -229,6 +233,19 @@ namespace nuone_tools
             }
 
             EnqueueSharedStatusBarRefresh();
+        }
+
+        private static string NormalizeBackgroundWorkCompletionLabel(string label)
+        {
+            if (string.IsNullOrWhiteSpace(label))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = label.Trim();
+            return trimmed.EndsWith("中", StringComparison.Ordinal)
+                ? trimmed[..^1].TrimEnd()
+                : trimmed;
         }
 
         private void BackgroundWorkNotification_Click(object sender, RoutedEventArgs e)

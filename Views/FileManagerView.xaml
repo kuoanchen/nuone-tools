@@ -536,7 +536,8 @@
                                             <StackPanel Orientation="Horizontal" Spacing="10">
                                                 <Grid Width="20"
                                                       Height="20"
-                                                      Loaded="FileEntryIconPresenter_Loaded">
+                                                      Loaded="FileEntryIconPresenter_Loaded"
+                                                      DataContextChanged="FileEntryIconPresenter_DataContextChanged">
                                                     <Image Source="{x:Bind IconImageSource, Mode=OneWay}"
                                                            Width="20"
                                                            Height="20"
@@ -718,7 +719,8 @@
                                             <StackPanel Orientation="Horizontal" Spacing="10">
                                                 <Grid Width="20"
                                                       Height="20"
-                                                      Loaded="FileEntryIconPresenter_Loaded">
+                                                      Loaded="FileEntryIconPresenter_Loaded"
+                                                      DataContextChanged="FileEntryIconPresenter_DataContextChanged">
                                                     <Image Source="{x:Bind IconImageSource, Mode=OneWay}"
                                                            Width="20"
                                                            Height="20"

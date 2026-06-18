@@ -309,6 +309,10 @@ namespace nuone_tools
 
         public BackupAutomationMode Mode { get; set; } = BackupAutomationMode.Copy;
 
+        public string ExcludedFolderNamesText { get; set; } = string.Empty;
+
+        public string LogDirectoryPath { get; set; } = string.Empty;
+
         public string MongoToolPath { get; set; } = @"C:\Program Files\MongoDB\Tools\100\bin\mongodump.exe";
 
         public string MongoConnectionString { get; set; } = string.Empty;

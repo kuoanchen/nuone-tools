@@ -112,6 +112,7 @@ namespace nuone_tools
             {
                 JobType = AutomationJobType.FileBackup,
                 Mode = BackupAutomationMode.Copy,
+                ExcludedFolderNamesText = ".vs, .vscode, .nuget, bin, obj, packages, node_modules",
                 MongoToolPath = @"C:\Program Files\MongoDB\Tools\100\bin\mongodump.exe",
                 MongoUseArchive = true,
                 MongoUseGzip = true,
@@ -192,6 +193,8 @@ namespace nuone_tools
             var weeklyDaysMask = GetEntryWeeklyDaysMask();
             var runMissedOnStartup = AutomationRunMissedOnStartupCheckBox.IsChecked == true;
             var mode = GetAutomationModeFromComboBox(AutomationModeComboBox);
+            var excludedFolderNamesText = string.Empty;
+            var logDirectoryPath = string.Empty;
             var mongoToolPath = AutomationMongoToolPathTextBox.Text.Trim();
             var mongoConnectionString = AutomationMongoConnectionStringTextBox.Text.Trim();
             var mongoDatabaseName = AutomationMongoDatabaseNameTextBox.Text.Trim();
@@ -260,6 +263,8 @@ namespace nuone_tools
                 SourcePath = sourcePath,
                 DestinationPath = destinationPath,
                 Mode = mode,
+                ExcludedFolderNamesText = excludedFolderNamesText,
+                LogDirectoryPath = logDirectoryPath,
                 MongoToolPath = mongoToolPath,
                 MongoConnectionString = mongoConnectionString,
                 MongoDatabaseName = mongoDatabaseName,
@@ -1048,6 +1053,8 @@ namespace nuone_tools
                         SourcePath = config.SourcePath,
                         DestinationPath = config.DestinationPath,
                         Mode = config.Mode,
+                        ExcludedFolderNamesText = config.ExcludedFolderNamesText ?? string.Empty,
+                        LogDirectoryPath = config.LogDirectoryPath ?? string.Empty,
                         MongoToolPath = config.MongoToolPath,
                         MongoConnectionString = config.MongoConnectionString,
                         MongoDatabaseName = config.MongoDatabaseName,
@@ -1349,6 +1356,7 @@ namespace nuone_tools
             var cancellationTokenSource = new CancellationTokenSource();
             _automationCancellationTokens[profile.Id] = cancellationTokenSource;
             var backgroundWorkId = BeginBackgroundWork(GetAutomationBackgroundWorkTitle(profile));
+            string? completionRecord = null;
 
             await EnqueueOnUiAsync(() =>
             {
@@ -1359,14 +1367,15 @@ namespace nuone_tools
 
             try
             {
-                await Task.Run(() => ExecuteBackupAutomation(profile, cancellationTokenSource.Token), cancellationTokenSource.Token);
+                var result = await Task.Run(() => ExecuteBackupAutomation(profile, cancellationTokenSource.Token), cancellationTokenSource.Token);
 
                 await EnqueueOnUiAsync(() =>
                 {
                     profile.LastRunText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
-                    profile.LastResultText = GetAutomationSuccessText(profile);
+                    profile.LastResultText = result.StatusText;
                     UpdateSharedStatusBar();
                 });
+                completionRecord = result.CompletionRecord;
             }
             catch (OperationCanceledException)
             {
@@ -1376,6 +1385,7 @@ namespace nuone_tools
                     profile.LastResultText = "已停止";
                     UpdateSharedStatusBar();
                 });
+                completionRecord = $"停止：{profile.Name}";
             }
             catch (Exception ex)
             {
@@ -1385,6 +1395,7 @@ namespace nuone_tools
                     profile.LastResultText = $"失敗: {ex.Message}";
                     UpdateSharedStatusBar();
                 });
+                completionRecord = $"失敗：{profile.Name} · {ex.Message}";
             }
             finally
             {
@@ -1408,7 +1419,7 @@ namespace nuone_tools
                     activeCancellationTokenSource.Dispose();
                 }
 
-                CompleteBackgroundWork(backgroundWorkId);
+                CompleteBackgroundWork(backgroundWorkId, completionRecord);
 
                 lock (_runningAutomationIds)
                 {
@@ -1417,43 +1428,88 @@ namespace nuone_tools
             }
         }
 
-        private static void ExecuteBackupAutomation(BackupAutomationProfile profile, CancellationToken cancellationToken)
+        private static BackupAutomationExecutionResult ExecuteBackupAutomation(BackupAutomationProfile profile, CancellationToken cancellationToken)
         {
-            if (profile.JobType == AutomationJobType.MongoBackup)
+            using var logScope = CreateBackupAutomationLogScope(profile);
+
+            try
             {
-                ExecuteMongoBackup(profile, cancellationToken);
-                return;
-            }
+                logScope.WriteLine($"工作：{profile.Name}");
+                logScope.WriteLine($"類型：{profile.JobType}");
+                logScope.WriteLine($"開始時間：{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}");
 
-            cancellationToken.ThrowIfCancellationRequested();
+                if (profile.JobType == AutomationJobType.MongoBackup)
+                {
+                    ExecuteMongoBackup(profile, cancellationToken);
+                    var mongoStatusText = "MongoDB 備份完成";
+                    var mongoCompletionRecord = BuildBackupAutomationCompletionRecord(profile.Name, mongoStatusText, logScope.LogFilePath);
+                    logScope.WriteLine(mongoStatusText);
+                    logScope.WriteLine(mongoCompletionRecord);
+                    return new BackupAutomationExecutionResult(mongoStatusText, mongoCompletionRecord);
+                }
 
-            if (string.IsNullOrWhiteSpace(profile.SourcePath) || string.IsNullOrWhiteSpace(profile.DestinationPath))
-            {
-                throw new InvalidOperationException("來源或目的地未設定。");
-            }
-
-            Directory.CreateDirectory(profile.DestinationPath);
-
-            if (File.Exists(profile.SourcePath))
-            {
                 cancellationToken.ThrowIfCancellationRequested();
-                var destinationFile = Path.Combine(profile.DestinationPath, Path.GetFileName(profile.SourcePath));
-                File.Copy(profile.SourcePath, destinationFile, overwrite: true);
-                return;
-            }
 
-            if (!Directory.Exists(profile.SourcePath))
+                if (string.IsNullOrWhiteSpace(profile.SourcePath) || string.IsNullOrWhiteSpace(profile.DestinationPath))
+                {
+                    throw new InvalidOperationException("來源或目的地未設定。");
+                }
+
+                Directory.CreateDirectory(profile.DestinationPath);
+
+                var excludedFolderNames = ParseExcludedFolderNames(profile.ExcludedFolderNamesText);
+                if (excludedFolderNames.Count > 0)
+                {
+                    logScope.WriteLine($"排除資料夾：{string.Join(", ", excludedFolderNames.OrderBy(static item => item, StringComparer.OrdinalIgnoreCase))}");
+                }
+
+                var summary = new BackupAutomationSummary();
+
+                if (File.Exists(profile.SourcePath))
+                {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var destinationFile = Path.Combine(profile.DestinationPath, Path.GetFileName(profile.SourcePath));
+                    File.Copy(profile.SourcePath, destinationFile, overwrite: true);
+                    summary.CopiedFiles++;
+                }
+                else
+                {
+                    if (!Directory.Exists(profile.SourcePath))
+                    {
+                        throw new DirectoryNotFoundException("來源不存在。");
+                    }
+
+                    if (profile.Mode == BackupAutomationMode.Mirror)
+                    {
+                        SyncDirectoryMirror(profile.SourcePath, profile.DestinationPath, excludedFolderNames, summary, logScope, cancellationToken);
+                    }
+                    else
+                    {
+                        CopyDirectory(profile.SourcePath, profile.DestinationPath, excludedFolderNames, summary, logScope, cancellationToken);
+                    }
+                }
+
+                var statusText = BuildBackupAutomationStatusText(profile, summary);
+                var completionRecord = BuildBackupAutomationCompletionRecord(profile.Name, statusText, logScope.LogFilePath);
+                logScope.WriteLine(statusText);
+                logScope.WriteLine(completionRecord);
+                return new BackupAutomationExecutionResult(statusText, completionRecord);
+            }
+            catch (OperationCanceledException)
             {
-                throw new DirectoryNotFoundException("來源不存在。");
+                logScope.WriteLine("工作已停止。");
+                throw;
             }
-
-            if (profile.Mode == BackupAutomationMode.Mirror)
+            catch (Exception ex)
             {
-                SyncDirectoryMirror(profile.SourcePath, profile.DestinationPath, cancellationToken);
-                return;
-            }
+                logScope.WriteLine($"失敗：{ex.Message}");
+                if (!string.IsNullOrWhiteSpace(logScope.LogFilePath))
+                {
+                    throw new InvalidOperationException($"{ex.Message}（log：{logScope.LogFilePath}）", ex);
+                }
 
-            CopyDirectory(profile.SourcePath, profile.DestinationPath, cancellationToken);
+                throw;
+            }
         }
 
         private static void ExecuteMongoBackup(BackupAutomationProfile profile, CancellationToken cancellationToken)
@@ -1688,14 +1744,141 @@ namespace nuone_tools
             return $"{profile.Name} {(profile.Mode == BackupAutomationMode.Mirror ? "同步中" : "備份中")}";
         }
 
-        private static string GetAutomationSuccessText(BackupAutomationProfile profile)
+        private sealed class BackupAutomationExecutionResult
         {
-            if (profile.JobType == AutomationJobType.MongoBackup)
+            public BackupAutomationExecutionResult(string statusText, string completionRecord)
             {
-                return "MongoDB 備份完成";
+                StatusText = statusText;
+                CompletionRecord = completionRecord;
             }
 
-            return profile.Mode == BackupAutomationMode.Mirror ? "同步完成" : "備份完成";
+            public string StatusText { get; }
+
+            public string CompletionRecord { get; }
+        }
+
+        private sealed class BackupAutomationSummary
+        {
+            public int CopiedFiles { get; set; }
+
+            public int DeletedFiles { get; set; }
+
+            public int DeletedDirectories { get; set; }
+
+            public int SkippedDirectories { get; set; }
+        }
+
+        private sealed class BackupAutomationLogScope : IDisposable
+        {
+            private readonly StreamWriter? _writer;
+
+            public BackupAutomationLogScope(string? logFilePath, StreamWriter? writer)
+            {
+                LogFilePath = logFilePath;
+                _writer = writer;
+            }
+
+            public string? LogFilePath { get; }
+
+            public void WriteLine(string message)
+            {
+                if (_writer is null)
+                {
+                    return;
+                }
+
+                _writer.WriteLine($"[{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}] {message}");
+                _writer.Flush();
+            }
+
+            public void Dispose()
+            {
+                _writer?.Dispose();
+            }
+        }
+
+        private static BackupAutomationLogScope CreateBackupAutomationLogScope(BackupAutomationProfile profile)
+        {
+            if (profile.JobType != AutomationJobType.FileBackup || string.IsNullOrWhiteSpace(profile.LogDirectoryPath))
+            {
+                return new BackupAutomationLogScope(logFilePath: null, writer: null);
+            }
+
+            Directory.CreateDirectory(profile.LogDirectoryPath);
+            var safeFileName = SanitizeFileName(string.IsNullOrWhiteSpace(profile.Name) ? "backup" : profile.Name);
+            var logFilePath = Path.Combine(
+                profile.LogDirectoryPath,
+                $"{safeFileName}_{DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture)}.log");
+            var writer = new StreamWriter(logFilePath, append: false, Encoding.UTF8);
+            return new BackupAutomationLogScope(logFilePath, writer);
+        }
+
+        private static string BuildBackupAutomationStatusText(BackupAutomationProfile profile, BackupAutomationSummary summary)
+        {
+            var verb = profile.Mode == BackupAutomationMode.Mirror ? "同步完成" : "備份完成";
+            var parts = new List<string>
+            {
+                $"複製 {summary.CopiedFiles.ToString(CultureInfo.InvariantCulture)}",
+            };
+
+            if (summary.DeletedFiles > 0)
+            {
+                parts.Add($"刪除檔案 {summary.DeletedFiles.ToString(CultureInfo.InvariantCulture)}");
+            }
+
+            if (summary.DeletedDirectories > 0)
+            {
+                parts.Add($"刪除資料夾 {summary.DeletedDirectories.ToString(CultureInfo.InvariantCulture)}");
+            }
+
+            if (summary.SkippedDirectories > 0)
+            {
+                parts.Add($"排除資料夾 {summary.SkippedDirectories.ToString(CultureInfo.InvariantCulture)}");
+            }
+
+            return $"{verb}：{string.Join("，", parts)}";
+        }
+
+        private static string BuildBackupAutomationCompletionRecord(string profileName, string statusText, string? logFilePath)
+        {
+            if (string.IsNullOrWhiteSpace(logFilePath))
+            {
+                return $"完成：{profileName} · {statusText}";
+            }
+
+            return $"完成：{profileName} · {statusText}{Environment.NewLine}log：{logFilePath}";
+        }
+
+        private static HashSet<string> ParseExcludedFolderNames(string rawValue)
+        {
+            return rawValue
+                .Split(new[] { ',', ';', '\r', '\n', '\t' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Where(static item => !string.IsNullOrWhiteSpace(item))
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        }
+
+        private static bool ShouldExcludeDirectory(string path, HashSet<string> excludedFolderNames)
+        {
+            if (excludedFolderNames.Count == 0)
+            {
+                return false;
+            }
+
+            var directoryName = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            return !string.IsNullOrWhiteSpace(directoryName) && excludedFolderNames.Contains(directoryName);
+        }
+
+        private static string SanitizeFileName(string value)
+        {
+            var invalidCharacters = Path.GetInvalidFileNameChars();
+            var builder = new StringBuilder(value.Length);
+            foreach (var character in value)
+            {
+                builder.Append(invalidCharacters.Contains(character) ? '_' : character);
+            }
+
+            var sanitized = builder.ToString().Trim();
+            return string.IsNullOrWhiteSpace(sanitized) ? "backup" : sanitized;
         }
 
         private static bool TryCalculateNextRun(
@@ -1890,7 +2073,13 @@ namespace nuone_tools
             return weeklyDaysMask == 0 ? 62 : weeklyDaysMask;
         }
 
-        private static void CopyDirectory(string sourceDirectory, string destinationDirectory, CancellationToken cancellationToken)
+        private static void CopyDirectory(
+            string sourceDirectory,
+            string destinationDirectory,
+            HashSet<string> excludedFolderNames,
+            BackupAutomationSummary summary,
+            BackupAutomationLogScope logScope,
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(destinationDirectory);
@@ -1900,11 +2089,19 @@ namespace nuone_tools
                 cancellationToken.ThrowIfCancellationRequested();
                 var destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(file));
                 File.Copy(file, destinationFile, overwrite: true);
+                summary.CopiedFiles++;
             }
 
             foreach (var directory in Directory.EnumerateDirectories(sourceDirectory))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (ShouldExcludeDirectory(directory, excludedFolderNames))
+                {
+                    summary.SkippedDirectories++;
+                    logScope.WriteLine($"略過資料夾：{directory}");
+                    continue;
+                }
+
                 var attributes = File.GetAttributes(directory);
                 if (attributes.HasFlag(System.IO.FileAttributes.ReparsePoint))
                 {
@@ -1912,11 +2109,17 @@ namespace nuone_tools
                 }
 
                 var childDestination = Path.Combine(destinationDirectory, Path.GetFileName(directory));
-                CopyDirectory(directory, childDestination, cancellationToken);
+                CopyDirectory(directory, childDestination, excludedFolderNames, summary, logScope, cancellationToken);
             }
         }
 
-        private static void SyncDirectoryMirror(string sourceDirectory, string destinationDirectory, CancellationToken cancellationToken)
+        private static void SyncDirectoryMirror(
+            string sourceDirectory,
+            string destinationDirectory,
+            HashSet<string> excludedFolderNames,
+            BackupAutomationSummary summary,
+            BackupAutomationLogScope logScope,
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
             Directory.CreateDirectory(destinationDirectory);
@@ -1935,6 +2138,7 @@ namespace nuone_tools
                 cancellationToken.ThrowIfCancellationRequested();
                 var destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(sourceFile));
                 File.Copy(sourceFile, destinationFile, overwrite: true);
+                summary.CopiedFiles++;
             }
 
             foreach (var destinationFile in Directory.EnumerateFiles(destinationDirectory))
@@ -1944,10 +2148,23 @@ namespace nuone_tools
                 if (!sourceFiles.ContainsKey(fileName))
                 {
                     File.Delete(destinationFile);
+                    summary.DeletedFiles++;
+                    logScope.WriteLine($"刪除檔案：{destinationFile}");
                 }
             }
 
             var sourceDirectories = Directory.EnumerateDirectories(sourceDirectory)
+                .Where(directory =>
+                {
+                    if (!ShouldExcludeDirectory(directory, excludedFolderNames))
+                    {
+                        return true;
+                    }
+
+                    summary.SkippedDirectories++;
+                    logScope.WriteLine($"略過資料夾：{directory}");
+                    return false;
+                })
                 .Where(static directory =>
                 {
                     var attributes = File.GetAttributes(directory);
@@ -1965,16 +2182,23 @@ namespace nuone_tools
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var destinationChildDirectory = Path.Combine(destinationDirectory, Path.GetFileName(sourceChildDirectory));
-                SyncDirectoryMirror(sourceChildDirectory, destinationChildDirectory, cancellationToken);
+                SyncDirectoryMirror(sourceChildDirectory, destinationChildDirectory, excludedFolderNames, summary, logScope, cancellationToken);
             }
 
             foreach (var destinationChildDirectory in Directory.EnumerateDirectories(destinationDirectory))
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                if (ShouldExcludeDirectory(destinationChildDirectory, excludedFolderNames))
+                {
+                    continue;
+                }
+
                 var directoryName = Path.GetFileName(destinationChildDirectory);
                 if (!sourceDirectories.ContainsKey(directoryName))
                 {
                     Directory.Delete(destinationChildDirectory, recursive: true);
+                    summary.DeletedDirectories++;
+                    logScope.WriteLine($"刪除資料夾：{destinationChildDirectory}");
                 }
             }
         }
@@ -1993,7 +2217,7 @@ namespace nuone_tools
 
             var cancellationTokenSource = new CancellationTokenSource();
             _autoExtractCancellationTokens[profile.Id] = cancellationTokenSource;
-            var backgroundWorkId = BeginBackgroundWork($"{profile.Name} 解壓中");
+            var backgroundWorkId = BeginBackgroundWork(BuildAutoExtractBackgroundWorkTitle(profile));
 
             await EnqueueOnUiAsync(() =>
             {
@@ -2075,6 +2299,39 @@ namespace nuone_tools
 
                     await RunAutoExtractProfileAsync(profile, triggeredByWatcher: false);
                 }
+            }
+        }
+
+        private static string BuildAutoExtractBackgroundWorkTitle(AutoExtractProfile profile)
+        {
+            try
+            {
+                if (string.IsNullOrWhiteSpace(profile.WatchPath) || !Directory.Exists(profile.WatchPath))
+                {
+                    return $"{profile.Name} 解壓中";
+                }
+
+                var archives = Directory.EnumerateFiles(profile.WatchPath, "*", SearchOption.TopDirectoryOnly)
+                    .Where(path => IsAutoExtractPathAllowed(profile, path))
+                    .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                if (archives.Count == 0)
+                {
+                    return $"{profile.Name} 解壓中";
+                }
+
+                var firstName = Path.GetFileName(archives[0]);
+                if (archives.Count == 1)
+                {
+                    return $"解壓 {firstName} 中";
+                }
+
+                return $"解壓 {firstName} 等 {archives.Count} 個檔案中";
+            }
+            catch
+            {
+                return $"{profile.Name} 解壓中";
             }
         }
 

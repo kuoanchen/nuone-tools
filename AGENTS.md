@@ -1,7 +1,7 @@
-# Agent Notes
+# Agent 備註
 
-Before modifying this repo, read `CODEMAP.md` first. It is the compact map for where features live and how to avoid broad token-expensive searches.
+修改這個 repo 前，先讀 `CODEMAP.md`。它是精簡地圖，說明功能大致分布在哪裡，也能避免一開始就做範圍過大的高 token 搜尋。
 
-Keep changes narrow, follow existing WinUI partial-class patterns, and do not revert unrelated dirty files. The user prefers not to run full builds in this repo unless they ask or verification truly requires it.
+請把變更範圍維持精簡，遵循既有的 WinUI partial class 模式，並且不要回復與本次任務無關的 dirty files。除非使用者有要求，或驗證這次修正真的有需要，否則不要在這個 repo 主動跑完整 build。
 
-When a bug is intermittent, cross-thread, async, remote-path, SSH, watcher, or otherwise hard to reproduce, add focused diagnostic logging first so failures are captured in a log instead of relying on guesswork alone.
+如果 bug 是間歇性、跨執行緒、非同步、遠端路徑、SSH、watcher，或其他難以重現的情況，請先加入聚焦的 diagnostic logging，讓失敗可以被記錄到 log 中，而不是只靠猜測排查。

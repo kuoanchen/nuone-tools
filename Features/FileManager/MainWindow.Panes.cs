@@ -505,6 +505,23 @@ namespace nuone_tools
             }
         }
 
+        internal static void AppendDebugLog(string fileName, string message)
+        {
+            try
+            {
+                Directory.CreateDirectory(ConfigDirectoryPath);
+                var logPath = Path.Combine(ConfigDirectoryPath, fileName);
+                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}";
+                lock (SshDebugLogLock)
+                {
+                    File.AppendAllText(logPath, line, Encoding.UTF8);
+                }
+            }
+            catch
+            {
+            }
+        }
+
         private static string BuildLogPreview(string? value)
         {
             if (string.IsNullOrWhiteSpace(value))

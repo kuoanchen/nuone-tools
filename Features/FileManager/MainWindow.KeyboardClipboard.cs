@@ -571,6 +571,10 @@ namespace nuone_tools
             {
                 Windows.System.VirtualKey.Space => ' ',
                 Windows.System.VirtualKey.Divide => '/',
+                Windows.System.VirtualKey.Subtract => '-',
+                Windows.System.VirtualKey.Decimal => '.',
+                (Windows.System.VirtualKey)189 => '-',
+                (Windows.System.VirtualKey)190 => '.',
                 _ => default,
             };
 
