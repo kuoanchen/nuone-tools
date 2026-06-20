@@ -274,6 +274,7 @@
                                TextTrimming="CharacterEllipsis" />
                 </Grid>
             </Border>
+
         </Grid>
     </Grid>
 </Window>

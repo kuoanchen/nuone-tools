@@ -25,9 +25,12 @@ namespace nuone_tools.Views
         }
 
         internal TextBox AccountApiUrlTextBoxElement => AccountApiUrlTextBox;
+        internal Border AccountConnectionStatusCardElement => AccountConnectionStatusCard;
         internal TextBlock AccountConnectionStatusTextBlockElement => AccountConnectionStatusTextBlock;
         internal TextBox AccountEmailTextBoxElement => AccountEmailTextBox;
         internal TextBlock AccountLastLoginTextBlockElement => AccountLastLoginTextBlock;
+        internal StackPanel AccountLoginFieldsPanelElement => AccountLoginFieldsPanel;
+        internal TextBox AccountPayloadJsonTextBoxElement => AccountPayloadJsonTextBox;
         internal PasswordBox AccountPasswordBoxElement => AccountPasswordBox;
         internal TextBlock AccountServiceAccountsTextBlockElement => AccountServiceAccountsTextBlock;
         internal Border AccountSettingsContentElement => AccountSettingsContent;
@@ -39,7 +42,6 @@ namespace nuone_tools.Views
         internal Border AppearanceSettingsNavBorderElement => AppearanceSettingsNavBorder;
         internal TextBlock AppearanceSettingsNavTextElement => AppearanceSettingsNavText;
         internal TextBlock CaptureHintTextBlockElement => CaptureHintTextBlock;
-        internal Button ClearAccountSessionButtonElement => ClearAccountSessionButton;
         internal TextBox CopyShortcutTextBoxElement => CopyShortcutTextBox;
         internal TextBox CreateFolderShortcutTextBoxElement => CreateFolderShortcutTextBox;
         internal TextBox DeleteShortcutTextBoxElement => DeleteShortcutTextBox;
@@ -53,6 +55,8 @@ namespace nuone_tools.Views
         internal TextBox FileBunkerInputEndpointTextBoxElement => FileBunkerInputEndpointTextBox;
         internal TextBox FileBunkerKeyLengthTextBoxElement => FileBunkerKeyLengthTextBox;
         internal TextBox FileBunkerOutputEndpointTextBoxElement => FileBunkerOutputEndpointTextBox;
+        internal TextBox LogDirectoryPathTextBoxElement => LogDirectoryPathTextBox;
+        internal TextBlock LastLocalBackupTextBlockElement => LastLocalBackupTextBlock;
         internal Border GeneralSettingsContentElement => GeneralSettingsContent;
         internal Border GeneralSettingsNavBorderElement => GeneralSettingsNavBorder;
         internal TextBlock GeneralSettingsNavTextElement => GeneralSettingsNavText;
@@ -85,11 +89,6 @@ namespace nuone_tools.Views
         private void AddToolbarCommand_Click(object sender, RoutedEventArgs e)
         {
             Owner?.AddToolbarCommand_Click(sender, e);
-        }
-
-        private void ClearAccountSessionButton_Click(object sender, RoutedEventArgs e)
-        {
-            Owner?.ClearAccountSessionButton_Click(sender, e);
         }
 
         private void DeleteToolbarCommand_Click(object sender, RoutedEventArgs e)
@@ -182,6 +181,21 @@ namespace nuone_tools.Views
             Owner?.LoginAccountButton_Click(sender, e);
         }
 
+        private void LogDirectoryPathTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            Owner?.LogDirectoryPathTextBox_TextChanged(sender, e);
+        }
+
+        private void OpenLogDirectoryButton_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.OpenLogDirectoryButton_Click(sender, e);
+        }
+
+        private void BackupLocalSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.BackupLocalSettingsButton_Click(sender, e);
+        }
+
         private void ShowAccountSettings_Click(object sender, RoutedEventArgs e)
         {
             Owner?.ShowAccountSettings_Click(sender, e);
@@ -227,6 +241,11 @@ namespace nuone_tools.Views
             Owner?.ThemeModeComboBox_SelectionChanged(sender, e);
         }
 
+        private void UseDefaultLogDirectoryButton_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.UseDefaultLogDirectoryButton_Click(sender, e);
+        }
+
         private void ToolbarCommandsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
         {
             Owner?.ToolbarCommandsListView_DragItemsCompleted(sender, args);
@@ -235,6 +254,11 @@ namespace nuone_tools.Views
         private void ToolbarIconPresenter_Loaded(object sender, RoutedEventArgs e)
         {
             Owner?.ToolbarIconPresenter_Loaded(sender, e);
+        }
+
+        private void ToolbarIconPresenter_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+        {
+            Owner?.ToolbarIconPresenter_DataContextChanged(sender, args);
         }
 
         private void ToolbarIconSummary_Loaded(object sender, RoutedEventArgs e)

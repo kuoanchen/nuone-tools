@@ -29,7 +29,7 @@ namespace nuone_tools
 
         internal void SendTerminalCommand_Click(object sender, RoutedEventArgs e)
         {
-            _ = SendTerminalCommandAsync();
+            RunFireAndForget(SendTerminalCommandAsync(), "terminal send command click");
         }
 
         internal void TerminalCommandTextBox_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -40,7 +40,7 @@ namespace nuone_tools
             }
 
             e.Handled = true;
-            _ = SendTerminalCommandAsync();
+            RunFireAndForget(SendTerminalCommandAsync(), "terminal send command key");
         }
 
         internal void TerminalHost_CharacterReceived(UIElement sender, CharacterReceivedRoutedEventArgs args)
@@ -54,7 +54,7 @@ namespace nuone_tools
             args.Handled = true;
             _isTerminalCursorVisible = true;
             RequestTerminalRender();
-            _ = SendTerminalRawInputAsync(character.ToString());
+            RunFireAndForget(SendTerminalRawInputAsync(character.ToString()), "terminal character input");
         }
 
         internal void TerminalHost_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -63,7 +63,7 @@ namespace nuone_tools
             {
                 e.Handled = true;
                 _isTerminalCursorVisible = true;
-                _ = PasteClipboardToTerminalAsync();
+                RunFireAndForget(PasteClipboardToTerminalAsync(), "terminal paste clipboard");
                 return;
             }
 
@@ -75,16 +75,15 @@ namespace nuone_tools
             e.Handled = true;
             _isTerminalCursorVisible = true;
             RequestTerminalRender();
-            _ = SendTerminalRawInputAsync(input);
+            RunFireAndForget(SendTerminalRawInputAsync(input), "terminal key input");
         }
 
         internal void TerminalHost_PointerPressed(object sender, PointerRoutedEventArgs e)
         {
             e.Handled = true;
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                _ = TerminalHost.Focus(FocusState.Programmatic);
-            });
+            TryEnqueueUi(
+                () => _ = TerminalHost.Focus(FocusState.Programmatic),
+                "terminal host pointer focus");
         }
 
         internal void TerminalHost_GotFocus(object sender, RoutedEventArgs e)
@@ -189,7 +188,7 @@ namespace nuone_tools
             }
 
             EnsureTerminalProcessStarted(session);
-            _ = SendTerminalInternalCommandAsync(session, command);
+            RunFireAndForget(SendTerminalInternalCommandAsync(session, command), "terminal internal command");
             session.StatusText = $"命令已送出 · {session.WorkingDirectory}";
             UpdateTerminalUi();
         }
@@ -273,7 +272,7 @@ namespace nuone_tools
 
             _isTerminalCursorVisible = true;
             RequestTerminalRender();
-            _ = SendTerminalRawInputAsync("\u0003");
+            RunFireAndForget(SendTerminalRawInputAsync("\u0003"), "terminal interrupt");
             session.StatusText = $"已送出中斷訊號 · {session.WorkingDirectory}";
             UpdateTerminalUi();
             return true;
@@ -435,7 +434,9 @@ namespace nuone_tools
 
         private void FocusTerminalHost()
         {
-            DispatcherQueue.TryEnqueue(() => _ = TerminalHost.Focus(FocusState.Programmatic));
+            TryEnqueueUi(
+                () => _ = TerminalHost.Focus(FocusState.Programmatic),
+                "terminal host focus");
         }
 
         private void InitializeTerminalCursorTimer()
@@ -452,14 +453,21 @@ namespace nuone_tools
 
         private void TerminalCursorTimer_Tick(DispatcherQueueTimer sender, object args)
         {
-            if (!_isTerminalHostFocused || _selectedTerminalTab is null || !_selectedTerminalTab.IsRunning)
+            try
             {
-                _isTerminalCursorVisible = false;
-                return;
-            }
+                if (!_isTerminalHostFocused || _selectedTerminalTab is null || !_selectedTerminalTab.IsRunning)
+                {
+                    _isTerminalCursorVisible = false;
+                    return;
+                }
 
-            _isTerminalCursorVisible = !_isTerminalCursorVisible;
-            RequestTerminalRender();
+                _isTerminalCursorVisible = !_isTerminalCursorVisible;
+                RequestTerminalRender();
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "terminal cursor timer tick");
+            }
         }
 
         private void SyncTerminalWorkingDirectoryFromActivePane()
@@ -481,7 +489,9 @@ namespace nuone_tools
             session.WorkingDirectory = candidate;
             if (session.ConPtyContext is not null && session.Process is not null && !session.Process.HasExited)
             {
-                _ = SendTerminalInternalCommandAsync(session, BuildWorkingDirectoryCommand(session.ShellKind, candidate));
+                RunFireAndForget(
+                    SendTerminalInternalCommandAsync(session, BuildWorkingDirectoryCommand(session.ShellKind, candidate)),
+                    "terminal sync working directory command");
             }
 
             session.StatusText = $"工作目錄已同步到 {session.WorkingDirectory}";
@@ -532,7 +542,9 @@ namespace nuone_tools
                 session.Process.EnableRaisingEvents = true;
                 var processToken = session.ProcessToken;
                 session.Process.Exited += (_, _) => TerminalProcess_Exited(session, processToken);
-                _ = Task.Run(() => PumpTerminalOutputAsync(session, launch.Context, processToken));
+                RunFireAndForget(
+                    Task.Run(() => PumpTerminalOutputAsync(session, launch.Context, processToken)),
+                    "terminal output pump");
 
                 AppendTerminalOutputLine(session, $"[system] Terminal 已啟動：{session.ShellDisplayName}");
                 AppendTerminalOutputLine(session, $"[system] 工作目錄：{session.WorkingDirectory}");
@@ -589,7 +601,7 @@ namespace nuone_tools
                 {
                     try
                     {
-                        _ = WriteToTerminalAsync(context, "exit\r\n");
+                        RunFireAndForget(WriteToTerminalAsync(context, "exit\r\n"), "terminal cleanup exit command");
                     }
                     catch
                     {
@@ -649,6 +661,13 @@ namespace nuone_tools
 
         private void TerminalProcess_Exited(TerminalTabSession session, Guid processToken)
         {
+            TryEnqueueUi(
+                () => HandleTerminalProcessExited(session, processToken),
+                "terminal process exited");
+        }
+
+        private void HandleTerminalProcessExited(TerminalTabSession session, Guid processToken)
+        {
             if (session.ProcessToken != processToken)
             {
                 return;
@@ -675,20 +694,22 @@ namespace nuone_tools
                 return;
             }
 
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                var next = session.OutputText + text;
-                if (next.Length > TerminalMaxOutputLength)
+            TryEnqueueUi(
+                () =>
                 {
-                    next = next[^TerminalMaxOutputLength..];
-                }
+                    var next = session.OutputText + text;
+                    if (next.Length > TerminalMaxOutputLength)
+                    {
+                        next = next[^TerminalMaxOutputLength..];
+                    }
 
-                session.OutputText = next;
-                if (ReferenceEquals(session, _selectedTerminalTab))
-                {
-                    RequestTerminalRender();
-                }
-            });
+                    session.OutputText = next;
+                    if (ReferenceEquals(session, _selectedTerminalTab))
+                    {
+                        RequestTerminalRender();
+                    }
+                },
+                "terminal append output");
         }
 
         private async Task SendTerminalInternalCommandAsync(TerminalTabSession session, string command)
@@ -743,40 +764,42 @@ namespace nuone_tools
 
         private void UpdateTerminalUi()
         {
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                EnsureTerminalTabExists();
-
-                if (_selectedTerminalTab is null)
+            TryEnqueueUi(
+                () =>
                 {
-                    return;
-                }
+                    EnsureTerminalTabExists();
 
-                TerminalShellTextBlock.Text = string.IsNullOrWhiteSpace(_selectedTerminalTab.ShellPath)
-                    ? "未指定"
-                    : _selectedTerminalTab.ShellPath;
-                TerminalWorkingDirectoryTextBlock.Text = string.IsNullOrWhiteSpace(_selectedTerminalTab.WorkingDirectory)
-                    ? "未指定"
-                    : _selectedTerminalTab.WorkingDirectory;
-                TerminalStatusTextBlock.Text = _selectedTerminalTab.StatusText;
-                RequestTerminalRender();
-
-                var selectedTag = _selectedTerminalTab.ShellKind.ToString();
-                foreach (var item in TerminalShellComboBox.Items.OfType<ComboBoxItem>())
-                {
-                    if (string.Equals(item.Tag as string, selectedTag, StringComparison.Ordinal))
+                    if (_selectedTerminalTab is null)
                     {
-                        TerminalShellComboBox.SelectedItem = item;
-                        break;
+                        return;
                     }
-                }
 
-                var tabItem = FindTerminalTabViewItem(_selectedTerminalTab);
-                if (tabItem is not null && !ReferenceEquals(TerminalTabsView.SelectedItem, tabItem))
-                {
-                    TerminalTabsView.SelectedItem = tabItem;
-                }
-            });
+                    TerminalShellTextBlock.Text = string.IsNullOrWhiteSpace(_selectedTerminalTab.ShellPath)
+                        ? "未指定"
+                        : _selectedTerminalTab.ShellPath;
+                    TerminalWorkingDirectoryTextBlock.Text = string.IsNullOrWhiteSpace(_selectedTerminalTab.WorkingDirectory)
+                        ? "未指定"
+                        : _selectedTerminalTab.WorkingDirectory;
+                    TerminalStatusTextBlock.Text = _selectedTerminalTab.StatusText;
+                    RequestTerminalRender();
+
+                    var selectedTag = _selectedTerminalTab.ShellKind.ToString();
+                    foreach (var item in TerminalShellComboBox.Items.OfType<ComboBoxItem>())
+                    {
+                        if (string.Equals(item.Tag as string, selectedTag, StringComparison.Ordinal))
+                        {
+                            TerminalShellComboBox.SelectedItem = item;
+                            break;
+                        }
+                    }
+
+                    var tabItem = FindTerminalTabViewItem(_selectedTerminalTab);
+                    if (tabItem is not null && !ReferenceEquals(TerminalTabsView.SelectedItem, tabItem))
+                    {
+                        TerminalTabsView.SelectedItem = tabItem;
+                    }
+                },
+                "terminal update ui");
         }
 
         private string GetTerminalSharedStatusPrimaryText()
@@ -921,17 +944,19 @@ namespace nuone_tools
             }
 
             _isTerminalRenderQueued = true;
-            DispatcherQueue.TryEnqueue(() =>
-            {
-                _isTerminalRenderQueued = false;
-                if (_selectedTerminalTab is null)
+            TryEnqueueUi(
+                () =>
                 {
-                    TerminalOutputTextBlock.Blocks.Clear();
-                    return;
-                }
+                    _isTerminalRenderQueued = false;
+                    if (_selectedTerminalTab is null)
+                    {
+                        TerminalOutputTextBlock.Blocks.Clear();
+                        return;
+                    }
 
-                RenderTerminalOutput(_selectedTerminalTab.OutputText);
-            });
+                    RenderTerminalOutput(_selectedTerminalTab.OutputText);
+                },
+                "terminal render output");
         }
 
         private void RenderTerminalOutput(string output)

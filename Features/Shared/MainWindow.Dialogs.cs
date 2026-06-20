@@ -102,23 +102,25 @@ namespace nuone_tools
             var isNodeDockerDeploy = existingItem is not null && IsDeployNodeDockerCommand(existingItem.Command);
             var isFileBunkerUpload = existingItem is not null &&
                 string.Equals(existingItem.Command, FileBunkerUploadCommand, StringComparison.OrdinalIgnoreCase);
+            var isStorageUpload = existingItem is not null &&
+                string.Equals(existingItem.Command, StorageUploadCommand, StringComparison.OrdinalIgnoreCase);
+            var isEnhancePdf = existingItem is not null &&
+                string.Equals(existingItem.Command, EnhancePdfCommand, StringComparison.OrdinalIgnoreCase);
             var isBuiltInTerminal = existingItem is not null && IsOpenBuiltInTerminalCommand(existingItem.Command);
             var isExternalTerminal = existingItem is not null && IsOpenExternalTerminalCommand(existingItem.Command);
             var isTerminal = isBuiltInTerminal || isExternalTerminal;
-            var nodeDockerDeployCheckBox = new CheckBox
+            var builtInActionComboBox = new ComboBox
             {
-                Content = "Node.js Docker 部署",
-                IsChecked = isNodeDockerDeploy,
-            };
-            var terminalCheckBox = new CheckBox
-            {
-                Content = "終端機",
-                IsChecked = isTerminal,
-            };
-            var fileBunkerUploadCheckBox = new CheckBox
-            {
-                Content = "FileBunker 上傳",
-                IsChecked = isFileBunkerUpload,
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "一般 Command", Tag = "command" },
+                    new ComboBoxItem { Content = "Node.js Docker 部署", Tag = "node-docker" },
+                    new ComboBoxItem { Content = "終端機", Tag = "terminal" },
+                    new ComboBoxItem { Content = "FileBunker 上傳", Tag = "filebunker-upload" },
+                    new ComboBoxItem { Content = "Storage 上傳", Tag = "storage-upload" },
+                    new ComboBoxItem { Content = "PDF 增強", Tag = "enhance-pdf" },
+                },
             };
             var nodeDockerUserTextBox = new TextBox
             {
@@ -314,6 +316,19 @@ namespace nuone_tools
             SelectComboBoxItemByTag(terminalShellComboBox, existingItem?.TerminalShellKind ?? _shortcutSettings.DefaultTerminalShellKind);
             SelectComboBoxItemByTag(terminalWorkingDirectoryModeComboBox, existingItem?.TerminalWorkingDirectoryMode ?? _shortcutSettings.DefaultTerminalWorkingDirectoryMode);
             SelectComboBoxItemByTag(terminalTargetComboBox, isBuiltInTerminal ? OpenBuiltInTerminalCommand : OpenExternalTerminalCommand);
+            SelectComboBoxItemByTag(
+                builtInActionComboBox,
+                isNodeDockerDeploy
+                    ? "node-docker"
+                    : isTerminal
+                        ? "terminal"
+                    : isFileBunkerUpload
+                        ? "filebunker-upload"
+                    : isStorageUpload
+                        ? "storage-upload"
+                    : isEnhancePdf
+                        ? "enhance-pdf"
+                    : "command");
 
             var terminalSettingsPanel = new StackPanel
             {
@@ -365,20 +380,41 @@ namespace nuone_tools
                 Opacity = 0.78,
                 Visibility = isFileBunkerUpload ? Visibility.Visible : Visibility.Collapsed,
             };
+            var storageUploadHint = new TextBlock
+            {
+                Text = "這個模式會直接使用目前 pane 選取的本機檔案，並套用設定頁裡已登入的 api.nuone.cl 帳號，把檔案上傳到 Storage，不需要另外填 command。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+                Visibility = isStorageUpload ? Visibility.Visible : Visibility.Collapsed,
+            };
+            var enhancePdfHint = new TextBlock
+            {
+                Text = "這個模式會直接使用目前 pane 選取的本機 PDF 檔案，呼叫內建的 enhance_pdf.py 流程，並在原目錄輸出同檔名加上 _enhanced.pdf，不需要另外填 command。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+                Visibility = isEnhancePdf ? Visibility.Visible : Visibility.Collapsed,
+            };
 
             void RefreshCommandMode()
             {
-                var deployMode = nodeDockerDeployCheckBox.IsChecked == true;
-                var terminalMode = terminalCheckBox.IsChecked == true;
-                var fileBunkerUploadMode = fileBunkerUploadCheckBox.IsChecked == true;
+                var selectedMode = builtInActionComboBox.SelectedItem is ComboBoxItem { Tag: string modeTag }
+                    ? modeTag
+                    : "command";
+                var deployMode = string.Equals(selectedMode, "node-docker", StringComparison.Ordinal);
+                var terminalMode = string.Equals(selectedMode, "terminal", StringComparison.Ordinal);
+                var fileBunkerUploadMode = string.Equals(selectedMode, "filebunker-upload", StringComparison.Ordinal);
+                var storageUploadMode = string.Equals(selectedMode, "storage-upload", StringComparison.Ordinal);
+                var enhancePdfMode = string.Equals(selectedMode, "enhance-pdf", StringComparison.Ordinal);
 
                 nodeDockerSettingsPanel.Visibility = deployMode ? Visibility.Visible : Visibility.Collapsed;
                 terminalSettingsPanel.Visibility = terminalMode ? Visibility.Visible : Visibility.Collapsed;
-                commandPanel.Visibility = deployMode || terminalMode || fileBunkerUploadMode ? Visibility.Collapsed : Visibility.Visible;
+                commandPanel.Visibility = deployMode || terminalMode || fileBunkerUploadMode || storageUploadMode || enhancePdfMode ? Visibility.Collapsed : Visibility.Visible;
                 builtInCommandHint.Visibility = deployMode ? Visibility.Visible : Visibility.Collapsed;
                 builtInTerminalHint.Visibility = terminalMode ? Visibility.Visible : Visibility.Collapsed;
                 fileBunkerUploadHint.Visibility = fileBunkerUploadMode ? Visibility.Visible : Visibility.Collapsed;
-                commandTextBox.IsReadOnly = deployMode || terminalMode || fileBunkerUploadMode;
+                storageUploadHint.Visibility = storageUploadMode ? Visibility.Visible : Visibility.Collapsed;
+                enhancePdfHint.Visibility = enhancePdfMode ? Visibility.Visible : Visibility.Collapsed;
+                commandTextBox.IsReadOnly = deployMode || terminalMode || fileBunkerUploadMode || storageUploadMode || enhancePdfMode;
                 terminalCustomWorkingDirectoryTextBox.Visibility =
                     terminalWorkingDirectoryModeComboBox.SelectedItem is ComboBoxItem { Tag: ToolbarWorkingDirectoryMode.CustomPath }
                         ? Visibility.Visible
@@ -411,8 +447,6 @@ namespace nuone_tools
 
                 if (terminalMode)
                 {
-                    nodeDockerDeployCheckBox.IsChecked = false;
-                    fileBunkerUploadCheckBox.IsChecked = false;
                     commandTextBox.Text = terminalTargetComboBox.SelectedItem is ComboBoxItem { Tag: string terminalCommand }
                         ? terminalCommand
                         : OpenExternalTerminalCommand;
@@ -432,8 +466,6 @@ namespace nuone_tools
 
                 if (fileBunkerUploadMode)
                 {
-                    nodeDockerDeployCheckBox.IsChecked = false;
-                    terminalCheckBox.IsChecked = false;
                     commandTextBox.Text = FileBunkerUploadCommand;
                     if (string.IsNullOrWhiteSpace(titleTextBox.Text))
                     {
@@ -445,55 +477,45 @@ namespace nuone_tools
                     {
                         iconGlyphTextBox.Text = "\uE898";
                     }
+
+                    return;
+                }
+
+                if (storageUploadMode)
+                {
+                    commandTextBox.Text = StorageUploadCommand;
+                    if (string.IsNullOrWhiteSpace(titleTextBox.Text))
+                    {
+                        titleTextBox.Text = "storage";
+                    }
+
+                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
+                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
+                    {
+                        iconGlyphTextBox.Text = "\uE898";
+                    }
+
+                    return;
+                }
+
+                if (enhancePdfMode)
+                {
+                    commandTextBox.Text = EnhancePdfCommand;
+                    if (string.IsNullOrWhiteSpace(titleTextBox.Text))
+                    {
+                        titleTextBox.Text = "pdf enhance";
+                    }
+
+                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
+                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
+                    {
+                        iconGlyphTextBox.Text = "\uEA90";
+                    }
                 }
             }
 
-            nodeDockerDeployCheckBox.Checked += (_, _) =>
-            {
-                if (terminalCheckBox.IsChecked == true)
-                {
-                    terminalCheckBox.IsChecked = false;
-                }
-
-                if (fileBunkerUploadCheckBox.IsChecked == true)
-                {
-                    fileBunkerUploadCheckBox.IsChecked = false;
-                }
-
-                RefreshCommandMode();
-            };
-            nodeDockerDeployCheckBox.Unchecked += (_, _) => RefreshCommandMode();
+            builtInActionComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
             nodeDockerLaunchModeComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
-            terminalCheckBox.Checked += (_, _) =>
-            {
-                if (nodeDockerDeployCheckBox.IsChecked == true)
-                {
-                    nodeDockerDeployCheckBox.IsChecked = false;
-                }
-
-                if (fileBunkerUploadCheckBox.IsChecked == true)
-                {
-                    fileBunkerUploadCheckBox.IsChecked = false;
-                }
-
-                RefreshCommandMode();
-            };
-            terminalCheckBox.Unchecked += (_, _) => RefreshCommandMode();
-            fileBunkerUploadCheckBox.Checked += (_, _) =>
-            {
-                if (nodeDockerDeployCheckBox.IsChecked == true)
-                {
-                    nodeDockerDeployCheckBox.IsChecked = false;
-                }
-
-                if (terminalCheckBox.IsChecked == true)
-                {
-                    terminalCheckBox.IsChecked = false;
-                }
-
-                RefreshCommandMode();
-            };
-            fileBunkerUploadCheckBox.Unchecked += (_, _) => RefreshCommandMode();
             terminalTargetComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
             terminalWorkingDirectoryModeComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
             RefreshCommandMode();
@@ -506,15 +528,16 @@ namespace nuone_tools
             });
             panel.Children.Add(new TextBlock { Text = "名稱" });
             panel.Children.Add(titleTextBox);
-            panel.Children.Add(nodeDockerDeployCheckBox);
-            panel.Children.Add(terminalCheckBox);
-            panel.Children.Add(fileBunkerUploadCheckBox);
+            panel.Children.Add(new TextBlock { Text = "內建動作" });
+            panel.Children.Add(builtInActionComboBox);
             panel.Children.Add(nodeDockerSettingsPanel);
             panel.Children.Add(terminalSettingsPanel);
             panel.Children.Add(commandPanel);
             panel.Children.Add(builtInCommandHint);
             panel.Children.Add(builtInTerminalHint);
             panel.Children.Add(fileBunkerUploadHint);
+            panel.Children.Add(storageUploadHint);
+            panel.Children.Add(enhancePdfHint);
             panel.Children.Add(new TextBlock { Text = "Icon 路徑" });
             panel.Children.Add(iconPathRow);
             panel.Children.Add(new TextBlock { Text = "Glyph 後備圖示" });
@@ -549,14 +572,21 @@ namespace nuone_tools
             }
 
             var title = titleTextBox.Text.Trim();
-            var command = nodeDockerDeployCheckBox.IsChecked == true
+            var selectedMode = builtInActionComboBox.SelectedItem is ComboBoxItem { Tag: string modeTag }
+                ? modeTag
+                : "command";
+            var command = string.Equals(selectedMode, "node-docker", StringComparison.Ordinal)
                 ? DeployNodeDockerCommand
-                : terminalCheckBox.IsChecked == true
+                : string.Equals(selectedMode, "terminal", StringComparison.Ordinal)
                     ? terminalTargetComboBox.SelectedItem is ComboBoxItem { Tag: string terminalCommand }
                         ? terminalCommand
                         : OpenExternalTerminalCommand
-                : fileBunkerUploadCheckBox.IsChecked == true
+                : string.Equals(selectedMode, "filebunker-upload", StringComparison.Ordinal)
                     ? FileBunkerUploadCommand
+                : string.Equals(selectedMode, "storage-upload", StringComparison.Ordinal)
+                    ? StorageUploadCommand
+                : string.Equals(selectedMode, "enhance-pdf", StringComparison.Ordinal)
+                    ? EnhancePdfCommand
                     : commandTextBox.Text.Trim();
             var iconPath = iconPathTextBox.Text.Trim();
             var iconGlyph = iconGlyphTextBox.Text.Trim();
@@ -685,11 +715,6 @@ namespace nuone_tools
                 PlaceholderText = ".vs, .vscode, bin, obj, packages, node_modules",
                 Text = FormatExcludedFolderNamesForEditor(profile.ExcludedFolderNamesText),
             };
-            var logDirectoryPathTextBox = new TextBox
-            {
-                Text = profile.LogDirectoryPath,
-                PlaceholderText = @"例如：\\dsm\server\backup\logs\ser6",
-            };
             var mongoToolPathTextBox = new TextBox { Text = profile.MongoToolPath };
             var mongoConnectionStringTextBox = new TextBox
             {
@@ -756,11 +781,9 @@ namespace nuone_tools
                 Opacity = 0.78,
                 TextWrapping = TextWrapping.Wrap,
             });
-            filePanel.Children.Add(new TextBlock { Text = "Log 輸出目錄（選填）" });
-            filePanel.Children.Add(logDirectoryPathTextBox);
             filePanel.Children.Add(new TextBlock
             {
-                Text = "若有填寫，每次執行都會輸出一份帶時間戳的備份記錄檔。",
+                Text = $"Log 會統一寫入全域 logging.LogDirectoryPath：{CurrentLogDirectoryPath}",
                 Opacity = 0.78,
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -830,6 +853,12 @@ namespace nuone_tools
             panel.Children.Add(intervalPanel);
             panel.Children.Add(scheduledPanel);
             panel.Children.Add(runMissedCheckBox);
+            panel.Children.Add(new TextBlock
+            {
+                Text = "排程只會在 app 開著時生效；如果勾這個，超過排定時間後才開 app 也會立刻補跑。",
+                Opacity = 0.78,
+                TextWrapping = TextWrapping.Wrap,
+            });
 
             var dialog = new ContentDialog
             {
@@ -905,7 +934,7 @@ namespace nuone_tools
             profile.DestinationPath = destinationPathTextBox.Text.Trim();
             profile.Mode = modeComboBox.SelectedIndex == 1 ? BackupAutomationMode.Mirror : BackupAutomationMode.Copy;
             profile.ExcludedFolderNamesText = FormatExcludedFolderNamesForStorage(excludedFolderNamesTextBox.Text);
-            profile.LogDirectoryPath = logDirectoryPathTextBox.Text.Trim();
+            profile.LogDirectoryPath = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath);
             profile.MongoToolPath = mongoToolPathTextBox.Text.Trim();
             profile.MongoConnectionString = mongoConnectionStringTextBox.Text.Trim();
             profile.MongoDatabaseName = mongoDatabaseNameTextBox.Text.Trim();

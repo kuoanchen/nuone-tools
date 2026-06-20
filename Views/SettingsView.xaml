@@ -279,13 +279,68 @@
                                          Visibility="Collapsed" />
                             </StackPanel>
 
+                            <TextBlock Text="診斷 Log"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       Margin="0,8,0,0" />
+
+                            <TextBlock Text="crash、ssh、icon、storage 等診斷 log 會寫到這個目錄。變更後立即生效。"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="15"
+                                       TextWrapping="Wrap" />
+
+                            <StackPanel Spacing="10">
+                                <TextBlock Text="Log 目錄"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="18"
+                                           FontWeight="SemiBold" />
+                                <TextBox x:Name="LogDirectoryPathTextBox"
+                                         TextChanged="LogDirectoryPathTextBox_TextChanged"
+                                         PlaceholderText="例如：C:\Soft\nuone-tools\logs"
+                                         Background="{StaticResource InputAltBrush}"
+                                         BorderBrush="{StaticResource PanelStrokeBrush}"
+                                         Foreground="{StaticResource TextPrimaryBrush}" />
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button Click="UseDefaultLogDirectoryButton_Click"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="使用預設" />
+                                    <Button Click="OpenLogDirectoryButton_Click"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="開啟目錄" />
+                                </StackPanel>
+                            </StackPanel>
+
+                            <TextBlock Text="本機資料備份"
+                                       Foreground="{StaticResource TextPrimaryBrush}"
+                                       FontSize="20"
+                                       FontWeight="SemiBold"
+                                       Margin="0,8,0,0" />
+
+                            <TextBlock Text="settings-local.json 不再自動同步。這裡可以手動把目前本機資料備份到後端。"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="15"
+                                       TextWrapping="Wrap" />
+
+                            <StackPanel Orientation="Horizontal" Spacing="10">
+                                <Button Click="BackupLocalSettingsButton_Click"
+                                        Style="{StaticResource GhostButtonStyle}"
+                                        Content="備份本機資料" />
+                            </StackPanel>
+
+                            <TextBlock x:Name="LastLocalBackupTextBlock"
+                                       Text="尚未備份"
+                                       Foreground="{StaticResource TextSecondaryBrush}"
+                                       FontSize="14"
+                                       TextWrapping="Wrap" />
+
                             <TextBlock Text="FileBunker 上傳"
                                        Foreground="{StaticResource TextPrimaryBrush}"
                                        FontSize="20"
                                        FontWeight="SemiBold"
                                        Margin="0,8,0,0" />
 
-                            <TextBlock Text="提供工具列的 FileBunker 上傳按鈕使用。設定會儲存在 Nuone Tools 的 settings.json，不再讀外部 .env。"
+                            <TextBlock Text="提供工具列的 FileBunker 上傳按鈕使用。設定會儲存在 Nuone Tools 的 settings-sync.json，不再讀外部 .env。"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        FontSize="15"
                                        TextWrapping="Wrap" />
@@ -409,47 +464,50 @@
                                        Foreground="{StaticResource TextPrimaryBrush}"
                                        FontSize="24"
                                        FontWeight="SemiBold" />
-                            <TextBlock Text="連接 https://api.nuone.cl 的 identity login。密碼只用於當次登入，不會寫進 settings.json。"
+                            <TextBlock Text="連接 https://api.nuone.cl 的 identity login。密碼只用於當次登入，會寫進 settings-local.json。"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        FontSize="15"
                                        TextWrapping="Wrap" />
 
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="API"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <TextBox x:Name="AccountApiUrlTextBox"
-                                         TextChanged="AccountApiUrlTextBox_TextChanged"
-                                         PlaceholderText="https://api.nuone.cl"
-                                         Background="{StaticResource InputAltBrush}"
-                                         BorderBrush="{StaticResource PanelStrokeBrush}"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="Email"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <TextBox x:Name="AccountEmailTextBox"
-                                         TextChanged="AccountEmailTextBox_TextChanged"
-                                         PlaceholderText="you@example.com"
-                                         Background="{StaticResource InputAltBrush}"
-                                         BorderBrush="{StaticResource PanelStrokeBrush}"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="Password"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <PasswordBox x:Name="AccountPasswordBox"
-                                             PlaceholderText="輸入密碼後登入"
+                            <StackPanel x:Name="AccountLoginFieldsPanel"
+                                        Spacing="18">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="API"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBox x:Name="AccountApiUrlTextBox"
+                                             TextChanged="AccountApiUrlTextBox_TextChanged"
+                                             PlaceholderText="https://api.nuone.cl"
                                              Background="{StaticResource InputAltBrush}"
                                              BorderBrush="{StaticResource PanelStrokeBrush}"
                                              Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Email"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBox x:Name="AccountEmailTextBox"
+                                             TextChanged="AccountEmailTextBox_TextChanged"
+                                             PlaceholderText="you@example.com"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Password"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <PasswordBox x:Name="AccountPasswordBox"
+                                                 PlaceholderText="輸入密碼後登入"
+                                                 Background="{StaticResource InputAltBrush}"
+                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Spacing="10">
@@ -457,13 +515,10 @@
                                         Click="LoginAccountButton_Click"
                                         Style="{StaticResource AccentButtonStyle}"
                                         Content="登入" />
-                                <Button x:Name="ClearAccountSessionButton"
-                                        Click="ClearAccountSessionButton_Click"
-                                        Style="{StaticResource GhostButtonStyle}"
-                                        Content="清除登入狀態" />
                             </StackPanel>
 
-                            <Border Padding="16"
+                            <Border x:Name="AccountConnectionStatusCard"
+                                    Padding="16"
                                     Background="{StaticResource CardBrush}"
                                     BorderBrush="{StaticResource PanelStrokeBrush}"
                                     BorderThickness="1"
@@ -542,6 +597,23 @@
                                                    FontSize="14"
                                                    TextWrapping="Wrap" />
                                     </Grid>
+
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Login payload"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="14" />
+                                        <TextBox x:Name="AccountPayloadJsonTextBox"
+                                                 IsReadOnly="True"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MinHeight="120"
+                                                 MaxHeight="260"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 Background="{StaticResource InputAltBrush}"
+                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -820,7 +892,8 @@
                                                         BorderThickness="1"
                                                         CornerRadius="12">
                                                     <Grid Tag="{x:Bind}"
-                                                          Loaded="ToolbarIconPresenter_Loaded">
+                                                          Loaded="ToolbarIconPresenter_Loaded"
+                                                          DataContextChanged="ToolbarIconPresenter_DataContextChanged">
                                                         <Image Width="24"
                                                                Height="24"
                                                                HorizontalAlignment="Center"

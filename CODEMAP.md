@@ -90,7 +90,7 @@
 - FileBunker toolbar 不預設出現；使用者可在新增 toolbar 按鈕 dialog 勾選 `FileBunker 上傳` 來建立。
 - FileBunker 上傳使用當前 active pane 的選取檔案，不開檔案選擇器。
 - FileBunker 成功 dialog 有複製連結按鈕，且會自動複製上傳 URL。
-- FileBunker 設定應放設定頁與 `settings.json`，不要讀 `.env`。
+- FileBunker 設定應放設定頁與 `settings-sync.json`，不要讀 `.env`。
 - 上傳 multipart file part 需要設定正確 `Content-Type`，圖片才會被 FileBunker 當圖片顯示。
 - 單檔重新命名預設不顯示副檔名；checkbox `包含副檔名` 開啟後才一起編輯副檔名。
 - 檔案縮圖可能回傳 null；讀取 Shell thumbnail 要先做 null/size guard。

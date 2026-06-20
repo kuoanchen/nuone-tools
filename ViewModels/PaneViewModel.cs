@@ -165,7 +165,7 @@ namespace nuone_tools
                 selectedItems.Select(item => MainWindow.NormalizePath(item.FullPath)),
                 StringComparer.OrdinalIgnoreCase);
 
-            foreach (var item in Items)
+            foreach (var item in EnumerateDisplayEntries())
             {
                 item.IsSelected = selectedPaths.Contains(MainWindow.NormalizePath(item.FullPath));
             }
@@ -182,6 +182,21 @@ namespace nuone_tools
                 1 => primary?.Name ?? "未選取",
                 _ => $"{selectedItems.Count} 個已選取",
             };
+
+            MainWindow.AppendDebugLog(
+                "pane-selection-debug.log",
+                $"Pane.UpdateSelection pane={Name} currentPath={CurrentPath} selectedCount={selectedItems.Count} primary={primary?.FullPath ?? "<null>"}");
+        }
+
+        public IEnumerable<FileEntry> EnumerateDisplayEntries()
+        {
+            foreach (var item in Items)
+            {
+                foreach (var nested in item.EnumerateTreeEntries())
+                {
+                    yield return nested;
+                }
+            }
         }
 
         public void NavigateTo(string path)
@@ -538,6 +553,9 @@ namespace nuone_tools
             OnPropertyChanged(nameof(FilterVisibility));
 
             var defaultSelection = Items.FirstOrDefault();
+            MainWindow.AppendDebugLog(
+                "pane-selection-debug.log",
+                $"Pane.ApplyFilter pane={Name} currentPath={CurrentPath} visibleItems={Items.Count} allItems={_allItems.Count} filter={query} defaultSelection={defaultSelection?.FullPath ?? "<null>"}");
             UpdateSelection(defaultSelection is null ? Array.Empty<FileEntry>() : new[] { defaultSelection });
             UpdateSummaryTexts();
         }

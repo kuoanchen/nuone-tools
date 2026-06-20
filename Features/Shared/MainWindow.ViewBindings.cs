@@ -56,9 +56,12 @@ namespace nuone_tools
         private StackPanel AutomationWeeklyDaysPanel => AutomationPage.WeeklyDaysPanel;
 
         private TextBox AccountApiUrlTextBox => SettingsPage.AccountApiUrlTextBoxElement;
+        private Border AccountConnectionStatusCard => SettingsPage.AccountConnectionStatusCardElement;
         private TextBlock AccountConnectionStatusTextBlock => SettingsPage.AccountConnectionStatusTextBlockElement;
         private TextBox AccountEmailTextBox => SettingsPage.AccountEmailTextBoxElement;
         private TextBlock AccountLastLoginTextBlock => SettingsPage.AccountLastLoginTextBlockElement;
+        private StackPanel AccountLoginFieldsPanel => SettingsPage.AccountLoginFieldsPanelElement;
+        private TextBox AccountPayloadJsonTextBox => SettingsPage.AccountPayloadJsonTextBoxElement;
         private PasswordBox AccountPasswordBox => SettingsPage.AccountPasswordBoxElement;
         private TextBlock AccountServiceAccountsTextBlock => SettingsPage.AccountServiceAccountsTextBlockElement;
         private Border AccountSettingsContent => SettingsPage.AccountSettingsContentElement;
@@ -70,7 +73,6 @@ namespace nuone_tools
         private Border AppearanceSettingsNavBorder => SettingsPage.AppearanceSettingsNavBorderElement;
         private TextBlock AppearanceSettingsNavText => SettingsPage.AppearanceSettingsNavTextElement;
         private TextBlock CaptureHintTextBlock => SettingsPage.CaptureHintTextBlockElement;
-        private Button ClearAccountSessionButton => SettingsPage.ClearAccountSessionButtonElement;
         private TextBox CopyShortcutTextBox => SettingsPage.CopyShortcutTextBoxElement;
         private TextBox CreateFolderShortcutTextBox => SettingsPage.CreateFolderShortcutTextBoxElement;
         private TextBox DeleteShortcutTextBox => SettingsPage.DeleteShortcutTextBoxElement;
@@ -84,6 +86,8 @@ namespace nuone_tools
         private TextBox FileBunkerInputEndpointTextBox => SettingsPage.FileBunkerInputEndpointTextBoxElement;
         private TextBox FileBunkerKeyLengthTextBox => SettingsPage.FileBunkerKeyLengthTextBoxElement;
         private TextBox FileBunkerOutputEndpointTextBox => SettingsPage.FileBunkerOutputEndpointTextBoxElement;
+        private TextBox LogDirectoryPathTextBox => SettingsPage.LogDirectoryPathTextBoxElement;
+        private TextBlock LastLocalBackupTextBlock => SettingsPage.LastLocalBackupTextBlockElement;
         private Border GeneralSettingsContent => SettingsPage.GeneralSettingsContentElement;
         private Border GeneralSettingsNavBorder => SettingsPage.GeneralSettingsNavBorderElement;
         private TextBlock GeneralSettingsNavText => SettingsPage.GeneralSettingsNavTextElement;

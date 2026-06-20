@@ -52,13 +52,33 @@ namespace nuone_tools
         internal void LeftPaneEntry_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
+            FocusPaneList(LeftPane);
             HandleItemTapped(LeftPane, sender as FrameworkElement);
         }
 
         internal void RightPaneEntry_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(RightPane);
+            FocusPaneList(RightPane);
             HandleItemTapped(RightPane, sender as FrameworkElement);
+        }
+
+        internal void LeftPaneTreeEntry_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            ActivatePane(LeftPane);
+            FocusPaneList(LeftPane);
+            var element = sender as FrameworkElement;
+            var entry = element?.DataContext as FileEntry;
+            HandleDirectEntryTapped(LeftPane, element, entry);
+        }
+
+        internal void RightPaneTreeEntry_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            ActivatePane(RightPane);
+            FocusPaneList(RightPane);
+            var element = sender as FrameworkElement;
+            var entry = element?.DataContext as FileEntry;
+            HandleDirectEntryTapped(RightPane, element, entry);
         }
 
         internal async void LeftPaneEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
@@ -73,25 +93,80 @@ namespace nuone_tools
             await HandleEntryRightTappedAsync(RightPane, sender as FrameworkElement, e);
         }
 
+        internal async void LeftPaneTreeEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            ActivatePane(LeftPane);
+            await HandleEntryRightTappedAsync(LeftPane, sender as FrameworkElement, e);
+        }
+
+        internal async void RightPaneTreeEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            ActivatePane(RightPane);
+            await HandleEntryRightTappedAsync(RightPane, sender as FrameworkElement, e);
+        }
+
+        internal void LeftPaneTreeEntry_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            ActivatePane(LeftPane);
+            HandleItemDoubleTapped(LeftPane, (sender as FrameworkElement)?.DataContext as FileEntry);
+            e.Handled = true;
+        }
+
+        internal void RightPaneTreeEntry_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            ActivatePane(RightPane);
+            HandleItemDoubleTapped(RightPane, (sender as FrameworkElement)?.DataContext as FileEntry);
+            e.Handled = true;
+        }
+
+        internal async void LeftPaneInlineExpand_Click(object sender, RoutedEventArgs e)
+        {
+            ActivatePane(LeftPane);
+            await ToggleInlineFolderAsync((sender as FrameworkElement)?.DataContext as FileEntry);
+        }
+
+        internal async void RightPaneInlineExpand_Click(object sender, RoutedEventArgs e)
+        {
+            ActivatePane(RightPane);
+            await ToggleInlineFolderAsync((sender as FrameworkElement)?.DataContext as FileEntry);
+        }
+
         private void SyncPaneSelectionFromListView(PaneViewModel pane, ListView listView)
         {
             var selectedEntries = listView.SelectedItems.OfType<FileEntry>().ToList();
+            AppendDebugLog(
+                "pane-selection-debug.log",
+                $"SyncPaneSelectionFromListView pane={pane.Name} currentPath={pane.CurrentPath} selectedCount={selectedEntries.Count} selectedPaths={(selectedEntries.Count == 0 ? "<empty>" : string.Join(" | ", selectedEntries.Select(static entry => entry.FullPath)))}");
             pane.UpdateSelection(selectedEntries);
         }
 
         private IReadOnlyList<FileEntry> GetSelectedEntries(PaneViewModel pane)
         {
             var listView = ReferenceEquals(pane, LeftPane) ? LeftPaneListView : RightPaneListView;
-            return listView.SelectedItems.OfType<FileEntry>().ToList();
+            var selectedEntries = listView.SelectedItems.OfType<FileEntry>().ToList();
+            if (selectedEntries.Count > 0)
+            {
+                return selectedEntries;
+            }
+
+            return pane.SelectedItem is null
+                ? Array.Empty<FileEntry>()
+                : new[] { pane.SelectedItem };
         }
 
         private async Task UpdateSelectionSizeAsync(PaneViewModel pane)
         {
             var selectedEntries = GetSelectedEntries(pane);
+            AppendDebugLog(
+                "pane-selection-debug.log",
+                $"UpdateSelectionSizeAsync start pane={pane.Name} currentPath={pane.CurrentPath} selectedCount={selectedEntries.Count} selectedPaths={(selectedEntries.Count == 0 ? "<empty>" : string.Join(" | ", selectedEntries.Select(static entry => entry.FullPath)))}");
             pane.UpdateSelectionText(BuildSelectionSummary(selectedEntries));
 
             if (MainWindow.IsSshPath(pane.CurrentPath))
             {
+                AppendDebugLog(
+                    "pane-selection-debug.log",
+                    $"UpdateSelectionSizeAsync skip-ssh pane={pane.Name} currentPath={pane.CurrentPath}");
                 return;
             }
 
@@ -106,6 +181,9 @@ namespace nuone_tools
 
             if (selectedEntries.Count == 0 || (selectedFiles.Count == 0 && selectedFolders.Count == 0))
             {
+                AppendDebugLog(
+                    "pane-selection-debug.log",
+                    $"UpdateSelectionSizeAsync skip-no-size pane={pane.Name} currentPath={pane.CurrentPath} selectedFiles={selectedFiles.Count} selectedFolders={selectedFolders.Count}");
                 return;
             }
 
@@ -118,6 +196,9 @@ namespace nuone_tools
 
             var token = cancellationTokenSource.Token;
             pane.UpdateSelectionText($"{BuildSelectionSummary(selectedEntries)} / 計算大小中...");
+            AppendDebugLog(
+                "pane-selection-debug.log",
+                $"UpdateSelectionSizeAsync calculating pane={pane.Name} currentPath={pane.CurrentPath} selectedFiles={selectedFiles.Count} selectedFolders={selectedFolders.Count}");
 
             try
             {
@@ -151,13 +232,29 @@ namespace nuone_tools
 
                 if (token.IsCancellationRequested)
                 {
+                    AppendDebugLog(
+                        "pane-selection-debug.log",
+                        $"UpdateSelectionSizeAsync cancelled-after-calc pane={pane.Name} currentPath={pane.CurrentPath}");
                     return;
                 }
 
                 pane.UpdateSelectionText($"{BuildSelectionSummary(selectedEntries)} / {FormatSize(totalSize)}");
+                AppendDebugLog(
+                    "pane-selection-debug.log",
+                    $"UpdateSelectionSizeAsync completed pane={pane.Name} currentPath={pane.CurrentPath} totalSize={totalSize}");
             }
             catch (OperationCanceledException)
             {
+                AppendDebugLog(
+                    "pane-selection-debug.log",
+                    $"UpdateSelectionSizeAsync operation-cancelled pane={pane.Name} currentPath={pane.CurrentPath}");
+            }
+            catch (Exception ex)
+            {
+                AppendDebugLog(
+                    "pane-selection-debug.log",
+                    $"UpdateSelectionSizeAsync exception pane={pane.Name} currentPath={pane.CurrentPath} error={ex}");
+                throw;
             }
             finally
             {
@@ -174,6 +271,9 @@ namespace nuone_tools
                 }
 
                 cancellationTokenSource.Dispose();
+                AppendDebugLog(
+                    "pane-selection-debug.log",
+                    $"UpdateSelectionSizeAsync end pane={pane.Name} currentPath={pane.CurrentPath}");
             }
         }
 
@@ -247,7 +347,134 @@ namespace nuone_tools
                 return;
             }
 
-            _ = OpenFileWithLoadingAsync(pane, entry.FullPath);
+            RunFireAndForget(OpenFileWithLoadingAsync(pane, entry.FullPath), "open file from double tap");
+        }
+
+        private static async Task ToggleInlineFolderAsync(FileEntry? entry)
+        {
+            if (entry is null || !entry.CanInlineExpand)
+            {
+                return;
+            }
+
+            if (!entry.IsInlineExpanded)
+            {
+                try
+                {
+                    await entry.EnsureInlineChildrenLoadedAsync();
+                }
+                catch (Exception ex)
+                {
+                    LogBoundaryException(ex, "toggle inline folder");
+                    return;
+                }
+            }
+
+            entry.IsInlineExpanded = !entry.IsInlineExpanded;
+        }
+
+        private void HandleDirectEntryTapped(PaneViewModel pane, FrameworkElement? element, FileEntry? entry)
+        {
+            if (entry is null)
+            {
+                return;
+            }
+
+            var shiftPressed = IsShiftModifierPressed();
+            var controlPressed = IsControlModifierPressed();
+            var wasSelected = pane.SelectedItem is not null
+                && PathEquals(pane.SelectedItem.FullPath, entry.FullPath)
+                && pane.SelectedCount == 1;
+
+            if (shiftPressed)
+            {
+                ApplyRangeSelection(pane, entry);
+            }
+            else if (controlPressed)
+            {
+                ToggleEntrySelection(pane, entry);
+            }
+            else
+            {
+                SetPaneSelection(pane, new[] { entry }, entry);
+            }
+
+            if (!wasSelected)
+            {
+                CancelPendingFlyout();
+            }
+            else
+            {
+                HandleItemTapped(pane, element);
+            }
+            ScheduleSelectionSizeUpdate(pane);
+        }
+
+        private void ApplyRangeSelection(PaneViewModel pane, FileEntry entry)
+        {
+            var displayEntries = pane.EnumerateDisplayEntries().ToList();
+            if (displayEntries.Count == 0)
+            {
+                SetPaneSelection(pane, new[] { entry }, entry);
+                return;
+            }
+
+            var anchor = pane.SelectedItem ?? entry;
+            var anchorIndex = displayEntries.FindIndex(item => PathEquals(item.FullPath, anchor.FullPath));
+            var targetIndex = displayEntries.FindIndex(item => PathEquals(item.FullPath, entry.FullPath));
+            if (anchorIndex < 0 || targetIndex < 0)
+            {
+                SetPaneSelection(pane, new[] { entry }, entry);
+                return;
+            }
+
+            var startIndex = Math.Min(anchorIndex, targetIndex);
+            var endIndex = Math.Max(anchorIndex, targetIndex);
+            var rangeEntries = displayEntries
+                .Skip(startIndex)
+                .Take(endIndex - startIndex + 1)
+                .ToList();
+            SetPaneSelection(pane, rangeEntries, entry);
+        }
+
+        private void ToggleEntrySelection(PaneViewModel pane, FileEntry entry)
+        {
+            var selectedEntries = GetSelectedEntriesInDisplayOrder(pane).ToList();
+            var existingIndex = selectedEntries.FindIndex(item => PathEquals(item.FullPath, entry.FullPath));
+            if (existingIndex >= 0)
+            {
+                selectedEntries.RemoveAt(existingIndex);
+            }
+            else
+            {
+                selectedEntries.Add(entry);
+            }
+
+            var primaryEntry = selectedEntries.Count == 0
+                ? null
+                : (selectedEntries.FirstOrDefault(item => PathEquals(item.FullPath, entry.FullPath)) ?? selectedEntries[^1]);
+            SetPaneSelection(pane, selectedEntries, primaryEntry);
+        }
+
+        private void SetPaneSelection(PaneViewModel pane, IReadOnlyList<FileEntry> selectedEntries, FileEntry? primaryEntry)
+        {
+            var listView = ReferenceEquals(pane, LeftPane) ? LeftPaneListView : RightPaneListView;
+            var selectedPaths = new HashSet<string>(
+                selectedEntries.Select(item => NormalizePath(item.FullPath)),
+                StringComparer.OrdinalIgnoreCase);
+
+            listView.SelectedItems.Clear();
+            foreach (var rootEntry in pane.Items.Where(item => selectedPaths.Contains(NormalizePath(item.FullPath))))
+            {
+                listView.SelectedItems.Add(rootEntry);
+            }
+
+            pane.UpdateSelection(selectedEntries);
+            pane.SelectedItem = primaryEntry;
+            ApplySelectionVisuals(listView);
+            AppendDebugLog(
+                "pane-selection-debug.log",
+                $"SetPaneSelection pane={pane.Name} currentPath={pane.CurrentPath} selectedCount={selectedEntries.Count} primary={primaryEntry?.FullPath ?? "<null>"} selectedPaths={(selectedEntries.Count == 0 ? "<empty>" : string.Join(" | ", selectedEntries.Select(static item => item.FullPath)))}");
         }
 
         private void HandleItemTapped(PaneViewModel pane, FrameworkElement? element)
@@ -319,14 +546,21 @@ namespace nuone_tools
         private void SelectEntryForContextMenu(PaneViewModel pane, FileEntry entry)
         {
             var listView = ReferenceEquals(pane, LeftPane) ? LeftPaneListView : RightPaneListView;
-            var selectedEntries = listView.SelectedItems.OfType<FileEntry>().ToList();
+            var selectedEntries = GetSelectedEntries(pane);
             var isAlreadySelected = selectedEntries.Any(item => PathEquals(item.FullPath, entry.FullPath));
 
             if (!isAlreadySelected)
             {
                 listView.SelectedItems.Clear();
-                listView.SelectedItems.Add(entry);
-                SyncPaneSelectionFromListView(pane, listView);
+                if (pane.Items.Contains(entry))
+                {
+                    listView.SelectedItems.Add(entry);
+                    SyncPaneSelectionFromListView(pane, listView);
+                }
+                else
+                {
+                    pane.UpdateSelection(new[] { entry });
+                }
             }
 
             pane.SelectedItem = entry;
@@ -350,7 +584,7 @@ namespace nuone_tools
 
         private void OpenSelected_Click(object sender, RoutedEventArgs e)
         {
-            _ = OpenSelectedEntriesAsync();
+            RunFireAndForget(OpenSelectedEntriesAsync(), "open selected entries");
         }
 
         internal void OpenPath_Click(object sender, RoutedEventArgs e)
@@ -362,7 +596,7 @@ namespace nuone_tools
                     if (TryParseSshPath(path, out _, out var remotePath) &&
                         !string.Equals(remotePath, "/", StringComparison.Ordinal))
                     {
-                        _ = OpenFileWithLoadingAsync(_activePane, path);
+                        RunFireAndForget(OpenFileWithLoadingAsync(_activePane, path), "open ssh file path");
                         return;
                     }
 
@@ -370,7 +604,7 @@ namespace nuone_tools
                     return;
                 }
 
-                _ = OpenFileWithLoadingAsync(_activePane, path);
+                RunFireAndForget(OpenFileWithLoadingAsync(_activePane, path), "open path");
             }
         }
 
@@ -522,22 +756,22 @@ namespace nuone_tools
                         break;
                     }
                 case ShellInjectedCommand.CopyToOtherPane:
-                    _ = ExecuteInjectedTransferAsync(pane, selectedPaths, move: false);
+                    RunFireAndForget(ExecuteInjectedTransferAsync(pane, selectedPaths, move: false), "shell injected copy to other pane");
                     break;
                 case ShellInjectedCommand.MoveToOtherPane:
-                    _ = ExecuteInjectedTransferAsync(pane, selectedPaths, move: true);
+                    RunFireAndForget(ExecuteInjectedTransferAsync(pane, selectedPaths, move: true), "shell injected move to other pane");
                     break;
                 case ShellInjectedCommand.Rename:
-                    _ = TriggerRenameAsync();
+                    RunFireAndForget(TriggerRenameAsync(), "shell injected rename");
                     break;
                 case ShellInjectedCommand.CreateFolder:
-                    _ = CreateFolderAsync(pane);
+                    RunFireAndForget(CreateFolderAsync(pane), "shell injected create folder");
                     break;
                 case ShellInjectedCommand.CreateAutomation:
-                    _ = CreateAutomationFromPanePairAsync(pane, primaryPath);
+                    RunFireAndForget(CreateAutomationFromPanePairAsync(pane, primaryPath), "shell injected create automation");
                     break;
                 case ShellInjectedCommand.DeployNodeDocker:
-                    _ = DeploySelectedNodePackageToDockerAsync(pane, selectedPaths);
+                    RunFireAndForget(DeploySelectedNodePackageToDockerAsync(pane, selectedPaths), "shell injected deploy node docker");
                     break;
                 case ShellInjectedCommand.CopyPath:
                     {
@@ -634,6 +868,16 @@ namespace nuone_tools
 
         private async Task CopyOrMovePathsAsync(IEnumerable<string> paths, PaneViewModel sourcePane, PaneViewModel targetPane, bool move)
         {
+            await CopyOrMovePathsToDirectoryAsync(paths, sourcePane, targetPane, targetPane.CurrentPath?.Trim(), move);
+        }
+
+        private async Task CopyOrMovePathsToDirectoryAsync(
+            IEnumerable<string> paths,
+            PaneViewModel sourcePane,
+            PaneViewModel targetPane,
+            string? targetDirectory,
+            bool move)
+        {
             var sourcePaths = paths
                 .Where(static path => !string.IsNullOrWhiteSpace(path))
                 .Select(path => path.Trim())
@@ -652,7 +896,6 @@ namespace nuone_tools
                 return;
             }
 
-            var targetDirectory = targetPane.CurrentPath?.Trim();
             if (string.IsNullOrWhiteSpace(targetDirectory) || !Directory.Exists(targetDirectory))
             {
                 await ShowMessageAsync(move ? "搬移失敗" : "複製失敗", "目的地資料夾不存在。");
@@ -1656,7 +1899,7 @@ namespace nuone_tools
                 GetSelectedEntries(pane).Select(entry => NormalizePath(entry.FullPath)),
                 StringComparer.OrdinalIgnoreCase);
 
-            return pane.Items
+            return pane.EnumerateDisplayEntries()
                 .Where(item => selectedPathSet.Contains(NormalizePath(item.FullPath)))
                 .ToList();
         }
@@ -1974,15 +2217,29 @@ namespace nuone_tools
 
         private void ApplySelectionVisualToContainer(ListViewItem listViewItem)
         {
-            if (listViewItem.ContentTemplateRoot is not Border border)
+            if (listViewItem.Content is not FileEntry entry)
             {
                 return;
             }
 
-            var isSelected = listViewItem.IsSelected;
-            border.Background = isSelected ? SelectedItemBackgroundBrush : UnselectedItemBackgroundBrush;
-            border.BorderBrush = isSelected ? SelectedItemBorderBrush : UnselectedItemBorderBrush;
-            border.BorderThickness = isSelected ? SelectedItemBorderThickness : UnselectedItemBorderThickness;
+            Border? border = null;
+            if (listViewItem.ContentTemplateRoot is Border directBorder)
+            {
+                border = directBorder;
+            }
+            else if (listViewItem.ContentTemplateRoot is Panel panel)
+            {
+                border = panel.Children.OfType<Border>().FirstOrDefault();
+            }
+
+            if (border is null)
+            {
+                return;
+            }
+
+            border.Background = entry.ItemBackground;
+            border.BorderBrush = entry.ItemBorderBrush;
+            border.BorderThickness = entry.ItemBorderThickness;
         }
 
         private static string EnsureUniquePath(string path)

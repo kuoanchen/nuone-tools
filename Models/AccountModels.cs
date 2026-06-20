@@ -95,4 +95,14 @@ namespace nuone_tools
             return new FileBunkerSettingsState();
         }
     }
+
+    public sealed class LoggingSettingsState
+    {
+        public string LogDirectoryPath { get; set; } = MainWindow.DefaultLogDirectoryPath;
+
+        public static LoggingSettingsState CreateDefault()
+        {
+            return new LoggingSettingsState();
+        }
+    }
 }

@@ -50,7 +50,9 @@ namespace nuone_tools
             return IsDeployNodeDockerCommand(command) ||
                 IsOpenBuiltInTerminalCommand(command) ||
                 IsOpenExternalTerminalCommand(command) ||
-                string.Equals(command.Trim(), FileBunkerUploadCommand, StringComparison.OrdinalIgnoreCase);
+                string.Equals(command.Trim(), EnhancePdfCommand, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(command.Trim(), FileBunkerUploadCommand, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(command.Trim(), StorageUploadCommand, StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool IsDeployNodeDockerCommand(string command)
@@ -73,9 +75,21 @@ namespace nuone_tools
 
         private async Task ExecuteBuiltInToolbarCommandAsync(ToolbarCommandItem item)
         {
+            if (string.Equals(item.Command, EnhancePdfCommand, StringComparison.OrdinalIgnoreCase))
+            {
+                await ExecuteEnhancePdfAsync();
+                return;
+            }
+
             if (string.Equals(item.Command, FileBunkerUploadCommand, StringComparison.OrdinalIgnoreCase))
             {
                 await ExecuteFileBunkerUploadAsync();
+                return;
+            }
+
+            if (string.Equals(item.Command, StorageUploadCommand, StringComparison.OrdinalIgnoreCase))
+            {
+                await ExecuteStorageUploadAsync();
                 return;
             }
 

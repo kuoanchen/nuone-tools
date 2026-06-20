@@ -67,6 +67,7 @@ namespace nuone_tools
 
     public sealed class FileEntry : ObservableObject
     {
+        private static readonly SemaphoreSlim ShellIconLoadSemaphore = new(6, 6);
         private static readonly SolidColorBrush UnselectedBackgroundBrush = new(Colors.Transparent);
         private static readonly SolidColorBrush SelectedBackgroundBrush = new(ColorHelper.FromArgb(255, 91, 20, 126));
         private static readonly SolidColorBrush UnselectedBorderBrush = new(Colors.Transparent);
@@ -74,8 +75,10 @@ namespace nuone_tools
         private static readonly Thickness UnselectedBorderThickness = new(1);
         private static readonly Thickness SelectedBorderThickness = new(1);
         private bool _isSelected;
+        private bool _isInlineExpanded;
         private ImageSource? _iconImageSource;
         private Task? _iconLoadTask;
+        private bool _inlineChildrenLoaded;
 
         public string Name { get; set; } = string.Empty;
 
@@ -92,6 +95,37 @@ namespace nuone_tools
         public string Glyph { get; set; } = "\uE8B7";
 
         public SolidColorBrush AccentColor { get; set; } = new(Colors.Gold);
+
+        public int InlineDepth { get; set; }
+
+        public ObservableCollection<FileEntry> InlineChildren { get; } = new();
+
+        public bool CanInlineExpand => IsDirectory && IsLocalFileSystemPath(FullPath);
+
+        public Visibility InlineExpandVisibility => CanInlineExpand
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        public string InlineExpandGlyph => IsInlineExpanded ? "\uE70D" : "\uE76C";
+
+        public Thickness InlineIndentMargin => new(InlineDepth * 18, 0, 0, 0);
+
+        public bool IsInlineExpanded
+        {
+            get => _isInlineExpanded;
+            set
+            {
+                if (SetProperty(ref _isInlineExpanded, value))
+                {
+                    OnPropertyChanged(nameof(InlineExpandGlyph));
+                    OnPropertyChanged(nameof(InlineChildrenVisibility));
+                }
+            }
+        }
+
+        public Visibility InlineChildrenVisibility => IsInlineExpanded && InlineChildren.Count > 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         public ImageSource? IconImageSource
         {
@@ -224,15 +258,60 @@ namespace nuone_tools
                 return Task.CompletedTask;
             }
 
+            if (!ShouldLoadShellIcon())
+            {
+                MainWindow.AppendDebugLog("icon-debug.log", $"skip risky-shell-icon path={FullPath} isDirectory={IsDirectory}");
+                return Task.CompletedTask;
+            }
+
             MainWindow.AppendDebugLog("icon-debug.log", $"ensure start path={FullPath} isDirectory={IsDirectory}");
             return _iconLoadTask ??= LoadShellIconAsync();
         }
 
+        public async Task EnsureInlineChildrenLoadedAsync()
+        {
+            if (_inlineChildrenLoaded || !CanInlineExpand || !Directory.Exists(FullPath))
+            {
+                return;
+            }
+
+            var directory = new DirectoryInfo(FullPath);
+            var children = new List<FileEntry>();
+
+            foreach (var folder in SafeEnumerateDirectories(directory))
+            {
+                var child = FromDirectory(folder);
+                child.InlineDepth = InlineDepth + 1;
+                children.Add(child);
+            }
+
+            foreach (var file in SafeEnumerateFiles(directory))
+            {
+                var child = FromFile(file);
+                child.InlineDepth = InlineDepth + 1;
+                children.Add(child);
+            }
+
+            InlineChildren.Clear();
+            foreach (var child in children)
+            {
+                InlineChildren.Add(child);
+            }
+
+            _inlineChildrenLoaded = true;
+            OnPropertyChanged(nameof(InlineChildrenVisibility));
+        }
+
         private async Task LoadShellIconAsync()
         {
+            var semaphoreEntered = false;
+
             try
             {
                 MainWindow.AppendDebugLog("icon-debug.log", $"load start path={FullPath} isDirectory={IsDirectory}");
+                await ShellIconLoadSemaphore.WaitAsync();
+                semaphoreEntered = true;
+                MainWindow.AppendDebugLog("icon-debug.log", $"load semaphore-entered path={FullPath} isDirectory={IsDirectory}");
                 StorageItemThumbnail? thumbnail = null;
 
                 if (IsDirectory && Directory.Exists(FullPath))
@@ -271,6 +350,14 @@ namespace nuone_tools
             {
                 MainWindow.AppendDebugLog("icon-debug.log", $"load error path={FullPath} error={ex}");
             }
+            finally
+            {
+                if (semaphoreEntered)
+                {
+                    ShellIconLoadSemaphore.Release();
+                    MainWindow.AppendDebugLog("icon-debug.log", $"load semaphore-released path={FullPath} isDirectory={IsDirectory}");
+                }
+            }
         }
 
         private static bool IsLocalFileSystemPath(string path)
@@ -278,6 +365,82 @@ namespace nuone_tools
             return !MainWindow.IsSshPath(path) &&
                 !MainWindow.IsWslPath(path) &&
                 !MainWindow.IsWslVirtualRootPath(path);
+        }
+
+        private bool ShouldLoadShellIcon()
+        {
+            if (IsDirectory)
+            {
+                return false;
+            }
+
+            var extension = Path.GetExtension(FullPath);
+            if (string.IsNullOrWhiteSpace(extension))
+            {
+                return true;
+            }
+
+            return extension.Trim().ToLowerInvariant() switch
+            {
+                ".dll" => false,
+                ".mui" => false,
+                ".exe" => false,
+                ".sys" => false,
+                ".ocx" => false,
+                ".cpl" => false,
+                _ => true,
+            };
+        }
+
+        public IEnumerable<FileEntry> EnumerateTreeEntries()
+        {
+            yield return this;
+
+            foreach (var child in InlineChildren)
+            {
+                foreach (var nested in child.EnumerateTreeEntries())
+                {
+                    yield return nested;
+                }
+            }
+        }
+
+        private static IEnumerable<DirectoryInfo> SafeEnumerateDirectories(DirectoryInfo directory)
+        {
+            try
+            {
+                return directory
+                    .EnumerateDirectories()
+                    .Where(static item => !ShouldHideFileSystemInfo(item))
+                    .OrderBy(static item => item.Name)
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<DirectoryInfo>();
+            }
+        }
+
+        private static IEnumerable<FileInfo> SafeEnumerateFiles(DirectoryInfo directory)
+        {
+            try
+            {
+                return directory
+                    .EnumerateFiles()
+                    .Where(static item => !ShouldHideFileSystemInfo(item))
+                    .OrderBy(static item => item.Name)
+                    .ToArray();
+            }
+            catch
+            {
+                return Array.Empty<FileInfo>();
+            }
+        }
+
+        private static bool ShouldHideFileSystemInfo(FileSystemInfo item)
+        {
+            return item.Attributes.HasFlag(System.IO.FileAttributes.Hidden) ||
+                item.Attributes.HasFlag(System.IO.FileAttributes.System);
         }
     }
 

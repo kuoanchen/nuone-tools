@@ -292,13 +292,10 @@ namespace nuone_tools
         {
             try
             {
-                if (File.Exists(SettingsConfigPath))
+                var localSettings = LoadLocalSettingsConfig();
+                if (localSettings?.Groups is { Count: > 0 })
                 {
-                    var settings = JsonSerializer.Deserialize<ShortcutSettingsConfig>(File.ReadAllText(SettingsConfigPath), JsonOptions);
-                    if (settings?.Groups is { Count: > 0 })
-                    {
-                        return settings.Groups;
-                    }
+                    return localSettings.Groups;
                 }
 
                 if (File.Exists(LegacyGroupsConfigPath))

@@ -191,9 +191,44 @@ namespace nuone_tools.Views
             Owner?.LeftPaneEntry_RightTapped(sender, e);
         }
 
+        private void LeftPaneTreeEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            Owner?.LeftPaneTreeEntry_RightTapped(sender, e);
+        }
+
         private void LeftPaneEntry_Tapped(object sender, TappedRoutedEventArgs e)
         {
             Owner?.LeftPaneEntry_Tapped(sender, e);
+        }
+
+        private void LeftPaneTreeEntry_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            Owner?.LeftPaneTreeEntry_Tapped(sender, e);
+        }
+
+        private void LeftPaneTreeEntry_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            Owner?.LeftPaneTreeEntry_DoubleTapped(sender, e);
+        }
+
+        private void LeftPaneEntry_DragStarting(UIElement sender, DragStartingEventArgs args)
+        {
+            Owner?.LeftPaneEntry_DragStarting(sender, args);
+        }
+
+        private void LeftPaneFolder_DragOver(object sender, DragEventArgs e)
+        {
+            Owner?.LeftPaneFolder_DragOver(sender, e);
+        }
+
+        private void LeftPaneFolder_Drop(object sender, DragEventArgs e)
+        {
+            Owner?.LeftPaneFolder_Drop(sender, e);
+        }
+
+        private void LeftPaneInlineExpand_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.LeftPaneInlineExpand_Click(sender, e);
         }
 
         private void LeftPaneList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -204,6 +239,16 @@ namespace nuone_tools.Views
         private void LeftPaneList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
         {
             Owner?.LeftPaneList_DragItemsStarting(sender, e);
+        }
+
+        private void LeftPaneList_DragOver(object sender, DragEventArgs e)
+        {
+            Owner?.LeftPaneList_DragOver(sender, e);
+        }
+
+        private void LeftPaneList_Drop(object sender, DragEventArgs e)
+        {
+            Owner?.LeftPaneList_Drop(sender, e);
         }
 
         private void LeftPaneList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -296,9 +341,44 @@ namespace nuone_tools.Views
             Owner?.RightPaneEntry_RightTapped(sender, e);
         }
 
+        private void RightPaneTreeEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
+        {
+            Owner?.RightPaneTreeEntry_RightTapped(sender, e);
+        }
+
         private void RightPaneEntry_Tapped(object sender, TappedRoutedEventArgs e)
         {
             Owner?.RightPaneEntry_Tapped(sender, e);
+        }
+
+        private void RightPaneTreeEntry_Tapped(object sender, TappedRoutedEventArgs e)
+        {
+            Owner?.RightPaneTreeEntry_Tapped(sender, e);
+        }
+
+        private void RightPaneTreeEntry_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
+        {
+            Owner?.RightPaneTreeEntry_DoubleTapped(sender, e);
+        }
+
+        private void RightPaneEntry_DragStarting(UIElement sender, DragStartingEventArgs args)
+        {
+            Owner?.RightPaneEntry_DragStarting(sender, args);
+        }
+
+        private void RightPaneFolder_DragOver(object sender, DragEventArgs e)
+        {
+            Owner?.RightPaneFolder_DragOver(sender, e);
+        }
+
+        private void RightPaneFolder_Drop(object sender, DragEventArgs e)
+        {
+            Owner?.RightPaneFolder_Drop(sender, e);
+        }
+
+        private void RightPaneInlineExpand_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.RightPaneInlineExpand_Click(sender, e);
         }
 
         private void RightPaneList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
@@ -309,6 +389,16 @@ namespace nuone_tools.Views
         private void RightPaneList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
         {
             Owner?.RightPaneList_DragItemsStarting(sender, e);
+        }
+
+        private void RightPaneList_DragOver(object sender, DragEventArgs e)
+        {
+            Owner?.RightPaneList_DragOver(sender, e);
+        }
+
+        private void RightPaneList_Drop(object sender, DragEventArgs e)
+        {
+            Owner?.RightPaneList_Drop(sender, e);
         }
 
         private void RightPaneList_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -354,6 +444,11 @@ namespace nuone_tools.Views
         private void ToolbarIconPresenter_Loaded(object sender, RoutedEventArgs e)
         {
             Owner?.ToolbarIconPresenter_Loaded(sender, e);
+        }
+
+        private void ToolbarIconPresenter_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+        {
+            Owner?.ToolbarIconPresenter_DataContextChanged(sender, args);
         }
 
         private void TopToolbarListView_ItemClick(object sender, ItemClickEventArgs e)

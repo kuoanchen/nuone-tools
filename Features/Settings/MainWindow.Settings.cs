@@ -52,6 +52,7 @@ namespace nuone_tools
             DefaultTerminalCustomWorkingDirectoryTextBox.Text = _editingShortcutSettings.DefaultTerminalCustomWorkingDirectory;
             UpdateDefaultTerminalCustomWorkingDirectoryVisibility();
             UpdateFileBunkerSettingsUi();
+            UpdateLoggingSettingsUi();
             CaptureHintTextBlock.Text = "按「修改」後，再按下實體鍵，會立即套用。";
             _isUpdatingSettingsUi = false;
         }
@@ -83,6 +84,26 @@ namespace nuone_tools
             finally
             {
                 _isUpdatingFileBunkerUi = false;
+            }
+        }
+
+        private void UpdateLoggingSettingsUi()
+        {
+            if (LogDirectoryPathTextBox is null ||
+                LastLocalBackupTextBlock is null)
+            {
+                return;
+            }
+
+            _isUpdatingLoggingUi = true;
+            try
+            {
+                LogDirectoryPathTextBox.Text = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath);
+                LastLocalBackupTextBlock.Text = $"最後一次備份：{_lastLocalBackupText}";
+            }
+            finally
+            {
+                _isUpdatingLoggingUi = false;
             }
         }
 
@@ -186,62 +207,86 @@ namespace nuone_tools
 
         internal async void AddToolbarCommand_Click(object sender, RoutedEventArgs e)
         {
-            var item = await ShowToolbarCommandEditorAsync(null);
-            if (item is null)
+            try
             {
-                return;
-            }
+                var item = await ShowToolbarCommandEditorAsync(null);
+                if (item is null)
+                {
+                    return;
+                }
 
-            ToolbarCommands.Add(item);
-            SaveToolbarCommandsSafe();
-            AddSyncSettingsNotification("工具列設定已更新", $"新增工具列按鈕：{item.Title}");
+                ToolbarCommands.Add(item);
+                SaveToolbarCommandsSafe();
+                AddSyncSettingsNotification("工具列設定已更新", $"新增工具列按鈕：{item.Title}");
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "add toolbar command");
+                await ShowMessageAsync("新增工具列按鈕失敗", ex.Message);
+            }
         }
 
         internal async void EditToolbarCommand_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is not FrameworkElement { Tag: ToolbarCommandItem item })
+            try
             {
-                return;
-            }
+                if (sender is not FrameworkElement { Tag: ToolbarCommandItem item })
+                {
+                    return;
+                }
 
-            var editedItem = await ShowToolbarCommandEditorAsync(item);
-            if (editedItem is null)
+                var editedItem = await ShowToolbarCommandEditorAsync(item);
+                if (editedItem is null)
+                {
+                    return;
+                }
+
+                item.Title = editedItem.Title;
+                item.Command = editedItem.Command;
+                item.IconPath = editedItem.IconPath;
+                item.IconGlyph = editedItem.IconGlyph;
+                item.NodeDockerUser = editedItem.NodeDockerUser;
+                item.NodeDockerHost = editedItem.NodeDockerHost;
+                item.NodeDockerRemoteDirectory = editedItem.NodeDockerRemoteDirectory;
+                item.NodeDockerLaunchMode = editedItem.NodeDockerLaunchMode;
+                item.TerminalShellKind = editedItem.TerminalShellKind;
+                item.TerminalWorkingDirectoryMode = editedItem.TerminalWorkingDirectoryMode;
+                item.TerminalCustomWorkingDirectory = editedItem.TerminalCustomWorkingDirectory;
+                item.TerminalLaunchArguments = editedItem.TerminalLaunchArguments;
+                SaveToolbarCommandsSafe();
+                AddSyncSettingsNotification("工具列設定已更新", $"編輯工具列按鈕：{item.Title}");
+            }
+            catch (Exception ex)
             {
-                return;
+                LogBoundaryException(ex, "edit toolbar command");
+                await ShowMessageAsync("編輯工具列按鈕失敗", ex.Message);
             }
-
-            item.Title = editedItem.Title;
-            item.Command = editedItem.Command;
-            item.IconPath = editedItem.IconPath;
-            item.IconGlyph = editedItem.IconGlyph;
-            item.NodeDockerUser = editedItem.NodeDockerUser;
-            item.NodeDockerHost = editedItem.NodeDockerHost;
-            item.NodeDockerRemoteDirectory = editedItem.NodeDockerRemoteDirectory;
-            item.NodeDockerLaunchMode = editedItem.NodeDockerLaunchMode;
-            item.TerminalShellKind = editedItem.TerminalShellKind;
-            item.TerminalWorkingDirectoryMode = editedItem.TerminalWorkingDirectoryMode;
-            item.TerminalCustomWorkingDirectory = editedItem.TerminalCustomWorkingDirectory;
-            item.TerminalLaunchArguments = editedItem.TerminalLaunchArguments;
-            SaveToolbarCommandsSafe();
-            AddSyncSettingsNotification("工具列設定已更新", $"編輯工具列按鈕：{item.Title}");
         }
 
         internal async void DeleteToolbarCommand_Click(object sender, RoutedEventArgs e)
         {
-            if (sender is not FrameworkElement { Tag: ToolbarCommandItem item })
+            try
             {
-                return;
-            }
+                if (sender is not FrameworkElement { Tag: ToolbarCommandItem item })
+                {
+                    return;
+                }
 
-            var confirmed = await ConfirmAsync("刪除工具列按鈕", $"確定要刪除「{item.Title}」嗎？");
-            if (!confirmed)
+                var confirmed = await ConfirmAsync("刪除工具列按鈕", $"確定要刪除「{item.Title}」嗎？");
+                if (!confirmed)
+                {
+                    return;
+                }
+
+                ToolbarCommands.Remove(item);
+                SaveToolbarCommandsSafe();
+                AddSyncSettingsNotification("工具列設定已更新", $"刪除工具列按鈕：{item.Title}");
+            }
+            catch (Exception ex)
             {
-                return;
+                LogBoundaryException(ex, "delete toolbar command");
+                await ShowMessageAsync("刪除工具列按鈕失敗", ex.Message);
             }
-
-            ToolbarCommands.Remove(item);
-            SaveToolbarCommandsSafe();
-            AddSyncSettingsNotification("工具列設定已更新", $"刪除工具列按鈕：{item.Title}");
         }
 
         internal void ToolbarCommandsListView_DragItemsCompleted(ListViewBase sender, DragItemsCompletedEventArgs args)
@@ -290,15 +335,36 @@ namespace nuone_tools
 
         internal async void ToolbarIconPresenter_Loaded(object sender, RoutedEventArgs e)
         {
-            if (sender is not Grid { Tag: ToolbarCommandItem item } presenter ||
-                presenter.Children.Count < 2 ||
-                presenter.Children[0] is not Image image ||
-                presenter.Children[1] is not FontIcon fontIcon)
+            try
             {
-                return;
-            }
+                if (sender is not Grid presenter)
+                {
+                    return;
+                }
 
-            await UpdateToolbarIconVisualAsync(image, fontIcon, item.IconPath, item.DisplayGlyph);
+                await RefreshToolbarIconPresenterAsync(presenter);
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "toolbar icon presenter loaded");
+            }
+        }
+
+        internal async void ToolbarIconPresenter_DataContextChanged(FrameworkElement sender, DataContextChangedEventArgs args)
+        {
+            try
+            {
+                if (sender is not Grid presenter)
+                {
+                    return;
+                }
+
+                await RefreshToolbarIconPresenterAsync(presenter);
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "toolbar icon presenter data-context changed");
+            }
         }
 
         internal void ToolbarIconSummary_Loaded(object sender, RoutedEventArgs e)
@@ -333,6 +399,48 @@ namespace nuone_tools
             image.Visibility = Visibility.Collapsed;
             fontIcon.Visibility = Visibility.Visible;
             fontIcon.Glyph = glyph;
+        }
+
+        private static async Task RefreshToolbarIconPresenterAsync(Grid presenter)
+        {
+            if (presenter.Tag is not ToolbarCommandItem item ||
+                presenter.Children.Count < 2 ||
+                presenter.Children[0] is not Image image ||
+                presenter.Children[1] is not FontIcon fontIcon)
+            {
+                return;
+            }
+
+            var expectedItem = item;
+
+            image.Source = null;
+            image.Visibility = Visibility.Collapsed;
+            fontIcon.Visibility = Visibility.Visible;
+            fontIcon.Glyph = expectedItem.DisplayGlyph;
+
+            var imageSource = ToolbarCommandItem.CreateIconImageSource(expectedItem.IconPath);
+            if (imageSource is null && ToolbarCommandItem.IsExecutableIconSource(expectedItem.IconPath))
+            {
+                imageSource = await ToolbarCommandItem.CreateShellIconImageSourceAsync(expectedItem.IconPath);
+            }
+
+            if (!ReferenceEquals(presenter.Tag, expectedItem))
+            {
+                return;
+            }
+
+            if (imageSource is not null)
+            {
+                image.Source = imageSource;
+                image.Visibility = Visibility.Visible;
+                fontIcon.Visibility = Visibility.Collapsed;
+                return;
+            }
+
+            image.Source = null;
+            image.Visibility = Visibility.Collapsed;
+            fontIcon.Visibility = Visibility.Visible;
+            fontIcon.Glyph = expectedItem.DisplayGlyph;
         }
 
         private void SyncToolbarCommandsOrder(ListViewBase sender)
@@ -401,7 +509,7 @@ namespace nuone_tools
                 SettingsSection.Appearance => "調整 Nuone Tools 的視覺偏好。變更後會立即儲存到本機 config。",
                 SettingsSection.Shortcuts => "設定常用鍵盤快捷鍵。變更後會立即儲存到本機 config。",
                 SettingsSection.Toolbar => "管理上方工具列按鈕。變更後會立即儲存到本機 config。",
-                _ => "設定檔案顯示、內建終端機預設與常用鍵盤快捷鍵。變更後會立即儲存到本機 config。",
+                _ => "設定檔案顯示、內建終端機預設、診斷 log 目錄與常用鍵盤快捷鍵。變更後會立即儲存到本機 config。",
             };
         }
 
@@ -816,6 +924,90 @@ namespace nuone_tools
             SaveShortcutSettingsSafe();
         }
 
+        internal void LogDirectoryPathTextBox_TextChanged(object sender, TextChangedEventArgs e)
+        {
+            if (_isUpdatingLoggingUi || LogDirectoryPathTextBox is null)
+            {
+                return;
+            }
+
+            _loggingSettings.LogDirectoryPath = NormalizeLogDirectoryPath(LogDirectoryPathTextBox.Text);
+            ApplyConfiguredLogDirectoryPath(_loggingSettings.LogDirectoryPath);
+            AppLogging.Information("Logging directory updated. Directory={LogDirectory}", _loggingSettings.LogDirectoryPath);
+            SaveShortcutSettingsSafe();
+            CaptureHintTextBlock.Text = $"已立即儲存 log 目錄：{_loggingSettings.LogDirectoryPath}";
+        }
+
+        internal void UseDefaultLogDirectoryButton_Click(object sender, RoutedEventArgs e)
+        {
+            _loggingSettings.LogDirectoryPath = DefaultLogDirectoryPath;
+            ApplyConfiguredLogDirectoryPath(_loggingSettings.LogDirectoryPath);
+            AppLogging.Information("Logging directory reset to default. Directory={LogDirectory}", _loggingSettings.LogDirectoryPath);
+            UpdateLoggingSettingsUi();
+            SaveShortcutSettingsSafe();
+            CaptureHintTextBlock.Text = $"已切回預設 log 目錄：{_loggingSettings.LogDirectoryPath}";
+        }
+
+        internal async void OpenLogDirectoryButton_Click(object sender, RoutedEventArgs e)
+        {
+            try
+            {
+                var logDirectoryPath = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath);
+                Directory.CreateDirectory(logDirectoryPath);
+                Process.Start(new ProcessStartInfo
+                {
+                    FileName = "explorer.exe",
+                    Arguments = $"\"{logDirectoryPath}\"",
+                    UseShellExecute = true,
+                });
+            }
+            catch (Exception ex)
+            {
+                await ShowMessageAsync("開啟 log 目錄失敗", ex.Message);
+            }
+        }
+
+        internal async void BackupLocalSettingsButton_Click(object sender, RoutedEventArgs e)
+        {
+            if (!TryGetAuthenticatedSettingsSyncContext(out _))
+            {
+                await ShowMessageAsync("備份本機資料失敗", "請先登入 Nuone 帳號。");
+                return;
+            }
+
+            var backgroundWorkId = BeginBackgroundWork("備份本機資料中");
+            string? completionRecord = null;
+            string? completionDetails = null;
+
+            try
+            {
+                Directory.CreateDirectory(ConfigDirectoryPath);
+                _lastLocalBackupText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                SaveLocalSettings();
+                var settingsJson = await GetCurrentLocalSettingsJsonAsync();
+                await UploadLocalSettingsJsonAsync(settingsJson, recordNotification: false);
+                UpdateLoggingSettingsUi();
+                CaptureHintTextBlock.Text = "已手動備份本機資料。";
+                completionRecord = "完成：備份本機資料";
+                completionDetails = $"已備份 settings-local.json（{GetLocalSettingsDeviceName()}）";
+            }
+            catch (Exception ex)
+            {
+                CaptureHintTextBlock.Text = $"本機資料備份失敗：{ex.Message}";
+                completionRecord = "失敗：備份本機資料";
+                completionDetails = ex.Message;
+                await ShowMessageAsync("備份本機資料失敗", ex.Message);
+            }
+            finally
+            {
+                CompleteBackgroundWork(
+                    backgroundWorkId,
+                    completionRecord,
+                    completionDetails,
+                    persistToLocalHistory: false);
+            }
+        }
+
         internal void AccountApiUrlTextBox_TextChanged(object sender, TextChangedEventArgs e)
         {
             if (_isUpdatingAccountUi || AccountApiUrlTextBox is null)
@@ -824,7 +1016,7 @@ namespace nuone_tools
             }
 
             _accountSettings.ApiBaseUrl = AccountApiUrlTextBox.Text.Trim();
-            SaveShortcutSettingsSafe();
+            SaveLocalSettingsSafe();
         }
 
         internal void AccountEmailTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -835,13 +1027,20 @@ namespace nuone_tools
             }
 
             _accountSettings.Email = AccountEmailTextBox.Text.Trim();
-            SaveShortcutSettingsSafe();
+            SaveLocalSettingsSafe();
         }
 
         internal async void LoginAccountButton_Click(object sender, RoutedEventArgs e)
         {
             if (_isAccountLoginRunning)
             {
+                return;
+            }
+
+            if (!string.IsNullOrWhiteSpace(_accountSettings.Token) && !_isAccountReloginFieldsVisible)
+            {
+                _isAccountReloginFieldsVisible = true;
+                UpdateAccountSettingsUi();
                 return;
             }
 
@@ -866,7 +1065,7 @@ namespace nuone_tools
             _accountSettings.Email = email;
             _accountSettings.LastStatusText = "登入中...";
             UpdateAccountSettingsUi();
-            SaveShortcutSettingsSafe();
+            SaveLocalSettingsSafe();
 
             var backgroundWorkId = BeginBackgroundWork("帳號登入中");
 
@@ -881,15 +1080,26 @@ namespace nuone_tools
                 _accountSettings.ServiceAccountsJson = result.ServiceAccountsJson;
                 _accountSettings.LastLoginText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
                 _accountSettings.LastStatusText = "登入成功";
+                _isAccountReloginFieldsVisible = false;
                 if (AccountPasswordBox is not null)
                 {
                     AccountPasswordBox.Password = string.Empty;
                 }
 
-                SaveShortcutSettingsSafe();
+                SaveLocalSettingsSafe();
                 UpdateAccountSettingsUi();
                 UpdateSharedStatusBar();
                 AddSyncSettingsNotification("帳號設定已更新", $"登入 Nuone 帳號：{_accountSettings.UserDisplayName}");
+
+                try
+                {
+                    await DownloadLatestSyncSettingsAsync("login");
+                }
+                catch (Exception syncEx)
+                {
+                    AppendDebugLog("settings-sync-debug.log", $"login-sync-failed message={syncEx.Message} detail={syncEx}");
+                    AddNotificationHistoryRecord(NotificationHistoryScope.Sync, "同步", "同步設定下載失敗", $"login：{syncEx.Message}", showWindowsToast: false);
+                }
             }
             catch (Exception ex)
             {
@@ -899,7 +1109,7 @@ namespace nuone_tools
                 _accountSettings.PayloadJson = string.Empty;
                 _accountSettings.ServiceAccountsJson = string.Empty;
                 _accountSettings.LastStatusText = $"登入失敗：{ex.Message}";
-                SaveShortcutSettingsSafe();
+                SaveLocalSettingsSafe();
                 UpdateAccountSettingsUi();
                 UpdateSharedStatusBar();
                 await ShowMessageAsync("帳號登入失敗", ex.Message);
@@ -920,12 +1130,13 @@ namespace nuone_tools
             _accountSettings.PayloadJson = string.Empty;
             _accountSettings.ServiceAccountsJson = string.Empty;
             _accountSettings.LastStatusText = "已清除本機登入狀態";
+            _isAccountReloginFieldsVisible = false;
             if (AccountPasswordBox is not null)
             {
                 AccountPasswordBox.Password = string.Empty;
             }
 
-            SaveShortcutSettingsSafe();
+            SaveLocalSettingsSafe();
             UpdateAccountSettingsUi();
             UpdateSharedStatusBar();
             AddSyncSettingsNotification("帳號設定已更新", "已清除本機登入狀態");
@@ -933,7 +1144,7 @@ namespace nuone_tools
 
         private void AddSyncSettingsNotification(string summary, string details)
         {
-            AddNotificationHistoryRecord(NotificationHistoryScope.Sync, "設定", summary, details);
+            AddNotificationHistoryRecord(NotificationHistoryScope.Sync, "設定", summary, details, showWindowsToast: false);
         }
 
         private void SaveSettingsPage_Click(object sender, RoutedEventArgs e)

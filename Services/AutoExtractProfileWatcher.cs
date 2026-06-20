@@ -132,33 +132,63 @@ namespace nuone_tools
 
         private void Watcher_Error(object sender, ErrorEventArgs e)
         {
-            _dispatcherQueue.TryEnqueue(Start);
+            if (!_dispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        Start();
+                    }
+                    catch (Exception ex)
+                    {
+                        MainWindow.LogBoundaryException(ex, "auto extract watcher error restart");
+                    }
+                }))
+            {
+                AppLogging.Warning("Auto extract watcher restart queue rejected Profile={Profile}", _profile.Name);
+            }
         }
 
         private void ScheduleTrigger()
         {
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                if (_isDisposed)
+            if (!_dispatcherQueue.TryEnqueue(() =>
                 {
-                    return;
-                }
+                    try
+                    {
+                        if (_isDisposed)
+                        {
+                            return;
+                        }
 
-                _debounceTimer.Stop();
-                _debounceTimer.Start();
-            });
+                        _debounceTimer.Stop();
+                        _debounceTimer.Start();
+                    }
+                    catch (Exception ex)
+                    {
+                        MainWindow.LogBoundaryException(ex, "auto extract watcher schedule trigger");
+                    }
+                }))
+            {
+                AppLogging.Warning("Auto extract watcher trigger queue rejected Profile={Profile}", _profile.Name);
+            }
         }
 
         private void DebounceTimer_Tick(DispatcherQueueTimer sender, object args)
         {
-            sender.Stop();
-
-            if (_isDisposed || !_profile.IsEnabled)
+            try
             {
-                return;
-            }
+                sender.Stop();
 
-            _triggerAction();
+                if (_isDisposed || !_profile.IsEnabled)
+                {
+                    return;
+                }
+
+                _triggerAction();
+            }
+            catch (Exception ex)
+            {
+                MainWindow.LogBoundaryException(ex, "auto extract watcher debounce tick");
+            }
         }
 
         private void StopInternal()

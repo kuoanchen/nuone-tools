@@ -45,19 +45,27 @@ namespace nuone_tools
 
         internal async void AddAutomationDialog_Click(object sender, RoutedEventArgs e)
         {
-            var kind = await ShowAutomationCreateKindDialogAsync();
-            if (kind == null)
+            try
             {
-                return;
-            }
+                var kind = await ShowAutomationCreateKindDialogAsync();
+                if (kind == null)
+                {
+                    return;
+                }
 
-            if (kind == AutomationCreateKind.Backup)
+                if (kind == AutomationCreateKind.Backup)
+                {
+                    await CreateBackupAutomationFromDialogAsync();
+                    return;
+                }
+
+                await CreateAutoExtractProfileFromDialogAsync();
+            }
+            catch (Exception ex)
             {
-                await CreateBackupAutomationFromDialogAsync();
-                return;
+                LogBoundaryException(ex, "add automation dialog");
+                await ShowMessageAsync("新增自動化工作失敗", ex.Message);
             }
-
-            await CreateAutoExtractProfileFromDialogAsync();
         }
 
         private async Task<AutomationCreateKind?> ShowAutomationCreateKindDialogAsync()
@@ -153,6 +161,7 @@ namespace nuone_tools
             SaveAutomationProfilesSafe();
             ActivateAutomation(profile);
             UpdateSharedStatusBar();
+            AddAutomationNotification("自動化", $"已新增備份工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
         }
 
         private async Task CreateAutoExtractProfileFromDialogAsync()
@@ -179,6 +188,7 @@ namespace nuone_tools
             SaveAutoExtractProfilesSafe();
             ActivateAutoExtractProfile(profile);
             UpdateSharedStatusBar();
+            AddAutomationNotification("自動解壓", $"已新增自動解壓：{profile.Name}", BuildAutoExtractProfileDetail(profile));
         }
 
         internal void AddAutomationJob_Click(object sender, RoutedEventArgs e)
@@ -194,7 +204,7 @@ namespace nuone_tools
             var runMissedOnStartup = AutomationRunMissedOnStartupCheckBox.IsChecked == true;
             var mode = GetAutomationModeFromComboBox(AutomationModeComboBox);
             var excludedFolderNamesText = string.Empty;
-            var logDirectoryPath = string.Empty;
+            var logDirectoryPath = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath);
             var mongoToolPath = AutomationMongoToolPathTextBox.Text.Trim();
             var mongoConnectionString = AutomationMongoConnectionStringTextBox.Text.Trim();
             var mongoDatabaseName = AutomationMongoDatabaseNameTextBox.Text.Trim();
@@ -204,32 +214,32 @@ namespace nuone_tools
 
             if (string.IsNullOrWhiteSpace(destinationPath))
             {
-                _ = ShowMessageAsync("新增自動化工作失敗", "目的地必須填寫。");
+                RunFireAndForget(ShowMessageAsync("新增自動化工作失敗", "目的地必須填寫。"), "automation validation message");
                 return;
             }
 
             if (jobType == AutomationJobType.FileBackup &&
                 (string.IsNullOrWhiteSpace(sourcePath) || (!File.Exists(sourcePath) && !Directory.Exists(sourcePath))))
             {
-                _ = ShowMessageAsync("新增自動化工作失敗", "來源路徑不存在。");
+                RunFireAndForget(ShowMessageAsync("新增自動化工作失敗", "來源路徑不存在。"), "automation validation message");
                 return;
             }
 
             if (jobType == AutomationJobType.MongoBackup && string.IsNullOrWhiteSpace(mongoConnectionString))
             {
-                _ = ShowMessageAsync("新增自動化工作失敗", "Mongo URI 必須填寫。");
+                RunFireAndForget(ShowMessageAsync("新增自動化工作失敗", "Mongo URI 必須填寫。"), "automation validation message");
                 return;
             }
 
             if (!int.TryParse(intervalRaw, NumberStyles.Integer, CultureInfo.InvariantCulture, out var intervalMinutes) || intervalMinutes <= 0)
             {
-                _ = ShowMessageAsync("新增自動化工作失敗", "間隔分鐘必須是大於 0 的整數。");
+                RunFireAndForget(ShowMessageAsync("新增自動化工作失敗", "間隔分鐘必須是大於 0 的整數。"), "automation validation message");
                 return;
             }
 
             if (scheduleType != AutomationScheduleType.Interval && !TryParseScheduleTimeText(scheduleTimeText, out _))
             {
-                _ = ShowMessageAsync("新增自動化工作失敗", "時間格式必須是 HH:mm。");
+                RunFireAndForget(ShowMessageAsync("新增自動化工作失敗", "時間格式必須是 HH:mm。"), "automation validation message");
                 return;
             }
 
@@ -245,7 +255,7 @@ namespace nuone_tools
 
             if (jobType == AutomationJobType.FileBackup && string.IsNullOrWhiteSpace(sourcePath))
             {
-                _ = ShowMessageAsync("新增自動化工作失敗", "來源路徑必須填寫。");
+                RunFireAndForget(ShowMessageAsync("新增自動化工作失敗", "來源路徑必須填寫。"), "automation validation message");
                 return;
             }
 
@@ -288,6 +298,7 @@ namespace nuone_tools
             SaveAutomationProfilesSafe();
             ActivateAutomation(profile);
             UpdateSharedStatusBar();
+            AddAutomationNotification("自動化", $"已新增備份工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
 
             AutomationNameTextBox.Text = string.Empty;
             AutomationSourcePathTextBox.Text = string.Empty;
@@ -317,48 +328,74 @@ namespace nuone_tools
 
         internal async void RunAutomationNow_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryGetBackupAutomationProfile(sender, out var profile))
+            try
             {
-                return;
-            }
+                if (!TryGetBackupAutomationProfile(sender, out var profile))
+                {
+                    return;
+                }
 
-            await RunBackupAutomationAsync(profile, triggeredByTimer: false);
+                await RunBackupAutomationAsync(profile, triggeredByTimer: false);
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "run automation now");
+                await ShowMessageAsync("執行自動化失敗", ex.Message);
+            }
         }
 
         internal async void EditAutomationJob_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryGetBackupAutomationProfile(sender, out var profile) ||
-                !await ShowBackupAutomationEditorAsync(profile))
+            try
             {
-                return;
-            }
+                if (!TryGetBackupAutomationProfile(sender, out var profile) ||
+                    !await ShowBackupAutomationEditorAsync(profile))
+                {
+                    return;
+                }
 
-            SaveAutomationProfilesSafe();
-            if (profile.IsEnabled)
-            {
-                ActivateAutomation(profile);
+                SaveAutomationProfilesSafe();
+                if (profile.IsEnabled)
+                {
+                    ActivateAutomation(profile);
+                }
+                UpdateSharedStatusBar();
+                AddAutomationNotification("自動化", $"已更新工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
             }
-            UpdateSharedStatusBar();
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "edit automation job");
+                await ShowMessageAsync("編輯自動化工作失敗", ex.Message);
+            }
         }
 
         internal async void StartAutomationJob_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryGetBackupAutomationProfile(sender, out var profile))
+            try
             {
-                return;
+                if (!TryGetBackupAutomationProfile(sender, out var profile))
+                {
+                    return;
+                }
+
+                profile.IsEnabled = true;
+                ActivateAutomation(profile);
+                profile.LastResultText = profile.JobType == AutomationJobType.MongoBackup
+                    ? "排程已啟動"
+                    : profile.Mode == BackupAutomationMode.Mirror
+                        ? "監聽已啟動"
+                        : "排程已啟動";
+                SaveAutomationProfilesSafe();
+                UpdateSharedStatusBar();
+                AddAutomationNotification("自動化", $"已啟用工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
+
+                await RunBackupAutomationAsync(profile, triggeredByTimer: false);
             }
-
-            profile.IsEnabled = true;
-            ActivateAutomation(profile);
-            profile.LastResultText = profile.JobType == AutomationJobType.MongoBackup
-                ? "排程已啟動"
-                : profile.Mode == BackupAutomationMode.Mirror
-                    ? "監聽已啟動"
-                    : "排程已啟動";
-            SaveAutomationProfilesSafe();
-            UpdateSharedStatusBar();
-
-            await RunBackupAutomationAsync(profile, triggeredByTimer: false);
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "start automation job");
+                await ShowMessageAsync("啟動自動化工作失敗", ex.Message);
+            }
         }
 
         internal void DeleteAutomationJob_Click(object sender, RoutedEventArgs e)
@@ -373,6 +410,7 @@ namespace nuone_tools
             BackupAutomations.Remove(profile);
             SaveAutomationProfilesSafe();
             UpdateSharedStatusBar();
+            AddAutomationNotification("自動化", $"已刪除工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
         }
 
         internal void StopAutomationJob_Click(object sender, RoutedEventArgs e)
@@ -394,6 +432,7 @@ namespace nuone_tools
                     : "排程已停止";
             SaveAutomationProfilesSafe();
             UpdateSharedStatusBar();
+            AddAutomationNotification("自動化", $"已停止工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
         }
 
         internal void AutomationEnabledToggle_Toggled(object sender, RoutedEventArgs e)
@@ -423,6 +462,10 @@ namespace nuone_tools
                 profile.NextRunText = "未啟用";
             }
             UpdateSharedStatusBar();
+            AddAutomationNotification(
+                "自動化",
+                $"{(profile.IsEnabled ? "已啟用" : "已停用")}工作：{profile.Name}",
+                BuildBackupAutomationProfileDetail(profile));
         }
 
         internal void AutomationNameTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -784,13 +827,13 @@ namespace nuone_tools
             var watchPath = AutoExtractWatchPathTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(watchPath))
             {
-                _ = ShowMessageAsync("新增自動解壓失敗", "監看目錄不能為空。");
+                RunFireAndForget(ShowMessageAsync("新增自動解壓失敗", "監看目錄不能為空。"), "auto extract validation message");
                 return;
             }
 
             if (!Directory.Exists(watchPath))
             {
-                _ = ShowMessageAsync("新增自動解壓失敗", $"監看目錄不存在：{watchPath}");
+                RunFireAndForget(ShowMessageAsync("新增自動解壓失敗", $"監看目錄不存在：{watchPath}"), "auto extract validation message");
                 return;
             }
 
@@ -811,6 +854,7 @@ namespace nuone_tools
             SaveAutoExtractProfilesSafe();
             ActivateAutoExtractProfile(profile);
             UpdateSharedStatusBar();
+            AddAutomationNotification("自動解壓", $"已新增工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
 
             AutoExtractNameTextBox.Text = string.Empty;
             AutoExtractWatchPathTextBox.Text = string.Empty;
@@ -820,43 +864,70 @@ namespace nuone_tools
 
         internal async void RunAutoExtractNow_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryGetAutoExtractProfile(sender, out var profile))
+            try
             {
-                return;
-            }
+                if (!TryGetAutoExtractProfile(sender, out var profile))
+                {
+                    return;
+                }
 
-            await RunAutoExtractProfileAsync(profile, triggeredByWatcher: false);
+                await RunAutoExtractProfileAsync(profile, triggeredByWatcher: false);
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "run auto extract now");
+                await ShowMessageAsync("執行自動解壓失敗", ex.Message);
+            }
         }
 
         internal async void EditAutoExtractProfile_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryGetAutoExtractProfile(sender, out var profile) ||
-                !await ShowAutoExtractProfileEditorAsync(profile))
+            try
             {
-                return;
-            }
+                if (!TryGetAutoExtractProfile(sender, out var profile) ||
+                    !await ShowAutoExtractProfileEditorAsync(profile))
+                {
+                    return;
+                }
 
-            SaveAutoExtractProfilesSafe();
-            if (profile.IsEnabled)
+                SaveAutoExtractProfilesSafe();
+                if (profile.IsEnabled)
+                {
+                    ActivateAutoExtractProfile(profile);
+                }
+                UpdateSharedStatusBar();
+                AddAutomationNotification("自動解壓", $"已更新工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
+            }
+            catch (Exception ex)
             {
-                ActivateAutoExtractProfile(profile);
+                LogBoundaryException(ex, "edit auto extract profile");
+                await ShowMessageAsync("編輯自動解壓失敗", ex.Message);
             }
         }
 
         internal async void StartAutoExtractProfile_Click(object sender, RoutedEventArgs e)
         {
-            if (!TryGetAutoExtractProfile(sender, out var profile))
+            try
             {
-                return;
+                if (!TryGetAutoExtractProfile(sender, out var profile))
+                {
+                    return;
+                }
+
+                profile.IsEnabled = true;
+                ActivateAutoExtractProfile(profile);
+                profile.LastResultText = "監看已啟動";
+                SaveAutoExtractProfilesSafe();
+                UpdateSharedStatusBar();
+                AddAutomationNotification("自動解壓", $"已啟用工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
+
+                await RunAutoExtractProfileAsync(profile, triggeredByWatcher: false);
             }
-
-            profile.IsEnabled = true;
-            ActivateAutoExtractProfile(profile);
-            profile.LastResultText = "監看已啟動";
-            SaveAutoExtractProfilesSafe();
-            UpdateSharedStatusBar();
-
-            await RunAutoExtractProfileAsync(profile, triggeredByWatcher: false);
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "start auto extract profile");
+                await ShowMessageAsync("啟動自動解壓失敗", ex.Message);
+            }
         }
 
         internal void StopAutoExtractProfile_Click(object sender, RoutedEventArgs e)
@@ -872,6 +943,7 @@ namespace nuone_tools
             profile.LastResultText = "監看已停止";
             SaveAutoExtractProfilesSafe();
             UpdateSharedStatusBar();
+            AddAutomationNotification("自動解壓", $"已停止工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
         }
 
         internal void DeleteAutoExtractProfile_Click(object sender, RoutedEventArgs e)
@@ -886,6 +958,7 @@ namespace nuone_tools
             AutoExtractProfiles.Remove(profile);
             SaveAutoExtractProfilesSafe();
             UpdateSharedStatusBar();
+            AddAutomationNotification("自動解壓", $"已刪除工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
         }
 
         internal void AutoExtractEnabledToggle_Toggled(object sender, RoutedEventArgs e)
@@ -909,6 +982,10 @@ namespace nuone_tools
             }
 
             UpdateSharedStatusBar();
+            AddAutomationNotification(
+                "自動解壓",
+                $"{(profile.IsEnabled ? "已啟用" : "已停用")}工作：{profile.Name}",
+                BuildAutoExtractProfileDetail(profile));
         }
 
         internal void AutoExtractNameTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -1032,49 +1109,45 @@ namespace nuone_tools
 
             try
             {
-                if (!File.Exists(SettingsConfigPath))
+                var localSettings = LoadLocalSettingsConfig();
+                if (localSettings?.BackupAutomations is { Count: > 0 })
                 {
-                    return;
-                }
-
-                var settings = JsonSerializer.Deserialize<ShortcutSettingsConfig>(File.ReadAllText(SettingsConfigPath), JsonOptions);
-                if (settings?.BackupAutomations is null)
-                {
-                    return;
-                }
-
-                foreach (var config in settings.BackupAutomations)
-                {
-                    var profile = new BackupAutomationProfile
+                    foreach (var config in localSettings.BackupAutomations)
                     {
-                        Id = config.Id == Guid.Empty ? Guid.NewGuid() : config.Id,
-                        Name = config.Name,
-                        JobType = config.JobType,
-                        SourcePath = config.SourcePath,
-                        DestinationPath = config.DestinationPath,
-                        Mode = config.Mode,
-                        ExcludedFolderNamesText = config.ExcludedFolderNamesText ?? string.Empty,
-                        LogDirectoryPath = config.LogDirectoryPath ?? string.Empty,
-                        MongoToolPath = config.MongoToolPath,
-                        MongoConnectionString = config.MongoConnectionString,
-                        MongoDatabaseName = config.MongoDatabaseName,
-                        MongoUseGzip = config.MongoUseGzip,
-                        MongoUseArchive = config.MongoUseArchive,
-                        MongoRetentionCount = Math.Max(1, config.MongoRetentionCount),
-                        ScheduleType = config.ScheduleType,
-                        IntervalMinutes = Math.Max(1, config.IntervalMinutes),
-                        ScheduleTimeText = string.IsNullOrWhiteSpace(config.ScheduleTimeText) ? "03:00" : config.ScheduleTimeText,
-                        WeeklyDaysMask = config.WeeklyDaysMask == 0 ? 62 : config.WeeklyDaysMask,
-                        RunMissedOnStartup = config.RunMissedOnStartup,
-                        IsEnabled = config.IsEnabled,
-                        LastRunText = string.IsNullOrWhiteSpace(config.LastRunText) ? "尚未執行" : config.LastRunText,
-                        LastResultText = string.IsNullOrWhiteSpace(config.LastResultText) ? (config.IsEnabled ? "等待排程" : "已停用") : config.LastResultText,
-                    };
-                    profile.SyncIntervalText();
-                    profile.SyncMongoRetentionText();
-                    profile.NextRunText = "尚未排程";
-                    BackupAutomations.Add(profile);
+                        var profile = new BackupAutomationProfile
+                        {
+                            Id = config.Id == Guid.Empty ? Guid.NewGuid() : config.Id,
+                            Name = config.Name,
+                            JobType = config.JobType,
+                            SourcePath = config.SourcePath,
+                            DestinationPath = config.DestinationPath,
+                            Mode = config.Mode,
+                            ExcludedFolderNamesText = config.ExcludedFolderNamesText ?? string.Empty,
+                            LogDirectoryPath = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath),
+                            MongoToolPath = config.MongoToolPath,
+                            MongoConnectionString = config.MongoConnectionString,
+                            MongoDatabaseName = config.MongoDatabaseName,
+                            MongoUseGzip = config.MongoUseGzip,
+                            MongoUseArchive = config.MongoUseArchive,
+                            MongoRetentionCount = Math.Max(1, config.MongoRetentionCount),
+                            ScheduleType = config.ScheduleType,
+                            IntervalMinutes = Math.Max(1, config.IntervalMinutes),
+                            ScheduleTimeText = string.IsNullOrWhiteSpace(config.ScheduleTimeText) ? "03:00" : config.ScheduleTimeText,
+                            WeeklyDaysMask = config.WeeklyDaysMask == 0 ? 62 : config.WeeklyDaysMask,
+                            RunMissedOnStartup = config.RunMissedOnStartup,
+                            IsEnabled = config.IsEnabled,
+                            LastRunText = string.IsNullOrWhiteSpace(config.LastRunText) ? "尚未執行" : config.LastRunText,
+                            LastResultText = string.IsNullOrWhiteSpace(config.LastResultText) ? (config.IsEnabled ? "等待排程" : "已停用") : config.LastResultText,
+                        };
+                        profile.SyncIntervalText();
+                        profile.SyncMongoRetentionText();
+                        profile.NextRunText = "尚未排程";
+                        BackupAutomations.Add(profile);
+                    }
+
+                    return;
                 }
+
             }
             catch
             {
@@ -1087,46 +1160,42 @@ namespace nuone_tools
 
             try
             {
-                if (!File.Exists(SettingsConfigPath))
+                var localSettings = LoadLocalSettingsConfig();
+                if (localSettings?.AutoExtractProfiles is { Count: > 0 })
                 {
-                    return;
-                }
-
-                var settings = JsonSerializer.Deserialize<ShortcutSettingsConfig>(File.ReadAllText(SettingsConfigPath), JsonOptions);
-                if (settings?.AutoExtractProfiles is null)
-                {
-                    return;
-                }
-
-                foreach (var config in settings.AutoExtractProfiles)
-                {
-                    var profile = new AutoExtractProfile
+                    foreach (var config in localSettings.AutoExtractProfiles)
                     {
-                        Id = config.Id == Guid.Empty ? Guid.NewGuid() : config.Id,
-                        Name = config.Name,
-                        WatchPath = config.WatchPath,
-                        ExtractorPath = config.ExtractorPath,
-                        ExtensionFilter = string.IsNullOrWhiteSpace(config.ExtensionFilter)
-                            ? ".zip, .rar, .7z"
-                            : config.ExtensionFilter,
-                        IsEnabled = config.IsEnabled,
-                        LastRunText = string.IsNullOrWhiteSpace(config.LastRunText) ? "尚未執行" : config.LastRunText,
-                        LastResultText = string.IsNullOrWhiteSpace(config.LastResultText)
-                            ? (config.IsEnabled ? "監看待命" : "已停用")
-                            : config.LastResultText,
-                    };
-
-                    foreach (var password in BuildLegacyPasswordEntries(config))
-                    {
-                        profile.Passwords.Add(new AutoExtractPasswordItem
+                        var profile = new AutoExtractProfile
                         {
-                            Value = password,
-                            ParentProfile = profile,
-                        });
+                            Id = config.Id == Guid.Empty ? Guid.NewGuid() : config.Id,
+                            Name = config.Name,
+                            WatchPath = config.WatchPath,
+                            ExtractorPath = config.ExtractorPath,
+                            ExtensionFilter = string.IsNullOrWhiteSpace(config.ExtensionFilter)
+                                ? ".zip, .rar, .7z"
+                                : config.ExtensionFilter,
+                            IsEnabled = config.IsEnabled,
+                            LastRunText = string.IsNullOrWhiteSpace(config.LastRunText) ? "尚未執行" : config.LastRunText,
+                            LastResultText = string.IsNullOrWhiteSpace(config.LastResultText)
+                                ? (config.IsEnabled ? "等待監看" : "已停用")
+                                : config.LastResultText,
+                        };
+
+                        foreach (var password in BuildLegacyPasswordEntries(config))
+                        {
+                            profile.Passwords.Add(new AutoExtractPasswordItem
+                            {
+                                Value = password,
+                                ParentProfile = profile,
+                            });
+                        }
+
+                        AutoExtractProfiles.Add(profile);
                     }
 
-                    AutoExtractProfiles.Add(profile);
+                    return;
                 }
+
             }
             catch
             {
@@ -1159,7 +1228,9 @@ namespace nuone_tools
             if (triggeredByStartup && profile.IsEnabled && profile.RunMissedOnStartup && ShouldRunMissedAutomationOnStartup(profile, DateTime.Now))
             {
                 profile.NextRunText = "啟動後補跑中...";
-                _ = RunBackupAutomationAsync(profile, triggeredByTimer: true);
+                RunFireAndForget(
+                    RunBackupAutomationAsync(profile, triggeredByTimer: true),
+                    "backup automation missed startup run");
             }
 
             ScheduleBackupAutomation(profile);
@@ -1205,8 +1276,15 @@ namespace nuone_tools
 
             timer.Elapsed += async (_, _) =>
             {
-                StopAutomationTimer(profile.Id);
-                await RunBackupAutomationAsync(profile, triggeredByTimer: true);
+                try
+                {
+                    StopAutomationTimer(profile.Id);
+                    await RunBackupAutomationAsync(profile, triggeredByTimer: true);
+                }
+                catch (Exception ex)
+                {
+                    LogBoundaryException(ex, "backup automation timer elapsed");
+                }
             };
             _automationTimers[profile.Id] = timer;
             profile.NextRunText = nextRunAt.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture);
@@ -1251,7 +1329,9 @@ namespace nuone_tools
             var watcher = new BackupAutomationSourceWatcher(
                 profile,
                 DispatcherQueue,
-                () => _ = RunBackupAutomationAsync(profile, triggeredByTimer: true),
+                () => RunFireAndForget(
+                    RunBackupAutomationAsync(profile, triggeredByTimer: true),
+                    "backup automation watcher trigger"),
                 AutomationWatcherDebounceInterval);
             watcher.Start();
             _automationWatchers[profile.Id] = watcher;
@@ -1299,7 +1379,9 @@ namespace nuone_tools
             var watcher = new AutoExtractProfileWatcher(
                 profile,
                 DispatcherQueue,
-                () => _ = RunAutoExtractProfileAsync(profile, triggeredByWatcher: true),
+                () => RunFireAndForget(
+                    RunAutoExtractProfileAsync(profile, triggeredByWatcher: true),
+                    "auto extract watcher trigger"),
                 AutomationWatcherDebounceInterval);
             watcher.Start();
             _autoExtractWatchers[profile.Id] = watcher;
@@ -1357,6 +1439,8 @@ namespace nuone_tools
             _automationCancellationTokens[profile.Id] = cancellationTokenSource;
             var backgroundWorkId = BeginBackgroundWork(GetAutomationBackgroundWorkTitle(profile));
             string? completionRecord = null;
+            string? notificationSummary = null;
+            string? notificationDetails = null;
 
             await EnqueueOnUiAsync(() =>
             {
@@ -1376,6 +1460,8 @@ namespace nuone_tools
                     UpdateSharedStatusBar();
                 });
                 completionRecord = result.CompletionRecord;
+                notificationSummary = BuildBackupAutomationNotificationSummary(profile, result.StatusText);
+                notificationDetails = result.CompletionRecord;
             }
             catch (OperationCanceledException)
             {
@@ -1386,6 +1472,8 @@ namespace nuone_tools
                     UpdateSharedStatusBar();
                 });
                 completionRecord = $"停止：{profile.Name}";
+                notificationSummary = $"已停止：{profile.Name}";
+                notificationDetails = BuildBackupAutomationProfileDetail(profile);
             }
             catch (Exception ex)
             {
@@ -1396,6 +1484,8 @@ namespace nuone_tools
                     UpdateSharedStatusBar();
                 });
                 completionRecord = $"失敗：{profile.Name} · {ex.Message}";
+                notificationSummary = $"執行失敗：{profile.Name}";
+                notificationDetails = completionRecord;
             }
             finally
             {
@@ -1419,11 +1509,16 @@ namespace nuone_tools
                     activeCancellationTokenSource.Dispose();
                 }
 
-                CompleteBackgroundWork(backgroundWorkId, completionRecord);
+                CompleteBackgroundWork(backgroundWorkId, completionRecord, persistToLocalHistory: false);
 
                 lock (_runningAutomationIds)
                 {
                     _runningAutomationIds.Remove(profile.Id);
+                }
+
+                if (!string.IsNullOrWhiteSpace(notificationSummary))
+                {
+                    AddAutomationNotification("自動化", notificationSummary, notificationDetails ?? notificationSummary);
                 }
             }
         }
@@ -1744,6 +1839,44 @@ namespace nuone_tools
             return $"{profile.Name} {(profile.Mode == BackupAutomationMode.Mirror ? "同步中" : "備份中")}";
         }
 
+        private void AddAutomationNotification(string category, string summary, string details)
+        {
+            AddNotificationHistoryRecord(NotificationHistoryScope.LocalOnly, category, summary, details);
+        }
+
+        private static string BuildBackupAutomationProfileDetail(BackupAutomationProfile profile)
+        {
+            var builder = new StringBuilder();
+            builder.Append("名稱：");
+            builder.AppendLine(profile.Name);
+            builder.Append("類型：");
+            builder.AppendLine(profile.JobTypeText);
+            builder.Append("排程：");
+            builder.AppendLine(profile.ScheduleDescription);
+            builder.Append("狀態：");
+            builder.AppendLine(profile.LastResultText);
+
+            if (profile.JobType == AutomationJobType.FileBackup)
+            {
+                builder.Append("來源：");
+                builder.AppendLine(profile.SourcePath);
+                builder.Append("目的地：");
+                builder.AppendLine(profile.DestinationPath);
+            }
+
+            return builder.ToString().TrimEnd();
+        }
+
+        private static string BuildBackupAutomationNotificationSummary(BackupAutomationProfile profile, string statusText)
+        {
+            var action = profile.JobType == AutomationJobType.MongoBackup
+                ? "MongoDB 備份"
+                : profile.Mode == BackupAutomationMode.Mirror
+                    ? "同步"
+                    : "備份";
+            return $"{action}完成：{profile.Name} · {statusText}";
+        }
+
         private sealed class BackupAutomationExecutionResult
         {
             public BackupAutomationExecutionResult(string statusText, string completionRecord)
@@ -1770,47 +1903,38 @@ namespace nuone_tools
 
         private sealed class BackupAutomationLogScope : IDisposable
         {
-            private readonly StreamWriter? _writer;
+            private readonly Guid _profileId;
+            private readonly string _profileName;
+            private readonly AutomationJobType _jobType;
 
-            public BackupAutomationLogScope(string? logFilePath, StreamWriter? writer)
+            public BackupAutomationLogScope(BackupAutomationProfile profile)
             {
-                LogFilePath = logFilePath;
-                _writer = writer;
+                _profileId = profile.Id;
+                _profileName = profile.Name;
+                _jobType = profile.JobType;
+                LogFilePath = AppLogging.CurrentLogFilePath;
             }
 
             public string? LogFilePath { get; }
 
             public void WriteLine(string message)
             {
-                if (_writer is null)
-                {
-                    return;
-                }
-
-                _writer.WriteLine($"[{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture)}] {message}");
-                _writer.Flush();
+                AppLogging.Information(
+                    "BackupAutomation ProfileId={ProfileId} Profile={ProfileName} JobType={JobType} Message={AutomationMessage}",
+                    _profileId,
+                    _profileName,
+                    _jobType,
+                    message);
             }
 
             public void Dispose()
             {
-                _writer?.Dispose();
             }
         }
 
         private static BackupAutomationLogScope CreateBackupAutomationLogScope(BackupAutomationProfile profile)
         {
-            if (profile.JobType != AutomationJobType.FileBackup || string.IsNullOrWhiteSpace(profile.LogDirectoryPath))
-            {
-                return new BackupAutomationLogScope(logFilePath: null, writer: null);
-            }
-
-            Directory.CreateDirectory(profile.LogDirectoryPath);
-            var safeFileName = SanitizeFileName(string.IsNullOrWhiteSpace(profile.Name) ? "backup" : profile.Name);
-            var logFilePath = Path.Combine(
-                profile.LogDirectoryPath,
-                $"{safeFileName}_{DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture)}.log");
-            var writer = new StreamWriter(logFilePath, append: false, Encoding.UTF8);
-            return new BackupAutomationLogScope(logFilePath, writer);
+            return new BackupAutomationLogScope(profile);
         }
 
         private static string BuildBackupAutomationStatusText(BackupAutomationProfile profile, BackupAutomationSummary summary)
@@ -2218,6 +2342,9 @@ namespace nuone_tools
             var cancellationTokenSource = new CancellationTokenSource();
             _autoExtractCancellationTokens[profile.Id] = cancellationTokenSource;
             var backgroundWorkId = BeginBackgroundWork(BuildAutoExtractBackgroundWorkTitle(profile));
+            string? completionRecord = null;
+            string? notificationSummary = null;
+            string? notificationDetails = null;
 
             await EnqueueOnUiAsync(() =>
             {
@@ -2236,6 +2363,9 @@ namespace nuone_tools
                     profile.LastResultText = result.StatusText;
                     UpdateSharedStatusBar();
                 });
+                completionRecord = $"完成：{profile.Name} · {result.StatusText}";
+                notificationSummary = BuildAutoExtractNotificationSummary(profile, result.StatusText);
+                notificationDetails = BuildAutoExtractExecutionDetail(profile, result);
 
                 if (result.ShouldShowPasswordMismatchDialog)
                 {
@@ -2250,6 +2380,9 @@ namespace nuone_tools
                     profile.LastResultText = "已停止";
                     UpdateSharedStatusBar();
                 });
+                completionRecord = $"停止：{profile.Name}";
+                notificationSummary = $"已停止：{profile.Name}";
+                notificationDetails = BuildAutoExtractProfileDetail(profile);
             }
             catch (Exception ex)
             {
@@ -2259,6 +2392,9 @@ namespace nuone_tools
                     profile.LastResultText = $"失敗：{ex.Message}";
                     UpdateSharedStatusBar();
                 });
+                completionRecord = $"失敗：{profile.Name} · {ex.Message}";
+                notificationSummary = $"執行失敗：{profile.Name}";
+                notificationDetails = completionRecord;
             }
             finally
             {
@@ -2274,11 +2410,16 @@ namespace nuone_tools
                     activeCancellationTokenSource.Dispose();
                 }
 
-                CompleteBackgroundWork(backgroundWorkId);
+                CompleteBackgroundWork(backgroundWorkId, completionRecord, persistToLocalHistory: false);
 
                 lock (_runningAutoExtractIds)
                 {
                     _runningAutoExtractIds.Remove(profile.Id);
+                }
+
+                if (!string.IsNullOrWhiteSpace(notificationSummary))
+                {
+                    AddAutomationNotification("自動解壓", notificationSummary, notificationDetails ?? notificationSummary);
                 }
 
                 if (!string.IsNullOrWhiteSpace(retryPassword))
@@ -2333,6 +2474,43 @@ namespace nuone_tools
             {
                 return $"{profile.Name} 解壓中";
             }
+        }
+
+        private static string BuildAutoExtractProfileDetail(AutoExtractProfile profile)
+        {
+            var builder = new StringBuilder();
+            builder.Append("名稱：");
+            builder.AppendLine(profile.Name);
+            builder.Append("監看目錄：");
+            builder.AppendLine(profile.WatchPath);
+            builder.Append("副檔名：");
+            builder.AppendLine(GetAutoExtractExtensionSummary(profile.ExtensionFilter));
+            builder.Append("狀態：");
+            builder.AppendLine(profile.LastResultText);
+            return builder.ToString().TrimEnd();
+        }
+
+        private static string BuildAutoExtractNotificationSummary(AutoExtractProfile profile, string statusText)
+        {
+            return statusText.StartsWith("失敗", StringComparison.Ordinal)
+                ? $"解壓失敗：{profile.Name}"
+                : $"解壓完成：{profile.Name}";
+        }
+
+        private static string BuildAutoExtractExecutionDetail(AutoExtractProfile profile, AutoExtractExecutionResult result)
+        {
+            var builder = new StringBuilder();
+            builder.AppendLine(BuildAutoExtractProfileDetail(profile));
+            builder.AppendLine();
+            builder.Append(result.StatusText);
+            if (result.ShouldShowPasswordMismatchDialog && !string.IsNullOrWhiteSpace(result.PasswordMismatchDialogMessage))
+            {
+                builder.AppendLine();
+                builder.AppendLine();
+                builder.Append(result.PasswordMismatchDialogMessage);
+            }
+
+            return builder.ToString().TrimEnd();
         }
 
         private static AutoExtractExecutionResult ExecuteAutoExtractProfile(AutoExtractProfile profile, CancellationToken cancellationToken)

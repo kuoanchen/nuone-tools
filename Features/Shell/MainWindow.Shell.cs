@@ -37,6 +37,8 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
+        private static readonly TimeSpan BackgroundWorkToastThreshold = TimeSpan.FromMilliseconds(1200);
+
         private void ShowFileManagerApp_Click(object sender, RoutedEventArgs e)
         {
             _settingsCaptureTarget = ShortcutCaptureTarget.None;
@@ -73,14 +75,20 @@ namespace nuone_tools
 
         private void SwitchToAppSection(AppSection section)
         {
+            AppLogging.Information(
+                "SwitchToAppSection requested From={CurrentSection} To={TargetSection}",
+                _activeSection,
+                section);
             CancelPendingFlyout();
             _activeSection = section;
             UpdateAppSectionVisuals();
             UpdateSharedStatusBar();
+            AppLogging.Information("SwitchToAppSection completed Current={CurrentSection}", _activeSection);
         }
 
         private void UpdateAppSectionVisuals()
         {
+            AppLogging.Debug("UpdateAppSectionVisuals start Section={ActiveSection}", _activeSection);
             var isFileManager = _activeSection == AppSection.FileManager;
             var isAutomation = _activeSection == AppSection.Automation;
             var isTerminal = _activeSection == AppSection.Terminal;
@@ -111,6 +119,13 @@ namespace nuone_tools
                 SettingsAppButtonBorder,
                 SettingsAppIcon,
                 SettingsAppText,
+                _activeSection == AppSection.Settings);
+            AppLogging.Debug(
+                "UpdateAppSectionVisuals completed Section={ActiveSection} FileManager={IsFileManager} Automation={IsAutomation} Terminal={IsTerminal} Settings={IsSettings}",
+                _activeSection,
+                isFileManager,
+                isAutomation,
+                isTerminal,
                 _activeSection == AppSection.Settings);
         }
 
@@ -201,7 +216,8 @@ namespace nuone_tools
             {
                 _backgroundWorks[workId] = new BackgroundWorkState(
                     label,
-                    string.IsNullOrWhiteSpace(details) ? label : details.Trim());
+                    string.IsNullOrWhiteSpace(details) ? label : details.Trim(),
+                    DateTimeOffset.UtcNow);
                 AddBackgroundWorkRecordLocked($"開始：{label}", details);
             }
 
@@ -219,6 +235,7 @@ namespace nuone_tools
             {
                 if (_backgroundWorks.Remove(workId, out var work))
                 {
+                    var elapsed = DateTimeOffset.UtcNow - work.StartedAtUtc;
                     var recordText = string.IsNullOrWhiteSpace(completionRecord)
                         ? $"完成：{NormalizeBackgroundWorkCompletionLabel(work.Label)}"
                         : completionRecord;
@@ -233,7 +250,8 @@ namespace nuone_tools
                             NotificationHistoryScope.LocalOnly,
                             "背景工作",
                             recordText,
-                            recordDetails);
+                            recordDetails,
+                            showWindowsToast: elapsed >= BackgroundWorkToastThreshold);
                     }
                 }
             }
@@ -256,8 +274,10 @@ namespace nuone_tools
 
         private void BackgroundWorkNotification_Click(object sender, RoutedEventArgs e)
         {
+            AppLogging.Information("BackgroundWorkNotification_Click start");
             if (BackgroundWorkNotificationButton is null)
             {
+                AppLogging.Warning("BackgroundWorkNotification_Click skipped because button is null");
                 return;
             }
 
@@ -265,8 +285,11 @@ namespace nuone_tools
             {
                 Placement = FlyoutPlacementMode.Bottom,
             };
+            AppLogging.Debug("BackgroundWorkNotification_Click flyout created");
             flyout.Content = BuildBackgroundWorkNotificationContent(flyout);
+            AppLogging.Debug("BackgroundWorkNotification_Click flyout content assigned");
             flyout.ShowAt(BackgroundWorkNotificationButton);
+            AppLogging.Information("BackgroundWorkNotification_Click flyout shown");
         }
 
         private FrameworkElement BuildBackgroundWorkNotificationContent(Flyout flyout)
@@ -275,6 +298,12 @@ namespace nuone_tools
             var localHistory = GetNotificationHistorySnapshot(NotificationHistoryScope.LocalOnly);
             var syncHistory = GetNotificationHistorySnapshot(NotificationHistoryScope.Sync);
             var entries = BuildNotificationListEntries(records, localHistory, syncHistory);
+            AppLogging.Debug(
+                "BuildBackgroundWorkNotificationContent records Session={SessionCount} Local={LocalCount} Sync={SyncCount} Entries={EntryCount}",
+                records.Count,
+                localHistory.Count,
+                syncHistory.Count,
+                entries.Count);
             var panel = new StackPanel
             {
                 Width = 380,
@@ -309,6 +338,7 @@ namespace nuone_tools
             };
             panel.Children.Add(clearButton);
 
+            AppLogging.Debug("BuildBackgroundWorkNotificationContent completed");
             return panel;
         }
 
@@ -346,6 +376,7 @@ namespace nuone_tools
             Flyout flyout,
             IReadOnlyList<NotificationListEntry> entries)
         {
+            AppLogging.Debug("BuildNotificationSummaryList start EntryCount={EntryCount}", entries.Count);
             var host = new StackPanel
             {
                 Spacing = 8,
@@ -362,15 +393,37 @@ namespace nuone_tools
                 return host;
             }
 
+            var renderedCount = 0;
             foreach (var entry in entries.Take(30))
             {
+                if (entry.IsGroupHeader)
+                {
+                    host.Children.Add(BuildNotificationGroupHeader(entry.GroupHeaderText));
+                    renderedCount++;
+                    continue;
+                }
+
                 host.Children.Add(BuildSummaryButton(entry, () =>
                 {
                     flyout.Content = BuildNotificationDetailContent(flyout, entry);
                 }));
+                renderedCount++;
             }
 
+            AppLogging.Debug("BuildNotificationSummaryList completed RenderedCount={RenderedCount}", renderedCount);
             return host;
+        }
+
+        private FrameworkElement BuildNotificationGroupHeader(string text)
+        {
+            return new TextBlock
+            {
+                Text = text,
+                Foreground = new SolidColorBrush(GetBrushColor("TextSecondaryBrush", "#B9AECF")),
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(2, 6, 2, 0),
+            };
         }
 
         private Button BuildSummaryButton(NotificationListEntry entry, Action onClick)
@@ -407,6 +460,10 @@ namespace nuone_tools
 
         private FrameworkElement BuildNotificationDetailContent(Flyout flyout, NotificationListEntry entry)
         {
+            AppLogging.Debug(
+                "BuildNotificationDetailContent start Scope={ScopeLabel} Timestamp={Timestamp}",
+                entry.ScopeLabel,
+                entry.Timestamp);
             var panel = new StackPanel
             {
                 Width = 380,
@@ -461,6 +518,7 @@ namespace nuone_tools
             actionPanel.Children.Add(copyButton);
             panel.Children.Add(actionPanel);
 
+            AppLogging.Debug("BuildNotificationDetailContent completed");
             return panel;
         }
 
@@ -474,6 +532,11 @@ namespace nuone_tools
             IReadOnlyList<NotificationHistoryRecord> localHistory,
             IReadOnlyList<NotificationHistoryRecord> syncHistory)
         {
+            AppLogging.Debug(
+                "BuildNotificationListEntries start Session={SessionCount} Local={LocalCount} Sync={SyncCount}",
+                sessionRecords.Count,
+                localHistory.Count,
+                syncHistory.Count);
             var entries = new List<NotificationListEntry>();
             foreach (var record in sessionRecords)
             {
@@ -524,9 +587,26 @@ namespace nuone_tools
                 });
             }
 
-            return entries
+            var orderedEntries = entries
                 .OrderByDescending(static item => item.Timestamp)
                 .ToList();
+
+            var groupedEntries = new List<NotificationListEntry>();
+            DateTime? currentGroupDate = null;
+            foreach (var entry in orderedEntries)
+            {
+                var localDate = entry.Timestamp.ToLocalTime().Date;
+                if (currentGroupDate != localDate)
+                {
+                    groupedEntries.Add(NotificationListEntry.CreateGroupHeader(FormatNotificationGroupDate(localDate)));
+                    currentGroupDate = localDate;
+                }
+
+                groupedEntries.Add(entry);
+            }
+
+            AppLogging.Debug("BuildNotificationListEntries completed EntryCount={EntryCount}", groupedEntries.Count);
+            return groupedEntries;
         }
 
         private static string BuildNotificationHistoryCardText(NotificationHistoryRecord record)
@@ -578,6 +658,13 @@ namespace nuone_tools
             return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         }
 
+        private static string FormatNotificationGroupDate(DateTime date)
+        {
+            return date == DateTime.Now.Date
+                ? "今天"
+                : date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
         private static DateTimeOffset ParseNotificationTimestamp(string? createdAtUtc)
         {
             if (DateTimeOffset.TryParse(createdAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
@@ -592,7 +679,8 @@ namespace nuone_tools
             NotificationHistoryScope scope,
             string category,
             string summary,
-            string details)
+            string details,
+            bool showWindowsToast = true)
         {
             var normalizedSummary = NormalizeBackgroundWorkRecordForTextBox(summary).Trim();
             if (string.IsNullOrWhiteSpace(normalizedSummary))
@@ -625,6 +713,10 @@ namespace nuone_tools
             }
 
             SaveNotificationHistoriesSafe();
+            if (showWindowsToast)
+            {
+                WindowsNotificationService.Show(record);
+            }
         }
 
         private List<NotificationHistoryRecord> GetNotificationHistorySnapshot(NotificationHistoryScope scope)
@@ -670,6 +762,10 @@ namespace nuone_tools
 
         private sealed class NotificationListEntry
         {
+            public bool IsGroupHeader { get; init; }
+
+            public string GroupHeaderText { get; init; } = string.Empty;
+
             public string ScopeLabel { get; init; } = string.Empty;
 
             public DateTimeOffset Timestamp { get; init; }
@@ -677,9 +773,18 @@ namespace nuone_tools
             public string CardText { get; init; } = string.Empty;
 
             public string DialogText { get; init; } = string.Empty;
+
+            public static NotificationListEntry CreateGroupHeader(string text)
+            {
+                return new NotificationListEntry
+                {
+                    IsGroupHeader = true,
+                    GroupHeaderText = text,
+                };
+            }
         }
 
-        private sealed record BackgroundWorkState(string Label, string Details);
+        private sealed record BackgroundWorkState(string Label, string Details, DateTimeOffset StartedAtUtc);
 
         private sealed class BackgroundWorkRecord
         {
@@ -694,11 +799,11 @@ namespace nuone_tools
         {
             if (DispatcherQueue.HasThreadAccess)
             {
-                UpdateSharedStatusBar();
+                RunSafely(UpdateSharedStatusBar, "shared status bar refresh");
                 return;
             }
 
-            DispatcherQueue.TryEnqueue(UpdateSharedStatusBar);
+            TryEnqueueUi(UpdateSharedStatusBar, "shared status bar refresh");
         }
 
         private static string BuildSharedStatusPath(PaneViewModel pane)

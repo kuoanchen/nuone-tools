@@ -74,6 +74,26 @@ function Expand-PublishPath {
     return $expanded
 }
 
+function Get-7ZipExecutable {
+    $command = Get-Command -Name '7z.exe' -ErrorAction SilentlyContinue
+    if ($null -ne $command -and -not [string]::IsNullOrWhiteSpace($command.Source)) {
+        return $command.Source
+    }
+
+    $candidates = @(
+        'C:\Program Files\7-Zip\7z.exe',
+        'C:\Program Files (x86)\7-Zip\7z.exe'
+    )
+
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) {
+            return $candidate
+        }
+    }
+
+    return ''
+}
+
 $repoRoot = Split-Path -Parent $PSScriptRoot
 $projectPath = Join-Path $repoRoot 'nuone-tools.csproj'
 if (-not (Test-Path $projectPath)) {
@@ -152,6 +172,7 @@ $archiveBaseName = if ([string]::IsNullOrWhiteSpace($ZipName)) {
 $zipPath = Join-Path $resolvedOutputDir ($archiveBaseName + '.zip')
 $stagingRoot = Join-Path $resolvedOutputDir '.staging'
 $stagingDir = Join-Path $stagingRoot $archiveBaseName
+$zipTool = 'Compress-Archive'
 
 if (Test-Path $zipPath) {
     Remove-Item -LiteralPath $zipPath -Force
@@ -164,11 +185,35 @@ if (Test-Path $stagingDir) {
 New-Item -ItemType Directory -Path $stagingDir -Force | Out-Null
 Copy-Item -Path (Join-Path $resolvedPublishDir '*') -Destination $stagingDir -Recurse -Force
 
-Compress-Archive -Path $stagingDir -DestinationPath $zipPath -CompressionLevel Optimal
+$sevenZipExe = Get-7ZipExecutable
+if (-not [string]::IsNullOrWhiteSpace($sevenZipExe)) {
+    $zipTool = '7-Zip'
+    $sevenZipArguments = @(
+        'a',
+        '-tzip',
+        '-mx=9',
+        $zipPath,
+        $archiveBaseName
+    )
+
+    Push-Location -LiteralPath $stagingRoot
+    try {
+        & $sevenZipExe @sevenZipArguments | Out-Null
+        if ($LASTEXITCODE -ne 0) {
+            throw "7-Zip 壓縮失敗，exit code=$LASTEXITCODE"
+        }
+    } finally {
+        Pop-Location
+    }
+} else {
+    Compress-Archive -Path $stagingDir -DestinationPath $zipPath -CompressionLevel Optimal
+}
+
 Remove-Item -LiteralPath $stagingDir -Recurse -Force
 
 Write-Host "完成打包"
 Write-Host "Version      : $version"
 Write-Host "Runtime      : $runtimeIdentifier"
 Write-Host "PublishDir   : $resolvedPublishDir"
+Write-Host "ZipTool      : $zipTool"
 Write-Host "Zip          : $zipPath"

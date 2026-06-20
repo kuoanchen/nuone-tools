@@ -167,23 +167,54 @@ namespace nuone_tools
 
         public List<string> HiddenDrivePaths { get; set; } = new();
 
-        public string LeftPanePath { get; set; } = string.Empty;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LeftPanePath { get; set; }
 
-        public string RightPanePath { get; set; } = string.Empty;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? RightPanePath { get; set; }
 
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public WindowPlacementConfig? WindowPlacement { get; set; }
 
-        public AccountSettingsConfig Account { get; set; } = new();
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public AccountSettingsConfig? Account { get; set; }
 
         public FileBunkerSettingsConfig FileBunker { get; set; } = new();
 
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public LoggingSettingsConfig? Logging { get; set; }
+
         public List<ToolbarCommandConfig> ToolbarCommands { get; set; } = new();
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<BackupAutomationConfig>? BackupAutomations { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<AutoExtractProfileConfig>? AutoExtractProfiles { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<PathGroupConfig>? Groups { get; set; }
+    }
+
+    public sealed class LocalSettingsConfig
+    {
+        public AccountSettingsConfig Account { get; set; } = new();
 
         public List<BackupAutomationConfig> BackupAutomations { get; set; } = new();
 
         public List<AutoExtractProfileConfig> AutoExtractProfiles { get; set; } = new();
 
         public List<PathGroupConfig> Groups { get; set; } = new();
+
+        public string LeftPanePath { get; set; } = string.Empty;
+
+        public string RightPanePath { get; set; } = string.Empty;
+
+        public WindowPlacementConfig? WindowPlacement { get; set; }
+
+        public LoggingSettingsConfig Logging { get; set; } = new();
+
+        public string LastLocalBackupText { get; set; } = "尚未備份";
     }
 
     public sealed class AccountSettingsConfig
@@ -222,6 +253,11 @@ namespace nuone_tools
         public int DaysToExpiration { get; set; } = 3650;
 
         public int DaysToPurge { get; set; } = 20;
+    }
+
+    public sealed class LoggingSettingsConfig
+    {
+        public string LogDirectoryPath { get; set; } = MainWindow.DefaultLogDirectoryPath;
     }
 
     public sealed class NotificationHistoryRecord
