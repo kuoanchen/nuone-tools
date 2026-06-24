@@ -20,6 +20,8 @@ namespace nuone_tools
         private TerminalShellKind _shellKind = TerminalShellKind.PowerShell;
         private bool _isRunning;
         private Guid _processToken = Guid.Empty;
+        private short _viewportColumns = 120;
+        private short _viewportRows = 32;
 
         public Guid Id { get; set; } = Guid.NewGuid();
 
@@ -91,5 +93,17 @@ namespace nuone_tools
         }
 
         public ConPtyRuntimeContext? ConPtyContext { get; set; }
+
+        public short ViewportColumns
+        {
+            get => _viewportColumns;
+            set => SetProperty(ref _viewportColumns, value);
+        }
+
+        public short ViewportRows
+        {
+            get => _viewportRows;
+            set => SetProperty(ref _viewportRows, value);
+        }
     }
 }

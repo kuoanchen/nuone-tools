@@ -144,9 +144,25 @@ namespace nuone_tools
         {
             var listView = ReferenceEquals(pane, LeftPane) ? LeftPaneListView : RightPaneListView;
             var selectedEntries = listView.SelectedItems.OfType<FileEntry>().ToList();
+            var trackedEntries = pane.GetTrackedSelectedEntries();
+
+            if (pane.SelectedCount > selectedEntries.Count && trackedEntries.Count > 0)
+            {
+                AppendDebugLog(
+                    "pane-selection-debug.log",
+                    $"GetSelectedEntries use-tracked pane={pane.Name} currentPath={pane.CurrentPath} " +
+                    $"listSelected={selectedEntries.Count} trackedSelected={trackedEntries.Count}");
+                return trackedEntries;
+            }
+
             if (selectedEntries.Count > 0)
             {
                 return selectedEntries;
+            }
+
+            if (trackedEntries.Count > 0)
+            {
+                return trackedEntries;
             }
 
             return pane.SelectedItem is null
@@ -666,13 +682,7 @@ namespace nuone_tools
 
         private async Task DeletePathAsync(string path, PaneViewModel pane)
         {
-            if (IsSshPath(path))
-            {
-                await ShowMessageAsync("遠端 Linux", "遠端 Linux 路徑目前先支援瀏覽。");
-                return;
-            }
-
-            var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            var name = GetPathDisplayName(path);
             var confirmed = await ConfirmAsync("刪除項目", $"確定要刪除「{name}」嗎？");
             if (!confirmed)
             {
@@ -682,7 +692,7 @@ namespace nuone_tools
             var backgroundWorkId = BeginBackgroundWork($"刪除 {name} 中");
             try
             {
-                var deleted = await Task.Run(() => DeletePathCore(path));
+                var deleted = await DeletePathCoreAsync(path);
                 if (!deleted)
                 {
                     return;
@@ -698,6 +708,28 @@ namespace nuone_tools
             {
                 CompleteBackgroundWork(backgroundWorkId);
             }
+        }
+
+        private static string GetPathDisplayName(string path)
+        {
+            if (IsSshPath(path) && TryParseSshPath(path, out _, out var remotePath))
+            {
+                var sshName = Path.GetFileName(remotePath.TrimEnd('/'));
+                return string.IsNullOrWhiteSpace(sshName) ? remotePath : sshName;
+            }
+
+            var name = Path.GetFileName(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+            return string.IsNullOrWhiteSpace(name) ? path : name;
+        }
+
+        private async Task<bool> DeletePathCoreAsync(string path)
+        {
+            if (IsSshPath(path))
+            {
+                return await DeleteRemotePathAsync(path);
+            }
+
+            return await Task.Run(() => DeletePathCore(path));
         }
 
         internal async void CreateFolderLeft_Click(object sender, RoutedEventArgs e)
@@ -1902,6 +1934,75 @@ namespace nuone_tools
             return pane.EnumerateDisplayEntries()
                 .Where(item => selectedPathSet.Contains(NormalizePath(item.FullPath)))
                 .ToList();
+        }
+
+        private async Task<bool> DeleteRemotePathAsync(string sshPath)
+        {
+            if (!TryParseSshPath(sshPath, out var connection, out var remotePath))
+            {
+                throw new InvalidOperationException("SSH 路徑格式不正確。");
+            }
+
+            AppendDebugLog("ssh-delete-debug.log", $"start path={sshPath} connection={connection} remotePath={remotePath}");
+            var script = new StringBuilder();
+            script.AppendLine("set -eu");
+            script.AppendLine("target=\"$1\"");
+            script.AppendLine("if [ -z \"$target\" ]; then");
+            script.AppendLine("  echo \"missing target path\" >&2");
+            script.AppendLine("  exit 64");
+            script.AppendLine("fi");
+            script.AppendLine("rm -rf -- \"$target\"");
+            var scriptText = NormalizeToLf(script.ToString());
+            AppendDebugLog("ssh-delete-debug.log", $"script path={sshPath} preview={TrimForDebugPreview(scriptText)}");
+
+            using var process = new Process
+            {
+                StartInfo = new ProcessStartInfo
+                {
+                    FileName = "ssh.exe",
+                    RedirectStandardInput = true,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true,
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                },
+            };
+            process.StartInfo.ArgumentList.Add("-T");
+            process.StartInfo.ArgumentList.Add("-o");
+            process.StartInfo.ArgumentList.Add("BatchMode=yes");
+            process.StartInfo.ArgumentList.Add(connection);
+            process.StartInfo.ArgumentList.Add("sh");
+            process.StartInfo.ArgumentList.Add("-s");
+            process.StartInfo.ArgumentList.Add("--");
+            process.StartInfo.ArgumentList.Add(remotePath);
+
+            if (!process.Start())
+            {
+                throw new InvalidOperationException("無法啟動 ssh.exe。");
+            }
+
+            await process.StandardInput.WriteAsync(scriptText);
+            process.StandardInput.Close();
+
+            var stdoutTask = process.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
+            await process.WaitForExitAsync();
+            var stdout = (await stdoutTask).Trim();
+            var stderr = (await stderrTask).Trim();
+
+            AppendDebugLog(
+                "ssh-delete-debug.log",
+                $"exit path={sshPath} connection={connection} remotePath={remotePath} exitCode={process.ExitCode} stdout={TrimForDebugPreview(stdout)} stderr={TrimForDebugPreview(stderr)}");
+
+            if (process.ExitCode != 0)
+            {
+                var detail = !string.IsNullOrWhiteSpace(stderr) ? stderr :
+                    !string.IsNullOrWhiteSpace(stdout) ? stdout :
+                    $"遠端刪除失敗，ssh.exe 結束代碼 {process.ExitCode.ToString(CultureInfo.InvariantCulture)}。";
+                throw new InvalidOperationException(detail);
+            }
+
+            return true;
         }
 
         private static string BuildBatchRenameDefaultBaseName(IReadOnlyList<FileEntry> selectedEntries)

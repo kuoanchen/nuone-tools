@@ -22,6 +22,10 @@ namespace nuone_tools
         private const int TerminalMaxOutputLength = 64000;
         private const short TerminalDefaultColumns = 120;
         private const short TerminalDefaultRows = 32;
+        private const double TerminalCellWidth = 8.4;
+        private const double TerminalCellHeight = 20.0;
+        private const double TerminalHorizontalPadding = 36.0;
+        private const double TerminalVerticalPadding = 36.0;
         private readonly DispatcherQueueTimer? _terminalCursorTimer;
         private bool _isTerminalCursorVisible = true;
         private bool _isTerminalHostFocused;
@@ -92,6 +96,11 @@ namespace nuone_tools
             _isTerminalCursorVisible = true;
             _terminalCursorTimer?.Start();
             UpdateTerminalUi();
+        }
+
+        internal void TerminalHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            ResizeSelectedTerminalToViewport();
         }
 
         internal void TerminalHost_LostFocus(object sender, RoutedEventArgs e)
@@ -538,6 +547,7 @@ namespace nuone_tools
                     TerminalDefaultRows);
 
                 session.ConPtyContext = launch.Context;
+                ApplyViewportSizeToSession(session);
                 session.Process = Process.GetProcessById(launch.ProcessId);
                 session.Process.EnableRaisingEvents = true;
                 var processToken = session.ProcessToken;
@@ -954,15 +964,15 @@ namespace nuone_tools
                         return;
                     }
 
-                    RenderTerminalOutput(_selectedTerminalTab.OutputText);
+                    RenderTerminalOutput(_selectedTerminalTab);
                 },
                 "terminal render output");
         }
 
-        private void RenderTerminalOutput(string output)
+        private void RenderTerminalOutput(TerminalTabSession session)
         {
             var shouldAutoScrollToBottom = IsTerminalScrollNearBottom();
-            var terminalScreen = BuildTerminalScreen(output);
+            var terminalScreen = BuildTerminalScreen(session.OutputText, session.ViewportColumns);
             TerminalOutputTextBlock.Blocks.Clear();
 
             var paragraph = new Paragraph();
@@ -1066,8 +1076,9 @@ namespace nuone_tools
             });
         }
 
-        private static TerminalScreenState BuildTerminalScreen(string output)
+        private static TerminalScreenState BuildTerminalScreen(string output, short viewportColumns)
         {
+            var columns = viewportColumns > 0 ? viewportColumns : TerminalDefaultColumns;
             var screen = new List<List<TerminalCell>> { new() };
             if (string.IsNullOrEmpty(output))
             {
@@ -1120,14 +1131,14 @@ namespace nuone_tools
                         var nextTabStop = ((column / 4) + 1) * 4;
                         while (column < nextTabStop)
                         {
-                            WriteCharacter(screen, ref row, ref column, ' ', state.ForegroundHex);
+                            WriteCharacter(screen, ref row, ref column, ' ', state.ForegroundHex, columns);
                         }
                         break;
                     case '\a':
                     case '\0':
                         break;
                     default:
-                        WriteCharacter(screen, ref row, ref column, character, state.ForegroundHex);
+                        WriteCharacter(screen, ref row, ref column, character, state.ForegroundHex, columns);
                         break;
                 }
             }
@@ -1311,9 +1322,11 @@ namespace nuone_tools
             ref int row,
             ref int column,
             char character,
-            string foregroundHex)
+            string foregroundHex,
+            short viewportColumns)
         {
-            if (column >= TerminalDefaultColumns)
+            var columns = viewportColumns > 0 ? viewportColumns : TerminalDefaultColumns;
+            if (column >= columns)
             {
                 row++;
                 column = 0;
@@ -1401,6 +1414,59 @@ namespace nuone_tools
             {
                 line.RemoveAt(line.Count - 1);
             }
+        }
+
+        private void ResizeSelectedTerminalToViewport()
+        {
+            var session = _selectedTerminalTab;
+            if (session is null)
+            {
+                return;
+            }
+
+            ApplyViewportSizeToSession(session);
+        }
+
+        private void ApplyViewportSizeToSession(TerminalTabSession session)
+        {
+            var columns = CalculateViewportColumns();
+            var rows = CalculateViewportRows();
+
+            var changed = session.ViewportColumns != columns || session.ViewportRows != rows;
+            session.ViewportColumns = columns;
+            session.ViewportRows = rows;
+
+            if (session.ConPtyContext is not null)
+            {
+                try
+                {
+                    session.ConPtyContext.Resize(columns, rows);
+                }
+                catch
+                {
+                }
+            }
+
+            if (changed && ReferenceEquals(session, _selectedTerminalTab))
+            {
+                RequestTerminalRender();
+            }
+        }
+
+        private short CalculateViewportColumns()
+        {
+            var width = TerminalOutputScrollViewer?.ActualWidth ?? 0;
+            var usableWidth = Math.Max(0, width - TerminalHorizontalPadding);
+            var columns = (short)Math.Max(40, Math.Floor(usableWidth / TerminalCellWidth));
+            return columns > 0 ? columns : TerminalDefaultColumns;
+        }
+
+        private short CalculateViewportRows()
+        {
+            var height = TerminalOutputScrollViewer?.ActualHeight ?? 0;
+            var usableHeight = Math.Max(0, height - TerminalVerticalPadding);
+            var rows = (short)Math.Max(12, Math.Floor(usableHeight / TerminalCellHeight));
+            return rows > 0 ? rows : TerminalDefaultRows;
         }
 
         private static void ClearLine(List<TerminalCell> line, int column, int mode)

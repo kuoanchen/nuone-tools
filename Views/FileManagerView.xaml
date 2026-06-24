@@ -5,6 +5,96 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:nuone_tools">
     <UserControl.Resources>
+        <DataTemplate x:Key="LeftPaneTabTemplate" x:DataType="local:PaneTabItem">
+            <Border Width="{x:Bind TabWidth, Mode=OneWay}"
+                    Height="42"
+                    Padding="8,8"
+                    Margin="0,0,4,0"
+                    Background="{x:Bind BackgroundBrush, Mode=OneWay}"
+                    BorderBrush="{x:Bind BorderBrush, Mode=OneWay}"
+                    BorderThickness="1"
+                    CornerRadius="10,10,0,0">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Click="LeftPaneTab_Click"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Padding="0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            MinHeight="26">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="{x:Bind IconGlyph, Mode=OneWay}"
+                                      Foreground="#67B7FF"
+                                      FontSize="12"
+                                      VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Bind Title}"
+                                       Foreground="{x:Bind ForegroundBrush, Mode=OneWay}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="1"
+                            Click="LeftPaneTabClose_Click"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Padding="3,0"
+                            MinWidth="20"
+                            MinHeight="20"
+                            Opacity="0.72"
+                            Content="✕" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <DataTemplate x:Key="RightPaneTabTemplate" x:DataType="local:PaneTabItem">
+            <Border Width="{x:Bind TabWidth, Mode=OneWay}"
+                    Height="42"
+                    Padding="8,8"
+                    Margin="0,0,4,0"
+                    Background="{x:Bind BackgroundBrush, Mode=OneWay}"
+                    BorderBrush="{x:Bind BorderBrush, Mode=OneWay}"
+                    BorderThickness="1"
+                    CornerRadius="10,10,0,0">
+                <Grid ColumnSpacing="8">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Button Click="RightPaneTab_Click"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Padding="0"
+                            HorizontalAlignment="Stretch"
+                            HorizontalContentAlignment="Stretch"
+                            MinHeight="26">
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <FontIcon Glyph="{x:Bind IconGlyph, Mode=OneWay}"
+                                      Foreground="#67B7FF"
+                                      FontSize="12"
+                                      VerticalAlignment="Center" />
+                            <TextBlock Text="{x:Bind Title}"
+                                       Foreground="{x:Bind ForegroundBrush, Mode=OneWay}"
+                                       FontSize="12"
+                                       FontWeight="SemiBold"
+                                       VerticalAlignment="Center"
+                                       TextTrimming="CharacterEllipsis" />
+                        </StackPanel>
+                    </Button>
+                    <Button Grid.Column="1"
+                            Click="RightPaneTabClose_Click"
+                            Style="{StaticResource GhostButtonStyle}"
+                            Padding="3,0"
+                            MinWidth="20"
+                            MinHeight="20"
+                            Opacity="0.72"
+                            Content="✕" />
+                </Grid>
+            </Border>
+        </DataTemplate>
+
         <DataTemplate x:Key="LeftPaneEntryTemplate" x:DataType="local:FileEntry">
             <StackPanel Spacing="4">
                 <Border Padding="10"
@@ -14,8 +104,9 @@
                         CornerRadius="12"
                         CanDrag="True"
                         DragStarting="LeftPaneEntry_DragStarting"
-                        AllowDrop="{x:Bind IsDirectory, Mode=OneWay}"
+                        AllowDrop="True"
                         DragOver="LeftPaneFolder_DragOver"
+                        DragLeave="LeftPaneFolder_DragLeave"
                         Drop="LeftPaneFolder_Drop"
                         Tapped="LeftPaneTreeEntry_Tapped"
                         DoubleTapped="LeftPaneTreeEntry_DoubleTapped"
@@ -87,8 +178,9 @@
                         CornerRadius="12"
                         CanDrag="True"
                         DragStarting="RightPaneEntry_DragStarting"
-                        AllowDrop="{x:Bind IsDirectory, Mode=OneWay}"
+                        AllowDrop="True"
                         DragOver="RightPaneFolder_DragOver"
+                        DragLeave="RightPaneFolder_DragLeave"
                         Drop="RightPaneFolder_Drop"
                         Tapped="RightPaneTreeEntry_Tapped"
                         DoubleTapped="RightPaneTreeEntry_DoubleTapped"
@@ -562,8 +654,38 @@
                         BorderThickness="1"
                         CornerRadius="22"
                         Tapped="LeftPaneContainer_Tapped">
-                    <Grid RowDefinitions="Auto,Auto,*">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*">
+                        <Grid ColumnSpacing="10" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid x:Name="LeftPaneTabStripHost" SizeChanged="LeftPaneTabStripHost_SizeChanged">
+                                <ItemsControl ItemsSource="{Binding LeftPane.Tabs}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <StaticResource ResourceKey="LeftPaneTabTemplate" />
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
+                            <Button Grid.Column="1"
+                                    Click="LeftPaneAddTab_Click"
+                                    Background="{StaticResource InputAltBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="0"
+                                    MinWidth="42"
+                                    MinHeight="42"
+                                    Content="＋" />
+                        </Grid>
+
                         <TextBox x:Name="LeftPathTextBox"
+                                 Grid.Row="1"
                                  Text="{Binding LeftPane.EditablePath, Mode=TwoWay}"
                                  KeyDown="LeftPathBox_KeyDown"
                                  GotFocus="LeftPathTextBox_GotFocus"
@@ -572,10 +694,10 @@
                                  Foreground="{StaticResource TextPrimaryBrush}"
                                  FontSize="16"
                                  FontWeight="SemiBold"
-                                 CornerRadius="12"
+                                 CornerRadius="10"
                                  Padding="12,10" />
 
-                        <Grid Grid.Row="1"
+                        <Grid Grid.Row="2"
                               DataContext="{Binding LeftPane}"
                               Margin="0,14,0,0"
                               Visibility="{Binding FilterVisibility}">
@@ -607,7 +729,7 @@
                         </Grid>
 
                         <ListView x:Name="LeftPaneListView"
-                                  Grid.Row="2"
+                                  Grid.Row="3"
                                   Margin="0,14,0,0"
                                   ItemsSource="{Binding LeftPane.Items}"
                                   ItemContainerStyle="{StaticResource PaneListViewItemStyle}"
@@ -643,7 +765,7 @@
                             </ListView.ItemTemplate>
                         </ListView>
 
-                        <Border Grid.RowSpan="3"
+                        <Border Grid.RowSpan="4"
                                 Background="#6A141119"
                                 CornerRadius="18"
                                 Visibility="{Binding LeftPane.LoadingVisibility}"
@@ -673,8 +795,38 @@
                         BorderThickness="1"
                         CornerRadius="22"
                         Tapped="RightPaneContainer_Tapped">
-                    <Grid RowDefinitions="Auto,Auto,*">
+                    <Grid RowDefinitions="Auto,Auto,Auto,*">
+                        <Grid ColumnSpacing="10" Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid x:Name="RightPaneTabStripHost" SizeChanged="RightPaneTabStripHost_SizeChanged">
+                                <ItemsControl ItemsSource="{Binding RightPane.Tabs}">
+                                    <ItemsControl.ItemsPanel>
+                                        <ItemsPanelTemplate>
+                                            <StackPanel Orientation="Horizontal" />
+                                        </ItemsPanelTemplate>
+                                    </ItemsControl.ItemsPanel>
+                                    <ItemsControl.ItemTemplate>
+                                        <StaticResource ResourceKey="RightPaneTabTemplate" />
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                            </Grid>
+                            <Button Grid.Column="1"
+                                    Click="RightPaneAddTab_Click"
+                                    Background="{StaticResource InputAltBrush}"
+                                    BorderBrush="{StaticResource PanelStrokeBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="8"
+                                    Padding="0"
+                                    MinWidth="42"
+                                    MinHeight="42"
+                                    Content="＋" />
+                        </Grid>
+
                         <TextBox x:Name="RightPathTextBox"
+                                 Grid.Row="1"
                                  Text="{Binding RightPane.EditablePath, Mode=TwoWay}"
                                  KeyDown="RightPathBox_KeyDown"
                                  GotFocus="RightPathTextBox_GotFocus"
@@ -683,10 +835,10 @@
                                  Foreground="{StaticResource TextPrimaryBrush}"
                                  FontSize="16"
                                  FontWeight="SemiBold"
-                                 CornerRadius="12"
+                                 CornerRadius="10"
                                  Padding="12,10" />
 
-                        <Grid Grid.Row="1"
+                        <Grid Grid.Row="2"
                               DataContext="{Binding RightPane}"
                               Margin="0,14,0,0"
                               Visibility="{Binding FilterVisibility}">
@@ -718,7 +870,7 @@
                         </Grid>
 
                         <ListView x:Name="RightPaneListView"
-                                  Grid.Row="2"
+                                  Grid.Row="3"
                                   Margin="0,14,0,0"
                                   ItemsSource="{Binding RightPane.Items}"
                                   ItemContainerStyle="{StaticResource PaneListViewItemStyle}"
@@ -754,7 +906,7 @@
                             </ListView.ItemTemplate>
                         </ListView>
 
-                        <Border Grid.RowSpan="3"
+                        <Border Grid.RowSpan="4"
                                 Background="#6A141119"
                                 CornerRadius="18"
                                 Visibility="{Binding RightPane.LoadingVisibility}"

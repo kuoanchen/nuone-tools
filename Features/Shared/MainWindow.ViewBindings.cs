@@ -15,10 +15,12 @@ namespace nuone_tools
         private Button DriveSectionMenuButton => FileManagerPage.DriveSectionMenuButtonElement;
         private Border LeftPaneBorder => FileManagerPage.LeftPaneBorderElement;
         private ListView LeftPaneListView => FileManagerPage.LeftPaneListViewElement;
+        private Grid LeftPaneTabStripHost => FileManagerPage.LeftPaneTabStripHostElement;
         private TextBox LeftPathTextBox => FileManagerPage.LeftPathTextBoxElement;
         private TextBox NewGroupNameTextBox => FileManagerPage.NewGroupNameTextBoxElement;
         private Border RightPaneBorder => FileManagerPage.RightPaneBorderElement;
         private ListView RightPaneListView => FileManagerPage.RightPaneListViewElement;
+        private Grid RightPaneTabStripHost => FileManagerPage.RightPaneTabStripHostElement;
         private TextBox RightPathTextBox => FileManagerPage.RightPathTextBoxElement;
         private Border TopCommandBarBorder => FileManagerPage.TopCommandBarBorderElement;
 

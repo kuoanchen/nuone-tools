@@ -35,10 +35,78 @@ using WinRT.Interop;
 
 namespace nuone_tools
 {
+    public sealed class PaneTabItem : ObservableObject
+    {
+        private string _title = "新分頁";
+        private string _path = string.Empty;
+        private string _iconGlyph = "\uE8B7";
+        private bool _isSelected;
+        private double _tabWidth = 132;
+        private Brush _backgroundBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 34, 28, 41));
+        private Brush _borderBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 58, 49, 70));
+        private Brush _foregroundBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 206, 197, 223));
+
+        internal Stack<string> History { get; } = new();
+
+        public string Title
+        {
+            get => _title;
+            set => SetProperty(ref _title, value);
+        }
+
+        public string Path
+        {
+            get => _path;
+            set => SetProperty(ref _path, value);
+        }
+
+        public string IconGlyph
+        {
+            get => _iconGlyph;
+            set => SetProperty(ref _iconGlyph, value);
+        }
+
+        public bool IsSelected
+        {
+            get => _isSelected;
+            set => SetProperty(ref _isSelected, value);
+        }
+
+        public double TabWidth
+        {
+            get => _tabWidth;
+            set => SetProperty(ref _tabWidth, value);
+        }
+
+        public Brush BackgroundBrush
+        {
+            get => _backgroundBrush;
+            set => SetProperty(ref _backgroundBrush, value);
+        }
+
+        public Brush BorderBrush
+        {
+            get => _borderBrush;
+            set => SetProperty(ref _borderBrush, value);
+        }
+
+        public Brush ForegroundBrush
+        {
+            get => _foregroundBrush;
+            set => SetProperty(ref _foregroundBrush, value);
+        }
+    }
+
     public sealed class PaneViewModel : ObservableObject
     {
-        private readonly Stack<string> _history = new();
         private readonly List<FileEntry> _allItems = new();
+        private readonly Brush _selectedTabBackgroundBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 91, 20, 126));
+        private readonly Brush _selectedTabBorderBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 140, 60, 188));
+        private readonly Brush _selectedTabForegroundBrush = new SolidColorBrush(Colors.White);
+        private readonly Brush _unselectedTabBackgroundBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 34, 28, 41));
+        private readonly Brush _unselectedTabBorderBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 58, 49, 70));
+        private readonly Brush _unselectedTabForegroundBrush = new SolidColorBrush(ColorHelper.FromArgb(255, 206, 197, 223));
+        private readonly List<FileEntry> _selectedEntries = new();
         private string _currentPath = string.Empty;
         private string _editablePath = string.Empty;
         private string _statusText = "尚未載入";
@@ -53,15 +121,28 @@ namespace nuone_tools
         private string _loadingText = "載入中...";
         private int _loadRequestVersion;
         private int _overlayRequestVersion;
+        private PaneTabItem? _selectedTab;
+        private double _lastTabStripAvailableWidth = 520;
 
         public PaneViewModel(string name)
         {
             Name = name;
+            var initialTab = new PaneTabItem();
+            Tabs.Add(initialTab);
+            ApplyTabSelection(initialTab);
         }
 
         public string Name { get; }
 
         public ObservableCollection<FileEntry> Items { get; } = new();
+
+        public ObservableCollection<PaneTabItem> Tabs { get; } = new();
+
+        public PaneTabItem? SelectedTab
+        {
+            get => _selectedTab;
+            private set => SetProperty(ref _selectedTab, value);
+        }
 
         public string FilterQuery
         {
@@ -170,6 +251,8 @@ namespace nuone_tools
                 item.IsSelected = selectedPaths.Contains(MainWindow.NormalizePath(item.FullPath));
             }
 
+            _selectedEntries.Clear();
+            _selectedEntries.AddRange(selectedItems);
             SelectedCount = selectedItems.Count;
 
             var primary = selectedItems.FirstOrDefault();
@@ -186,6 +269,11 @@ namespace nuone_tools
             MainWindow.AppendDebugLog(
                 "pane-selection-debug.log",
                 $"Pane.UpdateSelection pane={Name} currentPath={CurrentPath} selectedCount={selectedItems.Count} primary={primary?.FullPath ?? "<null>"}");
+        }
+
+        public IReadOnlyList<FileEntry> GetTrackedSelectedEntries()
+        {
+            return _selectedEntries.ToArray();
         }
 
         public IEnumerable<FileEntry> EnumerateDisplayEntries()
@@ -207,6 +295,16 @@ namespace nuone_tools
             }
 
             Load(path);
+        }
+
+        public void LoadTabPath(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
+            Load(path, rememberCurrent: false);
         }
 
         public void Refresh()
@@ -262,9 +360,15 @@ namespace nuone_tools
 
         public void GoBack()
         {
-            while (_history.Count > 0)
+            var history = SelectedTab?.History;
+            if (history is null)
             {
-                var previous = _history.Pop();
+                return;
+            }
+
+            while (history.Count > 0)
+            {
+                var previous = history.Pop();
                 if (Directory.Exists(previous) ||
                     MainWindow.IsSshPath(previous) ||
                     MainWindow.TryEnumerateUncServerShares(previous, out _))
@@ -273,6 +377,61 @@ namespace nuone_tools
                     return;
                 }
             }
+        }
+
+        public PaneTabItem AddTab(string initialPath)
+        {
+            var tab = new PaneTabItem
+            {
+                Path = NormalizeTabPath(initialPath),
+            };
+            tab.Title = BuildTabTitle(tab.Path);
+            Tabs.Add(tab);
+            ApplyTabSelection(tab);
+            UpdateTabLayout(_lastTabStripAvailableWidth);
+            return tab;
+        }
+
+        public string? ActivateTab(PaneTabItem? tab)
+        {
+            if (tab is null || !Tabs.Contains(tab))
+            {
+                return null;
+            }
+
+            ApplyTabSelection(tab);
+            EditablePath = string.IsNullOrWhiteSpace(tab.Path) ? CurrentPath : tab.Path;
+            if (string.IsNullOrWhiteSpace(tab.Path) || MainWindow.PathEquals(CurrentPath, tab.Path))
+            {
+                return null;
+            }
+
+            return tab.Path;
+        }
+
+        public bool CloseTab(PaneTabItem? tab, out string? pathToLoad)
+        {
+            pathToLoad = null;
+            if (tab is null || !Tabs.Contains(tab) || Tabs.Count <= 1)
+            {
+                return false;
+            }
+
+            var closingIndex = Tabs.IndexOf(tab);
+            var wasSelected = ReferenceEquals(SelectedTab, tab);
+            Tabs.Remove(tab);
+            UpdateTabLayout(_lastTabStripAvailableWidth);
+
+            if (!wasSelected)
+            {
+                return true;
+            }
+
+            var nextIndex = Math.Min(closingIndex, Tabs.Count - 1);
+            var nextTab = Tabs[nextIndex];
+            ApplyTabSelection(nextTab);
+            pathToLoad = string.IsNullOrWhiteSpace(nextTab.Path) ? null : nextTab.Path;
+            return true;
         }
 
         public void AppendFilterCharacter(char character)
@@ -327,11 +486,12 @@ namespace nuone_tools
 
             if (rememberCurrent && !string.IsNullOrWhiteSpace(CurrentPath) && !MainWindow.PathEquals(CurrentPath, path))
             {
-                _history.Push(CurrentPath);
+                SelectedTab?.History.Push(CurrentPath);
             }
 
             CurrentPath = path;
             EditablePath = CurrentPath;
+            SyncSelectedTabWithCurrentPath();
             _allItems.Clear();
             _allItems.AddRange(entries);
             FilterQuery = string.Empty;
@@ -359,6 +519,7 @@ namespace nuone_tools
             UpdateSelection(Array.Empty<FileEntry>());
             CurrentPath = path;
             EditablePath = path;
+            SyncSelectedTabWithCurrentPath();
             StatusText = "無法載入";
             SummaryText = message;
             IsLoading = false;
@@ -430,11 +591,12 @@ namespace nuone_tools
 
                 if (rememberCurrent && !string.IsNullOrWhiteSpace(CurrentPath) && !MainWindow.PathEquals(CurrentPath, path))
                 {
-                    _history.Push(CurrentPath);
+                    SelectedTab?.History.Push(CurrentPath);
                 }
 
                 CurrentPath = directory.FullName;
                 EditablePath = CurrentPath;
+                SyncSelectedTabWithCurrentPath();
                 _allItems.Clear();
 
                 foreach (var folder in SafeEnumerateDirectories(directory, ShowHiddenSystemItems))
@@ -483,11 +645,12 @@ namespace nuone_tools
         {
             if (rememberCurrent && !string.IsNullOrWhiteSpace(CurrentPath) && !MainWindow.PathEquals(CurrentPath, path))
             {
-                _history.Push(CurrentPath);
+                SelectedTab?.History.Push(CurrentPath);
             }
 
             CurrentPath = MainWindow.NormalizePath(path);
             EditablePath = CurrentPath;
+            SyncSelectedTabWithCurrentPath();
             _allItems.Clear();
 
             foreach (var distributionPath in distributionPaths)
@@ -503,11 +666,12 @@ namespace nuone_tools
         {
             if (rememberCurrent && !string.IsNullOrWhiteSpace(CurrentPath) && !MainWindow.PathEquals(CurrentPath, path))
             {
-                _history.Push(CurrentPath);
+                SelectedTab?.History.Push(CurrentPath);
             }
 
             CurrentPath = MainWindow.NormalizePath(path);
             EditablePath = CurrentPath;
+            SyncSelectedTabWithCurrentPath();
             _allItems.Clear();
 
             foreach (var sharePath in sharePaths)
@@ -620,6 +784,100 @@ namespace nuone_tools
             return attributes.HasFlag(System.IO.FileAttributes.Hidden)
                 || attributes.HasFlag(System.IO.FileAttributes.System)
                 || attributes.HasFlag(System.IO.FileAttributes.ReparsePoint);
+        }
+
+        private void ApplyTabSelection(PaneTabItem selectedTab)
+        {
+            SelectedTab = selectedTab;
+            foreach (var tab in Tabs)
+            {
+                var isSelected = ReferenceEquals(tab, selectedTab);
+                tab.IsSelected = isSelected;
+                tab.BackgroundBrush = isSelected ? _selectedTabBackgroundBrush : _unselectedTabBackgroundBrush;
+                tab.BorderBrush = isSelected ? _selectedTabBorderBrush : _unselectedTabBorderBrush;
+                tab.ForegroundBrush = isSelected ? _selectedTabForegroundBrush : _unselectedTabForegroundBrush;
+            }
+        }
+
+        public void UpdateTabLayout(double availableWidth)
+        {
+            if (double.IsNaN(availableWidth) || double.IsInfinity(availableWidth) || availableWidth <= 0)
+            {
+                return;
+            }
+
+            _lastTabStripAvailableWidth = availableWidth;
+            var count = Math.Max(Tabs.Count, 1);
+            const double itemGap = 4;
+            const double maxTabWidth = 132;
+            const double minTabWidth = 28;
+            var computedWidth = Math.Floor((availableWidth - ((count - 1) * itemGap)) / count);
+            var tabWidth = Math.Max(minTabWidth, Math.Min(maxTabWidth, computedWidth));
+
+            foreach (var tab in Tabs)
+            {
+                tab.TabWidth = tabWidth;
+            }
+        }
+
+        private void SyncSelectedTabWithCurrentPath()
+        {
+            if (SelectedTab is null)
+            {
+                return;
+            }
+
+            SelectedTab.Path = NormalizeTabPath(CurrentPath);
+            SelectedTab.Title = BuildTabTitle(CurrentPath);
+            SelectedTab.IconGlyph = BuildTabIconGlyph(CurrentPath);
+        }
+
+        private static string NormalizeTabPath(string path)
+        {
+            return string.IsNullOrWhiteSpace(path) ? string.Empty : path.Trim();
+        }
+
+        private static string BuildTabTitle(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return "新分頁";
+            }
+
+            if (MainWindow.TryParseSshPath(path, out var connection, out var remotePath))
+            {
+                var sshName = Path.GetFileName(remotePath.TrimEnd('/'));
+                return string.IsNullOrWhiteSpace(sshName) ? connection : sshName;
+            }
+
+            var normalized = path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var name = Path.GetFileName(normalized);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+
+            return normalized;
+        }
+
+        private static string BuildTabIconGlyph(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return "\uE8B7";
+            }
+
+            if (MainWindow.IsSshPath(path))
+            {
+                return "\uE128";
+            }
+
+            if (path.StartsWith(@"\\", StringComparison.Ordinal))
+            {
+                return "\uE968";
+            }
+
+            return "\uE7C3";
         }
     }
 }

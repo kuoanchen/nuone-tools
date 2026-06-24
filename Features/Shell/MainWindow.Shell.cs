@@ -209,7 +209,7 @@ namespace nuone_tools
                 : Visibility.Collapsed;
         }
 
-        private Guid BeginBackgroundWork(string label, string? details = null)
+        private Guid BeginBackgroundWork(string label, string? details = null, bool isAutomation = false)
         {
             var workId = Guid.NewGuid();
             lock (_backgroundWorkLock)
@@ -217,8 +217,9 @@ namespace nuone_tools
                 _backgroundWorks[workId] = new BackgroundWorkState(
                     label,
                     string.IsNullOrWhiteSpace(details) ? label : details.Trim(),
-                    DateTimeOffset.UtcNow);
-                AddBackgroundWorkRecordLocked($"開始：{label}", details);
+                    DateTimeOffset.UtcNow,
+                    isAutomation);
+                AddBackgroundWorkRecordLocked($"開始：{label}", details, isAutomation);
             }
 
             EnqueueSharedStatusBarRefresh();
@@ -242,9 +243,9 @@ namespace nuone_tools
                     var recordDetails = string.IsNullOrWhiteSpace(completionDetails)
                         ? (string.IsNullOrWhiteSpace(work.Details) ? recordText : work.Details)
                         : completionDetails.Trim();
-                    AddBackgroundWorkRecordLocked(recordText, recordDetails);
+                    AddBackgroundWorkRecordLocked(recordText, recordDetails, work.IsAutomation);
 
-                    if (persistToLocalHistory)
+                    if (persistToLocalHistory && work.IsAutomation)
                     {
                         AddNotificationHistoryRecord(
                             NotificationHistoryScope.LocalOnly,
@@ -538,7 +539,7 @@ namespace nuone_tools
                 localHistory.Count,
                 syncHistory.Count);
             var entries = new List<NotificationListEntry>();
-            foreach (var record in sessionRecords)
+            foreach (var record in sessionRecords.Where(static record => record.IsAutomation))
             {
                 var timestampText = record.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
                 var summary = $"{timestampText}　{record.Summary}";
@@ -563,7 +564,7 @@ namespace nuone_tools
                 });
             }
 
-            foreach (var record in localHistory)
+            foreach (var record in localHistory.Where(static record => IsAutomationNotificationCategory(record.Category)))
             {
                 var dialogText = BuildNotificationHistoryDialogText(record);
                 entries.Add(new NotificationListEntry
@@ -575,7 +576,7 @@ namespace nuone_tools
                 });
             }
 
-            foreach (var record in syncHistory)
+            foreach (var record in syncHistory.Where(static record => IsAutomationNotificationCategory(record.Category)))
             {
                 var dialogText = BuildNotificationHistoryDialogText(record);
                 entries.Add(new NotificationListEntry
@@ -682,6 +683,11 @@ namespace nuone_tools
             string details,
             bool showWindowsToast = true)
         {
+            if (!IsAutomationNotificationCategory(category))
+            {
+                return;
+            }
+
             var normalizedSummary = NormalizeBackgroundWorkRecordForTextBox(summary).Trim();
             if (string.IsNullOrWhiteSpace(normalizedSummary))
             {
@@ -784,7 +790,13 @@ namespace nuone_tools
             }
         }
 
-        private sealed record BackgroundWorkState(string Label, string Details, DateTimeOffset StartedAtUtc);
+        private static bool IsAutomationNotificationCategory(string? category)
+        {
+            return string.Equals(category?.Trim(), "自動化", StringComparison.Ordinal) ||
+                   string.Equals(category?.Trim(), "自動解壓", StringComparison.Ordinal);
+        }
+
+        private sealed record BackgroundWorkState(string Label, string Details, DateTimeOffset StartedAtUtc, bool IsAutomation);
 
         private sealed class BackgroundWorkRecord
         {
@@ -793,6 +805,8 @@ namespace nuone_tools
             public string Summary { get; init; } = string.Empty;
 
             public string Details { get; init; } = string.Empty;
+
+            public bool IsAutomation { get; init; }
         }
 
         private void EnqueueSharedStatusBarRefresh()
@@ -876,7 +890,7 @@ namespace nuone_tools
             }
         }
 
-        private void AddBackgroundWorkRecordLocked(string summary, string? details = null)
+        private void AddBackgroundWorkRecordLocked(string summary, string? details = null, bool isAutomation = false)
         {
             var normalizedSummary = NormalizeBackgroundWorkRecordForTextBox(summary).Trim();
             if (string.IsNullOrWhiteSpace(normalizedSummary))
@@ -892,6 +906,7 @@ namespace nuone_tools
                 Details = string.IsNullOrWhiteSpace(normalizedDetails)
                     ? normalizedSummary
                     : normalizedDetails,
+                IsAutomation = isAutomation,
             });
             while (_backgroundWorkRecords.Count > 100)
             {
@@ -903,7 +918,7 @@ namespace nuone_tools
         {
             lock (_backgroundWorkLock)
             {
-                return _backgroundWorkRecords.Count;
+                return _backgroundWorkRecords.Count(static record => record.IsAutomation);
             }
         }
 
@@ -911,7 +926,9 @@ namespace nuone_tools
         {
             lock (_backgroundWorkLock)
             {
-                return _backgroundWorkRecords.ToList();
+                return _backgroundWorkRecords
+                    .Where(static record => record.IsAutomation)
+                    .ToList();
             }
         }
 

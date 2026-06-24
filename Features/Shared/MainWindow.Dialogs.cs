@@ -706,6 +706,11 @@ namespace nuone_tools
                 },
                 SelectedIndex = profile.Mode == BackupAutomationMode.Mirror ? 1 : 0,
             };
+            var logDirectoryPathTextBox = new TextBox
+            {
+                Text = ResolveBackupAutomationLogDirectoryPath(profile.LogDirectoryPath),
+                PlaceholderText = CurrentLogDirectoryPath,
+            };
             var excludedFolderNamesTextBox = new TextBox
             {
                 AcceptsReturn = true,
@@ -781,13 +786,6 @@ namespace nuone_tools
                 Opacity = 0.78,
                 TextWrapping = TextWrapping.Wrap,
             });
-            filePanel.Children.Add(new TextBlock
-            {
-                Text = $"Log 會統一寫入全域 logging.LogDirectoryPath：{CurrentLogDirectoryPath}",
-                Opacity = 0.78,
-                TextWrapping = TextWrapping.Wrap,
-            });
-
             var mongoOptions = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 18 };
             mongoOptions.Children.Add(mongoUseArchiveCheckBox);
             mongoOptions.Children.Add(mongoUseGzipCheckBox);
@@ -846,6 +844,14 @@ namespace nuone_tools
             panel.Children.Add(jobTypeComboBox);
             panel.Children.Add(new TextBlock { Text = "目的地" });
             panel.Children.Add(destinationPathTextBox);
+            panel.Children.Add(new TextBlock { Text = "工作 log 目錄" });
+            panel.Children.Add(logDirectoryPathTextBox);
+            panel.Children.Add(new TextBlock
+            {
+                Text = $"每個自動化工作都會寫到自己的 log 目錄；未填時會沿用目前全域目錄：{CurrentLogDirectoryPath}",
+                Opacity = 0.78,
+                TextWrapping = TextWrapping.Wrap,
+            });
             panel.Children.Add(filePanel);
             panel.Children.Add(mongoPanel);
             panel.Children.Add(new TextBlock { Text = "排程類型" });
@@ -934,7 +940,7 @@ namespace nuone_tools
             profile.DestinationPath = destinationPathTextBox.Text.Trim();
             profile.Mode = modeComboBox.SelectedIndex == 1 ? BackupAutomationMode.Mirror : BackupAutomationMode.Copy;
             profile.ExcludedFolderNamesText = FormatExcludedFolderNamesForStorage(excludedFolderNamesTextBox.Text);
-            profile.LogDirectoryPath = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath);
+            profile.LogDirectoryPath = ResolveBackupAutomationLogDirectoryPath(logDirectoryPathTextBox.Text);
             profile.MongoToolPath = mongoToolPathTextBox.Text.Trim();
             profile.MongoConnectionString = mongoConnectionStringTextBox.Text.Trim();
             profile.MongoDatabaseName = mongoDatabaseNameTextBox.Text.Trim();
@@ -996,7 +1002,7 @@ namespace nuone_tools
             {
                 AcceptsReturn = true,
                 TextWrapping = TextWrapping.NoWrap,
-                MinHeight = 160,
+                Height = Math.Max(240, (passwordValues.Count + 1) * 28),
                 VerticalContentAlignment = VerticalAlignment.Top,
             };
             passwordsTextBox.Text = string.Join(Environment.NewLine, passwordValues);
@@ -1019,9 +1025,11 @@ namespace nuone_tools
             panel.Children.Add(new ScrollViewer
             {
                 Content = passwordsTextBox,
-                MaxHeight = 240,
+                Height = 240,
+                HorizontalScrollMode = ScrollMode.Enabled,
+                VerticalScrollMode = ScrollMode.Enabled,
                 HorizontalScrollBarVisibility = ScrollBarVisibility.Auto,
-                VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                VerticalScrollBarVisibility = ScrollBarVisibility.Visible,
             });
 
             var dialog = new ContentDialog

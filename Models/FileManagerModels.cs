@@ -70,11 +70,15 @@ namespace nuone_tools
         private static readonly SemaphoreSlim ShellIconLoadSemaphore = new(6, 6);
         private static readonly SolidColorBrush UnselectedBackgroundBrush = new(Colors.Transparent);
         private static readonly SolidColorBrush SelectedBackgroundBrush = new(ColorHelper.FromArgb(255, 91, 20, 126));
+        private static readonly SolidColorBrush DropTargetBackgroundBrush = new(ColorHelper.FromArgb(255, 73, 38, 98));
         private static readonly SolidColorBrush UnselectedBorderBrush = new(Colors.Transparent);
         private static readonly SolidColorBrush SelectedBorderBrush = new(ColorHelper.FromArgb(255, 140, 60, 188));
+        private static readonly SolidColorBrush DropTargetBorderBrush = new(ColorHelper.FromArgb(255, 198, 126, 255));
         private static readonly Thickness UnselectedBorderThickness = new(1);
         private static readonly Thickness SelectedBorderThickness = new(1);
+        private static readonly Thickness DropTargetBorderThickness = new(2);
         private bool _isSelected;
+        private bool _isDropTarget;
         private bool _isInlineExpanded;
         private ImageSource? _iconImageSource;
         private Task? _iconLoadTask;
@@ -162,11 +166,31 @@ namespace nuone_tools
             }
         }
 
-        public Brush ItemBackground => IsSelected ? SelectedBackgroundBrush : UnselectedBackgroundBrush;
+        public bool IsDropTarget
+        {
+            get => _isDropTarget;
+            set
+            {
+                if (SetProperty(ref _isDropTarget, value))
+                {
+                    OnPropertyChanged(nameof(ItemBackground));
+                    OnPropertyChanged(nameof(ItemBorderBrush));
+                    OnPropertyChanged(nameof(ItemBorderThickness));
+                }
+            }
+        }
 
-        public Brush ItemBorderBrush => IsSelected ? SelectedBorderBrush : UnselectedBorderBrush;
+        public Brush ItemBackground => IsDropTarget
+            ? DropTargetBackgroundBrush
+            : (IsSelected ? SelectedBackgroundBrush : UnselectedBackgroundBrush);
 
-        public Thickness ItemBorderThickness => IsSelected ? SelectedBorderThickness : UnselectedBorderThickness;
+        public Brush ItemBorderBrush => IsDropTarget
+            ? DropTargetBorderBrush
+            : (IsSelected ? SelectedBorderBrush : UnselectedBorderBrush);
+
+        public Thickness ItemBorderThickness => IsDropTarget
+            ? DropTargetBorderThickness
+            : (IsSelected ? SelectedBorderThickness : UnselectedBorderThickness);
 
         public static FileEntry FromDirectory(DirectoryInfo directory)
         {

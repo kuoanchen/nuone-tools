@@ -1638,7 +1638,7 @@ namespace nuone_tools
                     DestinationPath = profile.DestinationPath,
                     Mode = profile.Mode,
                     ExcludedFolderNamesText = profile.ExcludedFolderNamesText,
-                    LogDirectoryPath = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath),
+                    LogDirectoryPath = ResolveBackupAutomationLogDirectoryPath(profile.LogDirectoryPath),
                     MongoToolPath = profile.MongoToolPath,
                     MongoConnectionString = profile.MongoConnectionString,
                     MongoDatabaseName = profile.MongoDatabaseName,

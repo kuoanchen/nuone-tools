@@ -121,6 +121,7 @@ namespace nuone_tools
                 JobType = AutomationJobType.FileBackup,
                 Mode = BackupAutomationMode.Copy,
                 ExcludedFolderNamesText = ".vs, .vscode, .nuget, bin, obj, packages, node_modules",
+                LogDirectoryPath = ResolveBackupAutomationLogDirectoryPath(null),
                 MongoToolPath = @"C:\Program Files\MongoDB\Tools\100\bin\mongodump.exe",
                 MongoUseArchive = true,
                 MongoUseGzip = true,
@@ -204,7 +205,7 @@ namespace nuone_tools
             var runMissedOnStartup = AutomationRunMissedOnStartupCheckBox.IsChecked == true;
             var mode = GetAutomationModeFromComboBox(AutomationModeComboBox);
             var excludedFolderNamesText = string.Empty;
-            var logDirectoryPath = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath);
+            var logDirectoryPath = ResolveBackupAutomationLogDirectoryPath(null);
             var mongoToolPath = AutomationMongoToolPathTextBox.Text.Trim();
             var mongoConnectionString = AutomationMongoConnectionStringTextBox.Text.Trim();
             var mongoDatabaseName = AutomationMongoDatabaseNameTextBox.Text.Trim();
@@ -1123,7 +1124,7 @@ namespace nuone_tools
                             DestinationPath = config.DestinationPath,
                             Mode = config.Mode,
                             ExcludedFolderNamesText = config.ExcludedFolderNamesText ?? string.Empty,
-                            LogDirectoryPath = NormalizeLogDirectoryPath(_loggingSettings.LogDirectoryPath),
+                            LogDirectoryPath = ResolveBackupAutomationLogDirectoryPath(config.LogDirectoryPath),
                             MongoToolPath = config.MongoToolPath,
                             MongoConnectionString = config.MongoConnectionString,
                             MongoDatabaseName = config.MongoDatabaseName,
@@ -1437,7 +1438,7 @@ namespace nuone_tools
 
             var cancellationTokenSource = new CancellationTokenSource();
             _automationCancellationTokens[profile.Id] = cancellationTokenSource;
-            var backgroundWorkId = BeginBackgroundWork(GetAutomationBackgroundWorkTitle(profile));
+            var backgroundWorkId = BeginBackgroundWork(GetAutomationBackgroundWorkTitle(profile), isAutomation: true);
             string? completionRecord = null;
             string? notificationSummary = null;
             string? notificationDetails = null;
@@ -1535,7 +1536,7 @@ namespace nuone_tools
 
                 if (profile.JobType == AutomationJobType.MongoBackup)
                 {
-                    ExecuteMongoBackup(profile, cancellationToken);
+                    ExecuteMongoBackup(profile, logScope, cancellationToken);
                     var mongoStatusText = "MongoDB 備份完成";
                     var mongoCompletionRecord = BuildBackupAutomationCompletionRecord(profile.Name, mongoStatusText, logScope.LogFilePath);
                     logScope.WriteLine(mongoStatusText);
@@ -1564,8 +1565,12 @@ namespace nuone_tools
                 {
                     cancellationToken.ThrowIfCancellationRequested();
                     var destinationFile = Path.Combine(profile.DestinationPath, Path.GetFileName(profile.SourcePath));
-                    File.Copy(profile.SourcePath, destinationFile, overwrite: true);
-                    summary.CopiedFiles++;
+                    if (ShouldCopyFile(profile.SourcePath, destinationFile))
+                    {
+                        File.Copy(profile.SourcePath, destinationFile, overwrite: true);
+                        summary.CopiedFiles++;
+                        logScope.WriteLine($"複製檔案：{destinationFile}");
+                    }
                 }
                 else
                 {
@@ -1607,7 +1612,10 @@ namespace nuone_tools
             }
         }
 
-        private static void ExecuteMongoBackup(BackupAutomationProfile profile, CancellationToken cancellationToken)
+        private static void ExecuteMongoBackup(
+            BackupAutomationProfile profile,
+            BackupAutomationLogScope logScope,
+            CancellationToken cancellationToken)
         {
             cancellationToken.ThrowIfCancellationRequested();
 
@@ -1626,24 +1634,34 @@ namespace nuone_tools
             var executable = ResolveMongoDumpExecutable(profile.MongoToolPath);
             var timestamp = DateTime.Now.ToString("yyyyMMdd_HHmmss", CultureInfo.InvariantCulture);
             var databaseNames = ParseMongoDatabaseNames(profile.MongoDatabaseName);
+            logScope.WriteLine($"mongodump：{executable}");
+            logScope.WriteLine($"目的地：{profile.DestinationPath}");
+            logScope.WriteLine($"URI：{SanitizeMongoConnectionStringForLog(profile.MongoConnectionString)}");
+            logScope.WriteLine(
+                $"模式：{(profile.MongoUseArchive ? "archive" : "folder")} / gzip={(profile.MongoUseGzip ? "on" : "off")} / 保留份數={Math.Max(1, profile.MongoRetentionCount).ToString(CultureInfo.InvariantCulture)}");
+            logScope.WriteLine(
+                databaseNames.Count == 0
+                    ? "資料庫：全部"
+                    : $"資料庫：{string.Join(", ", databaseNames)}");
 
             if (databaseNames.Count == 0)
             {
-                ExecuteMongoBackupTarget(profile, executable, timestamp, databaseName: null, cancellationToken);
-                CleanupOldMongoBackups(profile.DestinationPath, BuildMongoBackupBaseName(databaseName: null), Math.Max(1, profile.MongoRetentionCount));
+                ExecuteMongoBackupTarget(profile, logScope, executable, timestamp, databaseName: null, cancellationToken);
+                CleanupOldMongoBackups(profile.DestinationPath, BuildMongoBackupBaseName(databaseName: null), Math.Max(1, profile.MongoRetentionCount), logScope);
                 return;
             }
 
             foreach (var databaseName in databaseNames)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                ExecuteMongoBackupTarget(profile, executable, timestamp, databaseName, cancellationToken);
-                CleanupOldMongoBackups(profile.DestinationPath, BuildMongoBackupBaseName(databaseName), Math.Max(1, profile.MongoRetentionCount));
+                ExecuteMongoBackupTarget(profile, logScope, executable, timestamp, databaseName, cancellationToken);
+                CleanupOldMongoBackups(profile.DestinationPath, BuildMongoBackupBaseName(databaseName), Math.Max(1, profile.MongoRetentionCount), logScope);
             }
         }
 
         private static void ExecuteMongoBackupTarget(
             BackupAutomationProfile profile,
+            BackupAutomationLogScope logScope,
             string executable,
             string timestamp,
             string? databaseName,
@@ -1651,6 +1669,7 @@ namespace nuone_tools
         {
             var backupBaseName = BuildMongoBackupBaseName(databaseName);
             var backupStem = $"{backupBaseName}_{timestamp}";
+            string createdPath;
             var argumentParts = new List<string>
             {
                 $"--uri=\"{profile.MongoConnectionString.Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
@@ -1664,12 +1683,12 @@ namespace nuone_tools
             if (profile.MongoUseArchive)
             {
                 var extension = profile.MongoUseGzip ? ".archive.gz" : ".archive";
-                var createdPath = Path.Combine(profile.DestinationPath, backupStem + extension);
+                createdPath = Path.Combine(profile.DestinationPath, backupStem + extension);
                 argumentParts.Add($"--archive=\"{createdPath}\"");
             }
             else
             {
-                var createdPath = Path.Combine(profile.DestinationPath, backupStem);
+                createdPath = Path.Combine(profile.DestinationPath, backupStem);
                 argumentParts.Add($"--out=\"{createdPath}\"");
             }
 
@@ -1679,7 +1698,10 @@ namespace nuone_tools
             }
 
             var arguments = string.Join(" ", argumentParts);
-            ExecuteProcessOrThrow(executable, arguments, cancellationToken);
+            logScope.WriteLine($"開始備份：{(string.IsNullOrWhiteSpace(databaseName) ? "全部資料庫" : databaseName)}");
+            logScope.WriteLine($"輸出：{createdPath}");
+            ExecuteProcessOrThrow(executable, arguments, cancellationToken, logScope);
+            logScope.WriteLine($"完成輸出：{createdPath}");
         }
 
         private static string BuildMongoBackupBaseName(string? databaseName)
@@ -1738,9 +1760,14 @@ namespace nuone_tools
             return "mongodump";
         }
 
-        private static void ExecuteProcessOrThrow(string fileName, string arguments, CancellationToken cancellationToken)
+        private static void ExecuteProcessOrThrow(
+            string fileName,
+            string arguments,
+            CancellationToken cancellationToken,
+            BackupAutomationLogScope? logScope = null)
         {
             cancellationToken.ThrowIfCancellationRequested();
+            logScope?.WriteLine($"執行：{fileName} {SanitizeMongoDumpArgumentsForLog(arguments)}");
 
             using var process = new Process
             {
@@ -1774,6 +1801,17 @@ namespace nuone_tools
             var standardError = process.StandardError.ReadToEnd();
             process.WaitForExit();
             cancellationToken.ThrowIfCancellationRequested();
+            if (!string.IsNullOrWhiteSpace(standardOutput))
+            {
+                logScope?.WriteLine($"stdout：{TrimLogOutput(standardOutput)}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(standardError))
+            {
+                logScope?.WriteLine($"stderr：{TrimLogOutput(standardError)}");
+            }
+
+            logScope?.WriteLine($"結束代碼：{process.ExitCode.ToString(CultureInfo.InvariantCulture)}");
 
             if (process.ExitCode == 0)
             {
@@ -1791,7 +1829,11 @@ namespace nuone_tools
             throw new InvalidOperationException(errorMessage);
         }
 
-        private static void CleanupOldMongoBackups(string destinationPath, string backupBaseName, int retentionCount)
+        private static void CleanupOldMongoBackups(
+            string destinationPath,
+            string backupBaseName,
+            int retentionCount,
+            BackupAutomationLogScope? logScope = null)
         {
             if (!Directory.Exists(destinationPath))
             {
@@ -1817,16 +1859,86 @@ namespace nuone_tools
                     if (entry.IsDirectory)
                     {
                         Directory.Delete(entry.Path, recursive: true);
+                        logScope?.WriteLine($"清理舊備份資料夾：{entry.Path}");
                     }
                     else if (File.Exists(entry.Path))
                     {
                         File.Delete(entry.Path);
+                        logScope?.WriteLine($"清理舊備份檔案：{entry.Path}");
                     }
                 }
                 catch
                 {
                 }
             }
+        }
+
+        private static string SanitizeMongoConnectionStringForLog(string connectionString)
+        {
+            if (string.IsNullOrWhiteSpace(connectionString))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = connectionString.Trim();
+            var schemeIndex = trimmed.IndexOf("://", StringComparison.Ordinal);
+            if (schemeIndex < 0)
+            {
+                return "***";
+            }
+
+            var authorityStart = schemeIndex + 3;
+            var authorityEnd = trimmed.IndexOf('/', authorityStart);
+            if (authorityEnd < 0)
+            {
+                authorityEnd = trimmed.Length;
+            }
+
+            var authority = trimmed.Substring(authorityStart, authorityEnd - authorityStart);
+            var atIndex = authority.LastIndexOf('@');
+            if (atIndex < 0)
+            {
+                return trimmed;
+            }
+
+            var sanitizedAuthority = $"***@{authority[(atIndex + 1)..]}";
+            return trimmed[..authorityStart] + sanitizedAuthority + trimmed[authorityEnd..];
+        }
+
+        private static string SanitizeMongoDumpArgumentsForLog(string arguments)
+        {
+            if (string.IsNullOrWhiteSpace(arguments))
+            {
+                return string.Empty;
+            }
+
+            var marker = "--uri=\"";
+            var markerIndex = arguments.IndexOf(marker, StringComparison.OrdinalIgnoreCase);
+            if (markerIndex < 0)
+            {
+                return arguments;
+            }
+
+            var valueStart = markerIndex + marker.Length;
+            var valueEnd = arguments.IndexOf('"', valueStart);
+            if (valueEnd < 0)
+            {
+                return arguments;
+            }
+
+            var sanitizedUri = SanitizeMongoConnectionStringForLog(arguments[valueStart..valueEnd]);
+            return arguments[..valueStart] + sanitizedUri + arguments[valueEnd..];
+        }
+
+        private static string TrimLogOutput(string text)
+        {
+            var normalized = NormalizeBackgroundWorkRecordForTextBox(text).Trim();
+            if (normalized.Length <= 800)
+            {
+                return normalized;
+            }
+
+            return normalized[..800] + "...";
         }
 
         private static string GetAutomationBackgroundWorkTitle(BackupAutomationProfile profile)
@@ -1863,6 +1975,9 @@ namespace nuone_tools
                 builder.Append("目的地：");
                 builder.AppendLine(profile.DestinationPath);
             }
+
+            builder.Append("Log：");
+            builder.AppendLine(ResolveBackupAutomationLogDirectoryPath(profile.LogDirectoryPath));
 
             return builder.ToString().TrimEnd();
         }
@@ -1903,6 +2018,7 @@ namespace nuone_tools
 
         private sealed class BackupAutomationLogScope : IDisposable
         {
+            private static readonly object FileWriteLock = new();
             private readonly Guid _profileId;
             private readonly string _profileName;
             private readonly AutomationJobType _jobType;
@@ -1912,13 +2028,29 @@ namespace nuone_tools
                 _profileId = profile.Id;
                 _profileName = profile.Name;
                 _jobType = profile.JobType;
-                LogFilePath = AppLogging.CurrentLogFilePath;
+                var logDirectoryPath = ResolveBackupAutomationLogDirectoryPath(profile.LogDirectoryPath);
+                Directory.CreateDirectory(logDirectoryPath);
+                LogFilePath = Path.Combine(
+                    logDirectoryPath,
+                    $"{BuildSafeLogFileName(profile.Name, profile.Id)}-{DateTime.Now.ToString("yyyyMMdd", CultureInfo.InvariantCulture)}.log");
             }
 
             public string? LogFilePath { get; }
 
             public void WriteLine(string message)
             {
+                var line =
+                    $"{DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff", CultureInfo.InvariantCulture)} " +
+                    $"[{_jobType}] [{_profileName}] {message}";
+
+                if (!string.IsNullOrWhiteSpace(LogFilePath))
+                {
+                    lock (FileWriteLock)
+                    {
+                        File.AppendAllText(LogFilePath, line + Environment.NewLine);
+                    }
+                }
+
                 AppLogging.Information(
                     "BackupAutomation ProfileId={ProfileId} Profile={ProfileName} JobType={JobType} Message={AutomationMessage}",
                     _profileId,
@@ -1937,12 +2069,29 @@ namespace nuone_tools
             return new BackupAutomationLogScope(profile);
         }
 
+        private static string ResolveBackupAutomationLogDirectoryPath(string? path)
+        {
+            return NormalizeLogDirectoryPath(string.IsNullOrWhiteSpace(path) ? CurrentLogDirectoryPath : path);
+        }
+
+        private static string BuildSafeLogFileName(string? profileName, Guid profileId)
+        {
+            var rawName = string.IsNullOrWhiteSpace(profileName)
+                ? $"automation-{profileId.ToString("N", CultureInfo.InvariantCulture)}"
+                : profileName.Trim();
+            var invalidCharacters = Path.GetInvalidFileNameChars();
+            var sanitized = new string(rawName.Select(character => invalidCharacters.Contains(character) ? '_' : character).ToArray()).Trim();
+            return string.IsNullOrWhiteSpace(sanitized)
+                ? $"automation-{profileId.ToString("N", CultureInfo.InvariantCulture)}"
+                : sanitized;
+        }
+
         private static string BuildBackupAutomationStatusText(BackupAutomationProfile profile, BackupAutomationSummary summary)
         {
             var verb = profile.Mode == BackupAutomationMode.Mirror ? "同步完成" : "備份完成";
             var parts = new List<string>
             {
-                $"複製 {summary.CopiedFiles.ToString(CultureInfo.InvariantCulture)}",
+                $"複製檔案 {summary.CopiedFiles.ToString(CultureInfo.InvariantCulture)}",
             };
 
             if (summary.DeletedFiles > 0)
@@ -1971,6 +2120,64 @@ namespace nuone_tools
             }
 
             return $"完成：{profileName} · {statusText}{Environment.NewLine}log：{logFilePath}";
+        }
+
+        private static bool ShouldCopyFile(string sourceFile, string destinationFile)
+        {
+            if (!File.Exists(destinationFile))
+            {
+                return true;
+            }
+
+            var sourceInfo = new FileInfo(sourceFile);
+            var destinationInfo = new FileInfo(destinationFile);
+            if (sourceInfo.Length != destinationInfo.Length)
+            {
+                return true;
+            }
+
+            if (sourceInfo.LastWriteTimeUtc == destinationInfo.LastWriteTimeUtc)
+            {
+                return false;
+            }
+
+            return !AreFilesContentEqual(sourceFile, destinationFile);
+        }
+
+        private static bool AreFilesContentEqual(string sourceFile, string destinationFile)
+        {
+            const int bufferSize = 81920;
+            using var sourceStream = new FileStream(sourceFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+            using var destinationStream = new FileStream(destinationFile, FileMode.Open, FileAccess.Read, FileShare.Read);
+            if (sourceStream.Length != destinationStream.Length)
+            {
+                return false;
+            }
+
+            var sourceBuffer = new byte[bufferSize];
+            var destinationBuffer = new byte[bufferSize];
+            while (true)
+            {
+                var sourceBytesRead = sourceStream.Read(sourceBuffer, 0, sourceBuffer.Length);
+                var destinationBytesRead = destinationStream.Read(destinationBuffer, 0, destinationBuffer.Length);
+                if (sourceBytesRead != destinationBytesRead)
+                {
+                    return false;
+                }
+
+                if (sourceBytesRead == 0)
+                {
+                    return true;
+                }
+
+                for (var index = 0; index < sourceBytesRead; index++)
+                {
+                    if (sourceBuffer[index] != destinationBuffer[index])
+                    {
+                        return false;
+                    }
+                }
+            }
         }
 
         private static HashSet<string> ParseExcludedFolderNames(string rawValue)
@@ -2212,8 +2419,14 @@ namespace nuone_tools
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(file));
+                if (!ShouldCopyFile(file, destinationFile))
+                {
+                    continue;
+                }
+
                 File.Copy(file, destinationFile, overwrite: true);
                 summary.CopiedFiles++;
+                logScope.WriteLine($"複製檔案：{destinationFile}");
             }
 
             foreach (var directory in Directory.EnumerateDirectories(sourceDirectory))
@@ -2222,7 +2435,6 @@ namespace nuone_tools
                 if (ShouldExcludeDirectory(directory, excludedFolderNames))
                 {
                     summary.SkippedDirectories++;
-                    logScope.WriteLine($"略過資料夾：{directory}");
                     continue;
                 }
 
@@ -2261,8 +2473,14 @@ namespace nuone_tools
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var destinationFile = Path.Combine(destinationDirectory, Path.GetFileName(sourceFile));
+                if (!ShouldCopyFile(sourceFile, destinationFile))
+                {
+                    continue;
+                }
+
                 File.Copy(sourceFile, destinationFile, overwrite: true);
                 summary.CopiedFiles++;
+                logScope.WriteLine($"複製檔案：{destinationFile}");
             }
 
             foreach (var destinationFile in Directory.EnumerateFiles(destinationDirectory))
@@ -2286,7 +2504,6 @@ namespace nuone_tools
                     }
 
                     summary.SkippedDirectories++;
-                    logScope.WriteLine($"略過資料夾：{directory}");
                     return false;
                 })
                 .Where(static directory =>
@@ -2341,7 +2558,7 @@ namespace nuone_tools
 
             var cancellationTokenSource = new CancellationTokenSource();
             _autoExtractCancellationTokens[profile.Id] = cancellationTokenSource;
-            var backgroundWorkId = BeginBackgroundWork(BuildAutoExtractBackgroundWorkTitle(profile));
+            var backgroundWorkId = BeginBackgroundWork(BuildAutoExtractBackgroundWorkTitle(profile), isAutomation: true);
             string? completionRecord = null;
             string? notificationSummary = null;
             string? notificationDetails = null;

@@ -39,6 +39,7 @@ namespace nuone_tools
     {
         private List<string> _pendingDraggedPaths = new();
         private PaneViewModel? _pendingDragSourcePane;
+        private FileEntry? _currentDropHighlightEntry;
 
         internal void LeftPaneList_DragItemsStarting(object sender, DragItemsStartingEventArgs e)
         {
@@ -68,6 +69,7 @@ namespace nuone_tools
 
         internal void LeftPaneList_DragOver(object sender, DragEventArgs e)
         {
+            SetCurrentDropHighlight(null);
             HandleDropTargetDragOver(LeftPane, LeftPane.CurrentPath, isDirectoryTarget: true, e);
         }
 
@@ -78,6 +80,7 @@ namespace nuone_tools
 
         internal void RightPaneList_DragOver(object sender, DragEventArgs e)
         {
+            SetCurrentDropHighlight(null);
             HandleDropTargetDragOver(RightPane, RightPane.CurrentPath, isDirectoryTarget: true, e);
         }
 
@@ -89,29 +92,46 @@ namespace nuone_tools
         internal void LeftPaneFolder_DragOver(object sender, DragEventArgs e)
         {
             var entry = (sender as FrameworkElement)?.DataContext as FileEntry;
-            HandleDropTargetDragOver(LeftPane, entry?.FullPath, entry?.IsDirectory == true, e);
+            var dropTarget = ResolvePaneRowDropTarget(LeftPane, entry);
+            SetCurrentDropHighlight(entry?.IsDirectory == true ? entry : null);
+            HandleDropTargetDragOver(LeftPane, dropTarget.targetPath, dropTarget.isDirectoryTarget, e);
+        }
+
+        internal void LeftPaneFolder_DragLeave(object sender, DragEventArgs e)
+        {
+            SetCurrentDropHighlight(null);
         }
 
         internal async void LeftPaneFolder_Drop(object sender, DragEventArgs e)
         {
             var entry = (sender as FrameworkElement)?.DataContext as FileEntry;
-            await HandleDropTargetDropAsync(LeftPane, entry?.FullPath, entry?.IsDirectory == true, e);
+            var dropTarget = ResolvePaneRowDropTarget(LeftPane, entry);
+            await HandleDropTargetDropAsync(LeftPane, dropTarget.targetPath, dropTarget.isDirectoryTarget, e);
         }
 
         internal void RightPaneFolder_DragOver(object sender, DragEventArgs e)
         {
             var entry = (sender as FrameworkElement)?.DataContext as FileEntry;
-            HandleDropTargetDragOver(RightPane, entry?.FullPath, entry?.IsDirectory == true, e);
+            var dropTarget = ResolvePaneRowDropTarget(RightPane, entry);
+            SetCurrentDropHighlight(entry?.IsDirectory == true ? entry : null);
+            HandleDropTargetDragOver(RightPane, dropTarget.targetPath, dropTarget.isDirectoryTarget, e);
+        }
+
+        internal void RightPaneFolder_DragLeave(object sender, DragEventArgs e)
+        {
+            SetCurrentDropHighlight(null);
         }
 
         internal async void RightPaneFolder_Drop(object sender, DragEventArgs e)
         {
             var entry = (sender as FrameworkElement)?.DataContext as FileEntry;
-            await HandleDropTargetDropAsync(RightPane, entry?.FullPath, entry?.IsDirectory == true, e);
+            var dropTarget = ResolvePaneRowDropTarget(RightPane, entry);
+            await HandleDropTargetDropAsync(RightPane, dropTarget.targetPath, dropTarget.isDirectoryTarget, e);
         }
 
         private void RememberPendingDrag(PaneViewModel pane, DragItemsStartingEventArgs e)
         {
+            SetCurrentDropHighlight(null);
             _pendingDragSourcePane = pane;
             _pendingDraggedPaths = e.Items
                 .OfType<FileEntry>()
@@ -127,6 +147,7 @@ namespace nuone_tools
 
         private void PrepareDirectEntryDrag(PaneViewModel pane, FrameworkElement? element, DragStartingEventArgs e)
         {
+            SetCurrentDropHighlight(null);
             var entry = element?.DataContext as FileEntry;
             if (entry is null || string.IsNullOrWhiteSpace(entry.FullPath) || IsSshPath(entry.FullPath))
             {
@@ -161,9 +182,87 @@ namespace nuone_tools
                 return;
             }
 
-            e.Data.RequestedOperation = DataPackageOperation.Copy;
+            e.Data.RequestedOperation = DataPackageOperation.Move | DataPackageOperation.Copy;
             e.Data.SetStorageItems(storageItems);
             e.Data.SetText(string.Join(Environment.NewLine, _pendingDraggedPaths));
+            AppendDebugLog(
+                "drag-drop-debug.log",
+                $"drag-start-direct-operation pane={pane.Name} requestedOperation={e.Data.RequestedOperation}");
+        }
+
+        private (string? targetPath, bool isDirectoryTarget) ResolvePaneRowDropTarget(PaneViewModel pane, FileEntry? entry)
+        {
+            if (entry?.IsDirectory == true && !string.IsNullOrWhiteSpace(entry.FullPath))
+            {
+                if (ShouldDropExpandedChildToPaneCurrentDirectory(pane, entry.FullPath))
+                {
+                    AppendDebugLog(
+                        "drag-drop-debug.log",
+                        $"resolve-row-drop-target pane={pane.Name} mode=expanded-child-to-current-path current={pane.CurrentPath ?? "<null>"} directoryEntry={entry.FullPath}");
+                    return (pane.CurrentPath, true);
+                }
+
+                AppendDebugLog(
+                    "drag-drop-debug.log",
+                    $"resolve-row-drop-target pane={pane.Name} mode=directory-entry target={entry.FullPath}");
+                return (entry.FullPath, true);
+            }
+
+            AppendDebugLog(
+                "drag-drop-debug.log",
+                $"resolve-row-drop-target pane={pane.Name} mode=pane-current-path target={pane.CurrentPath ?? "<null>"} row={entry?.FullPath ?? "<null>"}");
+            return (pane.CurrentPath, true);
+        }
+
+        private bool ShouldDropExpandedChildToPaneCurrentDirectory(PaneViewModel pane, string directoryPath)
+        {
+            if (string.IsNullOrWhiteSpace(pane.CurrentPath) || string.IsNullOrWhiteSpace(directoryPath))
+            {
+                return false;
+            }
+
+            var normalizedDirectoryPath = NormalizePath(directoryPath);
+            if (PathEquals(pane.CurrentPath, normalizedDirectoryPath))
+            {
+                return false;
+            }
+
+            if (_pendingDraggedPaths.Count == 0)
+            {
+                return false;
+            }
+
+            var directoryPrefix = normalizedDirectoryPath + Path.DirectorySeparatorChar;
+            return _pendingDraggedPaths.All(path =>
+            {
+                if (string.IsNullOrWhiteSpace(path))
+                {
+                    return false;
+                }
+
+                var normalizedSourcePath = NormalizePath(Path.GetFullPath(path.Trim()));
+                return normalizedSourcePath.StartsWith(directoryPrefix, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+
+        private void SetCurrentDropHighlight(FileEntry? entry)
+        {
+            if (ReferenceEquals(_currentDropHighlightEntry, entry))
+            {
+                return;
+            }
+
+            if (_currentDropHighlightEntry is not null)
+            {
+                _currentDropHighlightEntry.IsDropTarget = false;
+            }
+
+            _currentDropHighlightEntry = entry;
+
+            if (_currentDropHighlightEntry is not null)
+            {
+                _currentDropHighlightEntry.IsDropTarget = true;
+            }
         }
 
         private void HandleDropTargetDragOver(PaneViewModel pane, string? targetPath, bool isDirectoryTarget, DragEventArgs e)
@@ -177,10 +276,12 @@ namespace nuone_tools
                 return;
             }
 
-            e.AcceptedOperation = DataPackageOperation.Move;
+            e.AcceptedOperation = dataViewSupportsMoveOrCopy(e)
+                ? DataPackageOperation.Move
+                : DataPackageOperation.None;
             AppendDebugLog(
                 "drag-drop-debug.log",
-                $"drag-over pane={pane.Name} target={normalizedTarget}");
+                $"drag-over pane={pane.Name} target={normalizedTarget} accepted={e.AcceptedOperation}");
         }
 
         private async Task HandleDropTargetDropAsync(PaneViewModel targetPane, string? targetPath, bool isDirectoryTarget, DragEventArgs e)
@@ -242,6 +343,7 @@ namespace nuone_tools
             }
             finally
             {
+                SetCurrentDropHighlight(null);
                 ClearPendingDrag();
             }
         }
@@ -357,6 +459,7 @@ namespace nuone_tools
 
         private void ClearPendingDrag()
         {
+            SetCurrentDropHighlight(null);
             _pendingDraggedPaths.Clear();
             _pendingDragSourcePane = null;
         }
@@ -686,9 +789,17 @@ namespace nuone_tools
                 return;
             }
 
-            e.Data.RequestedOperation = DataPackageOperation.Copy;
+            e.Data.RequestedOperation = DataPackageOperation.Move | DataPackageOperation.Copy;
             e.Data.SetStorageItems(storageItems);
             e.Data.SetText(string.Join(Environment.NewLine, draggedEntries.Select(static entry => entry.FullPath)));
+            AppendDebugLog(
+                "drag-drop-debug.log",
+                $"drag-start-list-operation pane={pane.Name} requestedOperation={e.Data.RequestedOperation}");
+        }
+
+        private static bool dataViewSupportsMoveOrCopy(DragEventArgs e)
+        {
+            return e.DataView is not null;
         }
 
         private static List<IStorageItem> ResolveStorageItemsForTransfer(IEnumerable<FileEntry> entries)
@@ -953,7 +1064,7 @@ namespace nuone_tools
                 {
                     try
                     {
-                        var deleted = await Task.Run(() => DeletePathCore(entry.FullPath));
+                        var deleted = await DeletePathCoreAsync(entry.FullPath);
                         if (!deleted)
                         {
                             continue;

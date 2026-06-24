@@ -29,10 +29,12 @@ namespace nuone_tools.Views
         internal Button DriveSectionMenuButtonElement => DriveSectionMenuButton;
         internal Border LeftPaneBorderElement => LeftPaneBorder;
         internal ListView LeftPaneListViewElement => LeftPaneListView;
+        internal Grid LeftPaneTabStripHostElement => LeftPaneTabStripHost;
         internal TextBox LeftPathTextBoxElement => LeftPathTextBox;
         internal TextBox NewGroupNameTextBoxElement => NewGroupNameTextBox;
         internal Border RightPaneBorderElement => RightPaneBorder;
         internal ListView RightPaneListViewElement => RightPaneListView;
+        internal Grid RightPaneTabStripHostElement => RightPaneTabStripHost;
         internal TextBox RightPathTextBoxElement => RightPathTextBox;
         internal Border TopCommandBarBorderElement => TopCommandBarBorder;
 
@@ -186,6 +188,26 @@ namespace nuone_tools.Views
             Owner?.LeftPaneContainer_Tapped(sender, e);
         }
 
+        private void LeftPaneAddTab_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.LeftPaneAddTab_Click(sender, e);
+        }
+
+        private void LeftPaneTabStripHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            Owner?.LeftPaneTabStripHost_SizeChanged(sender, e);
+        }
+
+        private void LeftPaneTab_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.LeftPaneTab_Click(sender, e);
+        }
+
+        private void LeftPaneTabClose_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.LeftPaneTabClose_Click(sender, e);
+        }
+
         private void LeftPaneEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
         {
             Owner?.LeftPaneEntry_RightTapped(sender, e);
@@ -219,6 +241,11 @@ namespace nuone_tools.Views
         private void LeftPaneFolder_DragOver(object sender, DragEventArgs e)
         {
             Owner?.LeftPaneFolder_DragOver(sender, e);
+        }
+
+        private void LeftPaneFolder_DragLeave(object sender, DragEventArgs e)
+        {
+            Owner?.LeftPaneFolder_DragLeave(sender, e);
         }
 
         private void LeftPaneFolder_Drop(object sender, DragEventArgs e)
@@ -336,6 +363,26 @@ namespace nuone_tools.Views
             Owner?.RightPaneContainer_Tapped(sender, e);
         }
 
+        private void RightPaneAddTab_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.RightPaneAddTab_Click(sender, e);
+        }
+
+        private void RightPaneTabStripHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            Owner?.RightPaneTabStripHost_SizeChanged(sender, e);
+        }
+
+        private void RightPaneTab_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.RightPaneTab_Click(sender, e);
+        }
+
+        private void RightPaneTabClose_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.RightPaneTabClose_Click(sender, e);
+        }
+
         private void RightPaneEntry_RightTapped(object sender, RightTappedRoutedEventArgs e)
         {
             Owner?.RightPaneEntry_RightTapped(sender, e);
@@ -369,6 +416,11 @@ namespace nuone_tools.Views
         private void RightPaneFolder_DragOver(object sender, DragEventArgs e)
         {
             Owner?.RightPaneFolder_DragOver(sender, e);
+        }
+
+        private void RightPaneFolder_DragLeave(object sender, DragEventArgs e)
+        {
+            Owner?.RightPaneFolder_DragLeave(sender, e);
         }
 
         private void RightPaneFolder_Drop(object sender, DragEventArgs e)

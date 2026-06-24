@@ -1013,6 +1013,86 @@ namespace nuone_tools
             pane.GoBack();
         }
 
+        private string ResolveNewPaneTabPath(PaneViewModel pane)
+        {
+            if (!string.IsNullOrWhiteSpace(pane.CurrentPath))
+            {
+                return pane.CurrentPath;
+            }
+
+            if (ReferenceEquals(pane, LeftPane))
+            {
+                return ResolveInitialLeftPath();
+            }
+
+            var leftPath = !string.IsNullOrWhiteSpace(LeftPane.CurrentPath)
+                ? LeftPane.CurrentPath
+                : ResolveInitialLeftPath();
+            return ResolveInitialRightPath(leftPath);
+        }
+
+        private void AddPaneTab(PaneViewModel pane)
+        {
+            ActivatePane(pane);
+            var tab = pane.AddTab(ResolveNewPaneTabPath(pane));
+            UpdatePaneTabLayout(pane);
+            if (!string.IsNullOrWhiteSpace(tab.Path) && !PathEquals(tab.Path, pane.CurrentPath))
+            {
+                LoadPaneTabPath(pane, tab.Path);
+            }
+
+            UpdateSharedStatusBar();
+        }
+
+        private void ActivatePaneTab(PaneViewModel pane, PaneTabItem? tab)
+        {
+            ActivatePane(pane);
+            var path = pane.ActivateTab(tab);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                LoadPaneTabPath(pane, path);
+            }
+
+            UpdateSharedStatusBar();
+        }
+
+        private void ClosePaneTab(PaneViewModel pane, PaneTabItem? tab)
+        {
+            ActivatePane(pane);
+            if (!pane.CloseTab(tab, out var pathToLoad))
+            {
+                return;
+            }
+
+            UpdatePaneTabLayout(pane);
+            if (!string.IsNullOrWhiteSpace(pathToLoad) && !PathEquals(pathToLoad, pane.CurrentPath))
+            {
+                LoadPaneTabPath(pane, pathToLoad);
+            }
+
+            UpdateSharedStatusBar();
+        }
+
+        private void LoadPaneTabPath(PaneViewModel pane, string path)
+        {
+            if (IsSshPath(path))
+            {
+                RunFireAndForget(OpenSshPathInPaneAsync(pane, path, rememberCurrent: false), "open pane tab ssh path");
+                return;
+            }
+
+            pane.LoadTabPath(path);
+            LoadDriveCards();
+        }
+
+        private void UpdatePaneTabLayout(PaneViewModel pane)
+        {
+            var hostWidth = ReferenceEquals(pane, LeftPane)
+                ? LeftPaneTabStripHost.ActualWidth
+                : RightPaneTabStripHost.ActualWidth;
+            pane.UpdateTabLayout(hostWidth);
+        }
+
         private async Task NavigateToEditablePathAsync(PaneViewModel pane, string? rawPath = null)
         {
             ActivatePane(pane);
@@ -1220,6 +1300,46 @@ namespace nuone_tools
         internal void RightPathTextBox_GotFocus(object sender, RoutedEventArgs e)
         {
             ActivatePane(RightPane);
+        }
+
+        internal void LeftPaneAddTab_Click(object sender, RoutedEventArgs e)
+        {
+            AddPaneTab(LeftPane);
+        }
+
+        internal void LeftPaneTabStripHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            LeftPane.UpdateTabLayout(e.NewSize.Width);
+        }
+
+        internal void RightPaneAddTab_Click(object sender, RoutedEventArgs e)
+        {
+            AddPaneTab(RightPane);
+        }
+
+        internal void RightPaneTabStripHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            RightPane.UpdateTabLayout(e.NewSize.Width);
+        }
+
+        internal void LeftPaneTab_Click(object sender, RoutedEventArgs e)
+        {
+            ActivatePaneTab(LeftPane, (sender as FrameworkElement)?.DataContext as PaneTabItem);
+        }
+
+        internal void RightPaneTab_Click(object sender, RoutedEventArgs e)
+        {
+            ActivatePaneTab(RightPane, (sender as FrameworkElement)?.DataContext as PaneTabItem);
+        }
+
+        internal void LeftPaneTabClose_Click(object sender, RoutedEventArgs e)
+        {
+            ClosePaneTab(LeftPane, (sender as FrameworkElement)?.DataContext as PaneTabItem);
+        }
+
+        internal void RightPaneTabClose_Click(object sender, RoutedEventArgs e)
+        {
+            ClosePaneTab(RightPane, (sender as FrameworkElement)?.DataContext as PaneTabItem);
         }
 
         internal void LeftPaneContainer_Tapped(object sender, TappedRoutedEventArgs e)

@@ -90,6 +90,11 @@ namespace nuone_tools.Views
             Owner?.TerminalHost_PointerPressed(sender, e);
         }
 
+        private void TerminalHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            Owner?.TerminalHost_SizeChanged(sender, e);
+        }
+
         private void TerminalOutput_KeyDown(object sender, KeyRoutedEventArgs e)
         {
             Owner?.TerminalHost_KeyDown(sender, e);
