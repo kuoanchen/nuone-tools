@@ -4,17 +4,20 @@ using System.Collections.ObjectModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Net.Http;
 using System.Reflection;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Text.RegularExpressions;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using WinRT.Interop;
 
 namespace nuone_tools
 {
@@ -53,6 +56,10 @@ namespace nuone_tools
 
         [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
         private static extern int SHFileOperation(ref SHFILEOPSTRUCT lpFileOp);
+
+        [DllImport("user32.dll")]
+        [return: MarshalAs(UnmanagedType.Bool)]
+        private static extern bool SetForegroundWindow(nint hWnd);
 
         private static readonly SolidColorBrush SelectedItemBackgroundBrush = new(ColorHelper.FromArgb(255, 91, 20, 126));
         private static readonly SolidColorBrush SelectedItemBorderBrush = new(ColorHelper.FromArgb(255, 140, 60, 188));
@@ -137,6 +144,11 @@ namespace nuone_tools
         private bool _isLocalSettingsUploadWorkerRunning;
         private bool _isApplyingRemoteLocalSettings;
         private string? _pendingLocalSettingsUploadJson;
+        private readonly string? _launchArguments;
+        private readonly string[] _launchCommandLineArgs;
+        private readonly string? _launchWorkingDirectory;
+        private bool _pendingLaunchTerminalOpen;
+        private string? _pendingLaunchTerminalWorkingDirectory;
         private TerminalTabSession? _selectedTerminalTab;
         private int _nextTerminalTabNumber = 1;
 
@@ -239,9 +251,12 @@ namespace nuone_tools
 
         public PaneViewModel RightPane { get; } = new("右側");
 
-        public MainWindow()
+        public MainWindow(string? launchArguments = null, string[]? launchCommandLineArgs = null, string? launchWorkingDirectory = null)
         {
             AppLogging.Information("MainWindow constructor start");
+            _launchArguments = launchArguments;
+            _launchCommandLineArgs = launchCommandLineArgs ?? Array.Empty<string>();
+            _launchWorkingDirectory = launchWorkingDirectory;
             InitializeComponent();
             AppLogging.Information("MainWindow InitializeComponent completed");
 
@@ -301,6 +316,7 @@ namespace nuone_tools
             UpdateSettingsSectionVisuals();
             UpdateTerminalUi();
             UpdateSharedStatusBar();
+            ApplyLaunchArguments();
 
             _selectionFlyoutTimer = DispatcherQueue.CreateTimer();
             _selectionFlyoutTimer.Interval = TimeSpan.FromMilliseconds(225);
@@ -323,10 +339,92 @@ namespace nuone_tools
             RunFireAndForget(InitializeRemoteSyncSettingsAsync(), "startup remote settings sync");
             RunFireAndForget(CheckForUpdatesAsync(isAutomatic: true), "startup app update check");
             AppLogging.Information(
-                "MainWindow constructor completed ActiveSection={ActiveSection} LeftPath={LeftPath} RightPath={RightPath}",
+                "MainWindow constructor completed ActiveSection={ActiveSection} LeftPath={LeftPath} RightPath={RightPath} LaunchArguments={LaunchArguments} LaunchCommandLineArgs={LaunchCommandLineArgs} LaunchWorkingDirectory={LaunchWorkingDirectory}",
                 _activeSection,
                 LeftPane.CurrentPath,
-                RightPane.CurrentPath);
+                RightPane.CurrentPath,
+                _launchArguments,
+                _launchCommandLineArgs,
+                _launchWorkingDirectory);
+        }
+
+        private void ApplyLaunchArguments()
+        {
+            try
+            {
+                var tokens = TokenizeLaunchArguments(_launchArguments, _launchCommandLineArgs);
+
+                AppLogging.Information(
+                    "ApplyLaunchArguments evaluating Tokens={Tokens} RawArguments={RawArguments} WorkingDirectory={WorkingDirectory}",
+                    tokens,
+                    _launchArguments,
+                    _launchWorkingDirectory);
+
+                if (tokens.Any(static token => string.Equals(token, "-w", StringComparison.OrdinalIgnoreCase)))
+                {
+                    _pendingLaunchTerminalOpen = true;
+                    _pendingLaunchTerminalWorkingDirectory = ResolveLaunchWorkingDirectory();
+                    AppLogging.Information(
+                        "Launch argument matched terminal switch RawArguments={RawArguments} CommandLineArgs={CommandLineArgs} WorkingDirectory={WorkingDirectory}",
+                        _launchArguments,
+                        _launchCommandLineArgs,
+                        _launchWorkingDirectory);
+                    OpenTerminalSection(workingDirectoryOverride: _pendingLaunchTerminalWorkingDirectory);
+                }
+            }
+            catch (Exception ex)
+            {
+                AppLogging.Error(ex, "Failed to apply launch arguments Arguments={LaunchArguments}", _launchArguments);
+            }
+        }
+
+        private string? ResolveLaunchWorkingDirectory()
+        {
+            return !string.IsNullOrWhiteSpace(_launchWorkingDirectory) && Directory.Exists(_launchWorkingDirectory)
+                ? _launchWorkingDirectory.Trim()
+                : null;
+        }
+
+        internal void HandleExternalLaunchRequest(string? launchArguments, string[]? launchCommandLineArgs, string? launchWorkingDirectory)
+        {
+            TryEnqueueUi(
+                () =>
+                {
+                    var tokens = TokenizeLaunchArguments(launchArguments, launchCommandLineArgs);
+                    AppLogging.Information(
+                        "HandleExternalLaunchRequest Tokens={Tokens} RawArguments={RawArguments} WorkingDirectory={WorkingDirectory}",
+                        tokens,
+                        launchArguments,
+                        launchWorkingDirectory);
+
+                    Activate();
+                    SetForegroundWindow(WindowNative.GetWindowHandle(this));
+
+                    if (tokens.Any(static token => string.Equals(token, "-w", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var workingDirectory = !string.IsNullOrWhiteSpace(launchWorkingDirectory) && Directory.Exists(launchWorkingDirectory)
+                            ? launchWorkingDirectory.Trim()
+                            : null;
+                        OpenTerminalSection(workingDirectoryOverride: workingDirectory);
+                    }
+                },
+                "external launch request");
+        }
+
+        private static string[] TokenizeLaunchArguments(string? rawArguments, IEnumerable<string>? commandLineArgs)
+        {
+            var rawArgumentTokens = string.IsNullOrWhiteSpace(rawArguments)
+                ? Array.Empty<string>()
+                : Regex.Matches(rawArguments, "\"[^\"]*\"|\\S+")
+                    .Select(match => match.Value.Trim().Trim('"'))
+                    .Where(token => !string.IsNullOrWhiteSpace(token))
+                    .ToArray();
+
+            return rawArgumentTokens
+                .Concat(commandLineArgs ?? Array.Empty<string>())
+                .Where(token => !string.IsNullOrWhiteSpace(token))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
 
         private static string GetAppVersionText()
@@ -419,7 +517,21 @@ namespace nuone_tools
 
         private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
         {
-            if (args.WindowActivationState == WindowActivationState.Deactivated || _isAutomationExecutionOwner)
+            if (args.WindowActivationState == WindowActivationState.Deactivated)
+            {
+                return;
+            }
+
+            if (_pendingLaunchTerminalOpen)
+            {
+                _pendingLaunchTerminalOpen = false;
+                AppLogging.Information(
+                    "Applying pending terminal launch on activation WorkingDirectory={WorkingDirectory}",
+                    _pendingLaunchTerminalWorkingDirectory);
+                OpenTerminalSection(workingDirectoryOverride: _pendingLaunchTerminalWorkingDirectory);
+            }
+
+            if (_isAutomationExecutionOwner)
             {
                 return;
             }

@@ -1,7 +1,7 @@
 ﻿# Nuone Tools
 
-![Version](https://img.shields.io/badge/version-1.202606.3-blue.svg?cacheSeconds=2592000)
-![AssemblyVersion](https://img.shields.io/badge/assembly-1.2026.6.3-purple.svg?cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-1.202606.4-blue.svg?cacheSeconds=2592000)
+![AssemblyVersion](https://img.shields.io/badge/assembly-1.2026.6.4-purple.svg?cacheSeconds=2592000)
 ![TargetFramework](https://img.shields.io/badge/framework-net8.0-windows10.0.19041.0-0a7ea4.svg?cacheSeconds=2592000)
 
 WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動化、批次重新命名、工具列命令與原生 Windows Shell 操作流程。
@@ -10,10 +10,10 @@ WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動
 
 - 專案名稱：Nuone Tools
 - RootNamespace：`nuone_tools`
-- Version：`1.202606.3`
-- AssemblyVersion：`1.2026.6.3`
-- FileVersion：`1.2026.6.3`
-- InformationalVersion：`1.2026.6.3`
+- Version：`1.202606.4`
+- AssemblyVersion：`1.2026.6.4`
+- FileVersion：`1.2026.6.4`
+- InformationalVersion：`1.2026.6.4`
 - TargetFramework：`net8.0-windows10.0.19041.0`
 - Platforms：`x86;x64;ARM64`
 - RuntimeIdentifiers：`win-x86;win-x64;win-arm64`
@@ -35,6 +35,23 @@ WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動
 .\package-release.cmd
 ```
 
+### 啟動模式
+
+```powershell
+nuone-tools.exe
+nuone-tools.exe -w
+nuone-tools.exe -w -it 2
+```
+
+- `nuone-tools.exe`
+  - 一般模式，可開多個 UI 視窗。
+- `nuone-tools.exe -w`
+  - 共用既有其中一個 UI，直接切到終端機，工作目錄跟隨目前外部終端機路徑。
+- `nuone-tools.exe -w -it 2`
+  - 指定切到第 2 個已開啟的 UI 視窗，再進終端機。
+- `tools.cmd` 與 Git Bash 用的 `tools` wrapper 會在 app 啟動時自動建立到「目前使用者 PATH 中可寫入的資料夾」。
+  - 若 `WindowsApps` 不可寫，會改放到像 `C:\Users\<user>\.local\bin` 這類可寫且已在 PATH 的位置。
+
 ## 文件產生方式
 
 - `scripts\generate-changelog.ps1`
@@ -48,6 +65,15 @@ WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動
   - 依序產生 changelog 與 readme
 
 ## Changelog
+
+## 1.202606.4 (2026-06-25)
+
+### 新功能
+
+* 啟動時自動安裝 tools 命令別名 ([655411c](https://github.com/kuoanchen/nuone-tools/commit/655411cba1e82afed6fb440ac8be5795fcb7d7df))
+  - 在 `App.xaml.cs` 新增 `tools.cmd` 與 `tools` wrapper 自動建立流程，啟動時會把 `nuone-tools.exe` 暴露成可從 cmd 與 Git Bash 呼叫的 `tools` 命令
+* 支援單實例終端機喚起與外部啟動導向 ([184eed3](https://github.com/kuoanchen/nuone-tools/commit/184eed37fb6b9bd2d09f7055abdb69152db69f0a))
+  - 新增 app 單實例註冊與 named pipe 轉送機制，支援將後續啟動請求導向既有 nuone-tools 視窗
 
 ## 1.202606.3 (2026-06-24)
 

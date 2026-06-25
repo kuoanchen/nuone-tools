@@ -367,15 +367,42 @@ namespace nuone_tools
         {
             if (TerminalTabs.Count > 0)
             {
-                if (_selectedTerminalTab is null)
+                var session = _selectedTerminalTab;
+                if (session is null)
                 {
-                    SelectTerminalTab(TerminalTabs[0]);
+                    session = TerminalTabs[0];
+                    SelectTerminalTab(session);
+                }
+
+                if (!string.IsNullOrWhiteSpace(workingDirectoryOverride))
+                {
+                    ApplyTerminalWorkingDirectoryOverride(session, workingDirectoryOverride);
                 }
 
                 return;
             }
 
             AddTerminalTab(GetDefaultTerminalShellKind(), true, workingDirectoryOverride);
+        }
+
+        private void ApplyTerminalWorkingDirectoryOverride(TerminalTabSession session, string workingDirectoryOverride)
+        {
+            var candidate = workingDirectoryOverride.Trim();
+            if (string.IsNullOrWhiteSpace(candidate) || !Directory.Exists(candidate))
+            {
+                return;
+            }
+
+            session.WorkingDirectory = candidate;
+            if (session.ConPtyContext is not null && session.Process is not null && !session.Process.HasExited)
+            {
+                RunFireAndForget(
+                    SendTerminalInternalCommandAsync(session, BuildWorkingDirectoryCommand(session.ShellKind, candidate)),
+                    "terminal external launch working directory command");
+            }
+
+            session.StatusText = $"工作目錄已切換到 {session.WorkingDirectory}";
+            UpdateTerminalUi();
         }
 
         private void AddTerminalTab(TerminalShellKind shellKind, bool shouldSelect, string? workingDirectoryOverride = null)
