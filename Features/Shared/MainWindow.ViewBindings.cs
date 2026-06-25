@@ -15,10 +15,12 @@ namespace nuone_tools
         private Button DriveSectionMenuButton => FileManagerPage.DriveSectionMenuButtonElement;
         private Border LeftPaneBorder => FileManagerPage.LeftPaneBorderElement;
         private ListView LeftPaneListView => FileManagerPage.LeftPaneListViewElement;
+        private Grid LeftPaneTabStripHost => FileManagerPage.LeftPaneTabStripHostElement;
         private TextBox LeftPathTextBox => FileManagerPage.LeftPathTextBoxElement;
         private TextBox NewGroupNameTextBox => FileManagerPage.NewGroupNameTextBoxElement;
         private Border RightPaneBorder => FileManagerPage.RightPaneBorderElement;
         private ListView RightPaneListView => FileManagerPage.RightPaneListViewElement;
+        private Grid RightPaneTabStripHost => FileManagerPage.RightPaneTabStripHostElement;
         private TextBox RightPathTextBox => FileManagerPage.RightPathTextBoxElement;
         private Border TopCommandBarBorder => FileManagerPage.TopCommandBarBorderElement;
 
@@ -56,9 +58,12 @@ namespace nuone_tools
         private StackPanel AutomationWeeklyDaysPanel => AutomationPage.WeeklyDaysPanel;
 
         private TextBox AccountApiUrlTextBox => SettingsPage.AccountApiUrlTextBoxElement;
+        private Border AccountConnectionStatusCard => SettingsPage.AccountConnectionStatusCardElement;
         private TextBlock AccountConnectionStatusTextBlock => SettingsPage.AccountConnectionStatusTextBlockElement;
         private TextBox AccountEmailTextBox => SettingsPage.AccountEmailTextBoxElement;
         private TextBlock AccountLastLoginTextBlock => SettingsPage.AccountLastLoginTextBlockElement;
+        private StackPanel AccountLoginFieldsPanel => SettingsPage.AccountLoginFieldsPanelElement;
+        private TextBox AccountPayloadJsonTextBox => SettingsPage.AccountPayloadJsonTextBoxElement;
         private PasswordBox AccountPasswordBox => SettingsPage.AccountPasswordBoxElement;
         private TextBlock AccountServiceAccountsTextBlock => SettingsPage.AccountServiceAccountsTextBlockElement;
         private Border AccountSettingsContent => SettingsPage.AccountSettingsContentElement;
@@ -70,13 +75,17 @@ namespace nuone_tools
         private Border AppearanceSettingsNavBorder => SettingsPage.AppearanceSettingsNavBorderElement;
         private TextBlock AppearanceSettingsNavText => SettingsPage.AppearanceSettingsNavTextElement;
         private TextBlock CaptureHintTextBlock => SettingsPage.CaptureHintTextBlockElement;
-        private Button ClearAccountSessionButton => SettingsPage.ClearAccountSessionButtonElement;
         private TextBox CopyShortcutTextBox => SettingsPage.CopyShortcutTextBoxElement;
         private TextBox CreateFolderShortcutTextBox => SettingsPage.CreateFolderShortcutTextBoxElement;
         private TextBox DeleteShortcutTextBox => SettingsPage.DeleteShortcutTextBoxElement;
         private TextBox DefaultTerminalCustomWorkingDirectoryTextBox => SettingsPage.DefaultTerminalCustomWorkingDirectoryTextBoxElement;
         private ComboBox DefaultTerminalShellComboBox => SettingsPage.DefaultTerminalShellComboBoxElement;
         private ComboBox DefaultTerminalWorkingDirectoryModeComboBox => SettingsPage.DefaultTerminalWorkingDirectoryModeComboBoxElement;
+        private TextBlock CurrentAppVersionTextBlock => SettingsPage.CurrentAppVersionTextBlockElement;
+        private StackPanel AppUpdateActionButtonsPanel => SettingsPage.AppUpdateActionButtonsPanelElement;
+        private Button CheckForUpdatesButton => SettingsPage.CheckForUpdatesButtonElement;
+        private Button OpenUpdateDownloadButton => SettingsPage.OpenUpdateDownloadButtonElement;
+        private Button CopyUpdateDownloadUrlButton => SettingsPage.CopyUpdateDownloadUrlButtonElement;
         private TextBox FileBunkerApiKeyTextBox => SettingsPage.FileBunkerApiKeyTextBoxElement;
         private TextBox FileBunkerClientIdTextBox => SettingsPage.FileBunkerClientIdTextBoxElement;
         private TextBox FileBunkerDaysToExpirationTextBox => SettingsPage.FileBunkerDaysToExpirationTextBoxElement;
@@ -84,7 +93,14 @@ namespace nuone_tools
         private TextBox FileBunkerInputEndpointTextBox => SettingsPage.FileBunkerInputEndpointTextBoxElement;
         private TextBox FileBunkerKeyLengthTextBox => SettingsPage.FileBunkerKeyLengthTextBoxElement;
         private TextBox FileBunkerOutputEndpointTextBox => SettingsPage.FileBunkerOutputEndpointTextBoxElement;
-        private Border GeneralSettingsContent => SettingsPage.GeneralSettingsContentElement;
+        private TextBox LogDirectoryPathTextBox => SettingsPage.LogDirectoryPathTextBoxElement;
+        private TextBlock AppUpdateManifestUrlTextBlock => SettingsPage.AppUpdateManifestUrlTextBlockElement;
+        private TextBlock AppUpdateReleaseNotesTextBlock => SettingsPage.AppUpdateReleaseNotesTextBlockElement;
+        private TextBlock AppUpdateStatusTextBlock => SettingsPage.AppUpdateStatusTextBlockElement;
+        private TextBlock LatestAppVersionTextBlock => SettingsPage.LatestAppVersionTextBlockElement;
+        private TextBlock LastAppUpdateCheckTextBlock => SettingsPage.LastAppUpdateCheckTextBlockElement;
+        private TextBlock LastLocalBackupTextBlock => SettingsPage.LastLocalBackupTextBlockElement;
+        private StackPanel GeneralSettingsContent => SettingsPage.GeneralSettingsContentElement;
         private Border GeneralSettingsNavBorder => SettingsPage.GeneralSettingsNavBorderElement;
         private TextBlock GeneralSettingsNavText => SettingsPage.GeneralSettingsNavTextElement;
         private Button LoginAccountButton => SettingsPage.LoginAccountButtonElement;

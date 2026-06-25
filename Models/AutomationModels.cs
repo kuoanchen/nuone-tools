@@ -58,6 +58,8 @@ namespace nuone_tools
         private int _weeklyDaysMask = 62;
         private bool _runMissedOnStartup;
         private bool _isEnabled = true;
+        private bool _notificationEnabled = true;
+        private bool _toastEnabled = true;
         private bool _isRunning;
         private string _lastRunText = "尚未執行";
         private string _lastResultText = "等待排程";
@@ -263,6 +265,18 @@ namespace nuone_tools
                     OnPropertyChanged(nameof(StopButtonVisibility));
                 }
             }
+        }
+
+        public bool NotificationEnabled
+        {
+            get => _notificationEnabled;
+            set => SetProperty(ref _notificationEnabled, value);
+        }
+
+        public bool ToastEnabled
+        {
+            get => _toastEnabled;
+            set => SetProperty(ref _toastEnabled, value);
         }
 
         public bool IsRunning
@@ -495,6 +509,8 @@ namespace nuone_tools
         private string _extensionFilter = ".zip, .rar, .7z";
         private string _pendingPasswordText = string.Empty;
         private bool _isEnabled = true;
+        private bool _notificationEnabled = true;
+        private bool _toastEnabled = true;
         private bool _isRunning;
         private string _lastRunText = "尚未執行";
         private string _lastResultText = "監看待命";
@@ -559,6 +575,18 @@ namespace nuone_tools
                     OnPropertyChanged(nameof(StopButtonVisibility));
                 }
             }
+        }
+
+        public bool NotificationEnabled
+        {
+            get => _notificationEnabled;
+            set => SetProperty(ref _notificationEnabled, value);
+        }
+
+        public bool ToastEnabled
+        {
+            get => _toastEnabled;
+            set => SetProperty(ref _toastEnabled, value);
         }
 
         public bool IsRunning

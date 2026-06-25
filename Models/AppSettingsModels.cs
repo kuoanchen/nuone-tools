@@ -167,23 +167,54 @@ namespace nuone_tools
 
         public List<string> HiddenDrivePaths { get; set; } = new();
 
-        public string LeftPanePath { get; set; } = string.Empty;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? LeftPanePath { get; set; }
 
-        public string RightPanePath { get; set; } = string.Empty;
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public string? RightPanePath { get; set; }
 
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
         public WindowPlacementConfig? WindowPlacement { get; set; }
 
-        public AccountSettingsConfig Account { get; set; } = new();
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public AccountSettingsConfig? Account { get; set; }
 
         public FileBunkerSettingsConfig FileBunker { get; set; } = new();
 
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public LoggingSettingsConfig? Logging { get; set; }
+
         public List<ToolbarCommandConfig> ToolbarCommands { get; set; } = new();
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<BackupAutomationConfig>? BackupAutomations { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<AutoExtractProfileConfig>? AutoExtractProfiles { get; set; }
+
+        [JsonIgnore(Condition = JsonIgnoreCondition.WhenWritingNull)]
+        public List<PathGroupConfig>? Groups { get; set; }
+    }
+
+    public sealed class LocalSettingsConfig
+    {
+        public AccountSettingsConfig Account { get; set; } = new();
 
         public List<BackupAutomationConfig> BackupAutomations { get; set; } = new();
 
         public List<AutoExtractProfileConfig> AutoExtractProfiles { get; set; } = new();
 
         public List<PathGroupConfig> Groups { get; set; } = new();
+
+        public string LeftPanePath { get; set; } = string.Empty;
+
+        public string RightPanePath { get; set; } = string.Empty;
+
+        public WindowPlacementConfig? WindowPlacement { get; set; }
+
+        public LoggingSettingsConfig Logging { get; set; } = new();
+
+        public string LastLocalBackupText { get; set; } = "尚未備份";
     }
 
     public sealed class AccountSettingsConfig
@@ -222,6 +253,48 @@ namespace nuone_tools
         public int DaysToExpiration { get; set; } = 3650;
 
         public int DaysToPurge { get; set; } = 20;
+    }
+
+    public sealed class LoggingSettingsConfig
+    {
+        public string LogDirectoryPath { get; set; } = MainWindow.DefaultLogDirectoryPath;
+    }
+
+    public sealed class AppUpdateManifest
+    {
+        public string App { get; set; } = string.Empty;
+
+        public string Channel { get; set; } = string.Empty;
+
+        public string Version { get; set; } = string.Empty;
+
+        [JsonPropertyName("published_at")]
+        public string PublishedAt { get; set; } = string.Empty;
+
+        public AppUpdatePackageManifest Package { get; set; } = new();
+
+        [JsonPropertyName("release_notes")]
+        public string ReleaseNotes { get; set; } = string.Empty;
+
+        public bool Mandatory { get; set; }
+
+        [JsonPropertyName("min_supported_version")]
+        public string MinSupportedVersion { get; set; } = string.Empty;
+    }
+
+    public sealed class AppUpdatePackageManifest
+    {
+        public string Platform { get; set; } = string.Empty;
+
+        public string Type { get; set; } = string.Empty;
+
+        public string Filename { get; set; } = string.Empty;
+
+        public string Url { get; set; } = string.Empty;
+
+        public string Sha256 { get; set; } = string.Empty;
+
+        public long Size { get; set; }
     }
 
     public sealed class NotificationHistoryRecord
@@ -337,6 +410,10 @@ namespace nuone_tools
 
         public bool IsEnabled { get; set; } = true;
 
+        public bool NotificationEnabled { get; set; } = true;
+
+        public bool ToastEnabled { get; set; } = true;
+
         public string LastRunText { get; set; } = "尚未執行";
 
         public string LastResultText { get; set; } = "等待排程";
@@ -361,6 +438,10 @@ namespace nuone_tools
         public string PasswordListText { get; set; } = string.Empty;
 
         public bool IsEnabled { get; set; } = true;
+
+        public bool NotificationEnabled { get; set; } = true;
+
+        public bool ToastEnabled { get; set; } = true;
 
         public string LastRunText { get; set; } = "尚未執行";
 

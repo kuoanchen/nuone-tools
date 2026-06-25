@@ -4,7 +4,7 @@
     <TargetFramework>net8.0-windows10.0.19041.0</TargetFramework>
     <TargetPlatformMinVersion>10.0.17763.0</TargetPlatformMinVersion>
     <RootNamespace>nuone_tools</RootNamespace>
-    <AppVersion>1.2026.6.2</AppVersion>
+    <AppVersion>1.2026.6.3</AppVersion>
     <Version>$(AppVersion)</Version>
     <AssemblyVersion>$(AppVersion)</AssemblyVersion>
     <FileVersion>$(AppVersion)</FileVersion>
@@ -30,6 +30,13 @@
     <Content Include="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" />
     <Content Include="Assets\StoreLogo.png" />
     <Content Include="Assets\Wide310x150Logo.scale-200.png" />
+    <Content Include="scripts\enhance_pdf.py" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Update="Assets\AppIcon.ico" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Update="Assets\Square44x44Logo.scale-200.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
+    <Content Update="Assets\Square44x44Logo.targetsize-24_altform-unplated.png" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
@@ -49,6 +56,14 @@
       Namespaces="&lt;Namespace Prefix='pkg' Uri='http://schemas.microsoft.com/appx/manifest/foundation/windows10'/&gt;" />
   </Target>
 
+  <Target Name="CopyWindowsAppRuntimeInsightsResourceToOutput" AfterTargets="Build" Condition="'$(RuntimeIdentifier)' != '' and '$(DesignTimeBuild)' != 'true'">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\extract-windows-app-runtime-resource.ps1&quot; -RuntimeIdentifier &quot;$(RuntimeIdentifier)&quot; -OutputDirectory &quot;$(OutDir)&quot;" />
+  </Target>
+
+  <Target Name="CopyWindowsAppRuntimeInsightsResourceToPublish" AfterTargets="Publish" Condition="'$(RuntimeIdentifier)' != ''">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\extract-windows-app-runtime-resource.ps1&quot; -RuntimeIdentifier &quot;$(RuntimeIdentifier)&quot; -OutputDirectory &quot;$(PublishDir)&quot;" />
+  </Target>
+
   <!--
     Defining the "Msix" ProjectCapability here allows the Single-project MSIX Packaging
     Tools extension to be activated for this project even if the Windows App SDK Nuget
@@ -60,6 +75,8 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.Windows.SDK.BuildTools" Version="10.0.28000.1839" />
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Serilog" Version="4.3.0" />
+    <PackageReference Include="Serilog.Sinks.File" Version="7.0.0" />
   </ItemGroup>
 
   <!--

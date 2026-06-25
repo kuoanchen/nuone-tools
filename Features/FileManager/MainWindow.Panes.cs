@@ -219,10 +219,18 @@ namespace nuone_tools
                 return false;
             }
 
-            return Directory.Exists(path) ||
-                IsSshPath(path) ||
-                TryEnumerateWslDistributions(path, out _) ||
-                TryEnumerateUncServerShares(path, out _);
+            try
+            {
+                return Directory.Exists(path) ||
+                    IsSshPath(path) ||
+                    TryEnumerateWslDistributions(path, out _) ||
+                    TryEnumerateUncServerShares(path, out _);
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, "navigable directory check");
+                return false;
+            }
         }
 
         internal static bool IsSshPath(string? path)
@@ -492,13 +500,7 @@ namespace nuone_tools
         {
             try
             {
-                Directory.CreateDirectory(ConfigDirectoryPath);
-                var logPath = Path.Combine(ConfigDirectoryPath, "ssh-debug.log");
-                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}";
-                lock (SshDebugLogLock)
-                {
-                    File.AppendAllText(logPath, line, Encoding.UTF8);
-                }
+                AppLogging.Debug("SSH {Message}", message);
             }
             catch
             {
@@ -509,17 +511,21 @@ namespace nuone_tools
         {
             try
             {
-                Directory.CreateDirectory(ConfigDirectoryPath);
-                var logPath = Path.Combine(ConfigDirectoryPath, fileName);
-                var line = $"{DateTime.Now:yyyy-MM-dd HH:mm:ss.fff} {message}{Environment.NewLine}";
-                lock (SshDebugLogLock)
-                {
-                    File.AppendAllText(logPath, line, Encoding.UTF8);
-                }
+                AppLogging.Debug("DebugLog Category={LogCategory} Message={DebugMessage}", NormalizeLegacyLogCategory(fileName), message);
             }
             catch
             {
             }
+        }
+
+        private static string NormalizeLegacyLogCategory(string fileName)
+        {
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return "debug";
+            }
+
+            return Path.GetFileNameWithoutExtension(fileName.Trim());
         }
 
         private static string BuildLogPreview(string? value)
@@ -956,7 +962,7 @@ namespace nuone_tools
         {
             if (IsSshPath(path))
             {
-                _ = OpenSshPathInPaneAsync(pane, path, rememberCurrent: true);
+                RunFireAndForget(OpenSshPathInPaneAsync(pane, path, rememberCurrent: true), "open ssh path");
                 ActivatePane(pane);
                 return;
             }
@@ -969,7 +975,7 @@ namespace nuone_tools
         {
             if (IsSshPath(pane.CurrentPath))
             {
-                _ = OpenSshPathInPaneAsync(pane, pane.CurrentPath, rememberCurrent: false);
+                RunFireAndForget(OpenSshPathInPaneAsync(pane, pane.CurrentPath, rememberCurrent: false), "refresh ssh path");
                 return;
             }
 
@@ -994,7 +1000,7 @@ namespace nuone_tools
         {
             if (IsSshPath(pane.CurrentPath))
             {
-                _ = OpenSshPathInPaneAsync(pane, GetSshParentPath(pane.CurrentPath), rememberCurrent: true);
+                RunFireAndForget(OpenSshPathInPaneAsync(pane, GetSshParentPath(pane.CurrentPath), rememberCurrent: true), "navigate ssh parent");
                 ActivatePane(pane);
                 return;
             }
@@ -1005,6 +1011,86 @@ namespace nuone_tools
         private void NavigateBack(PaneViewModel pane)
         {
             pane.GoBack();
+        }
+
+        private string ResolveNewPaneTabPath(PaneViewModel pane)
+        {
+            if (!string.IsNullOrWhiteSpace(pane.CurrentPath))
+            {
+                return pane.CurrentPath;
+            }
+
+            if (ReferenceEquals(pane, LeftPane))
+            {
+                return ResolveInitialLeftPath();
+            }
+
+            var leftPath = !string.IsNullOrWhiteSpace(LeftPane.CurrentPath)
+                ? LeftPane.CurrentPath
+                : ResolveInitialLeftPath();
+            return ResolveInitialRightPath(leftPath);
+        }
+
+        private void AddPaneTab(PaneViewModel pane)
+        {
+            ActivatePane(pane);
+            var tab = pane.AddTab(ResolveNewPaneTabPath(pane));
+            UpdatePaneTabLayout(pane);
+            if (!string.IsNullOrWhiteSpace(tab.Path) && !PathEquals(tab.Path, pane.CurrentPath))
+            {
+                LoadPaneTabPath(pane, tab.Path);
+            }
+
+            UpdateSharedStatusBar();
+        }
+
+        private void ActivatePaneTab(PaneViewModel pane, PaneTabItem? tab)
+        {
+            ActivatePane(pane);
+            var path = pane.ActivateTab(tab);
+            if (!string.IsNullOrWhiteSpace(path))
+            {
+                LoadPaneTabPath(pane, path);
+            }
+
+            UpdateSharedStatusBar();
+        }
+
+        private void ClosePaneTab(PaneViewModel pane, PaneTabItem? tab)
+        {
+            ActivatePane(pane);
+            if (!pane.CloseTab(tab, out var pathToLoad))
+            {
+                return;
+            }
+
+            UpdatePaneTabLayout(pane);
+            if (!string.IsNullOrWhiteSpace(pathToLoad) && !PathEquals(pathToLoad, pane.CurrentPath))
+            {
+                LoadPaneTabPath(pane, pathToLoad);
+            }
+
+            UpdateSharedStatusBar();
+        }
+
+        private void LoadPaneTabPath(PaneViewModel pane, string path)
+        {
+            if (IsSshPath(path))
+            {
+                RunFireAndForget(OpenSshPathInPaneAsync(pane, path, rememberCurrent: false), "open pane tab ssh path");
+                return;
+            }
+
+            pane.LoadTabPath(path);
+            LoadDriveCards();
+        }
+
+        private void UpdatePaneTabLayout(PaneViewModel pane)
+        {
+            var hostWidth = ReferenceEquals(pane, LeftPane)
+                ? LeftPaneTabStripHost.ActualWidth
+                : RightPaneTabStripHost.ActualWidth;
+            pane.UpdateTabLayout(hostWidth);
         }
 
         private async Task NavigateToEditablePathAsync(PaneViewModel pane, string? rawPath = null)
@@ -1093,6 +1179,12 @@ namespace nuone_tools
             _activePane = pane;
             UpdateActivePaneVisuals();
             UpdateSharedStatusBar();
+        }
+
+        private void FocusPaneList(PaneViewModel pane)
+        {
+            var listView = ReferenceEquals(pane, LeftPane) ? LeftPaneListView : RightPaneListView;
+            _ = listView.Focus(FocusState.Programmatic);
         }
 
         private void UpdateActivePaneVisuals()
@@ -1210,23 +1302,69 @@ namespace nuone_tools
             ActivatePane(RightPane);
         }
 
+        internal void LeftPaneAddTab_Click(object sender, RoutedEventArgs e)
+        {
+            AddPaneTab(LeftPane);
+        }
+
+        internal void LeftPaneTabStripHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            LeftPane.UpdateTabLayout(e.NewSize.Width);
+        }
+
+        internal void RightPaneAddTab_Click(object sender, RoutedEventArgs e)
+        {
+            AddPaneTab(RightPane);
+        }
+
+        internal void RightPaneTabStripHost_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            RightPane.UpdateTabLayout(e.NewSize.Width);
+        }
+
+        internal void LeftPaneTab_Click(object sender, RoutedEventArgs e)
+        {
+            ActivatePaneTab(LeftPane, (sender as FrameworkElement)?.DataContext as PaneTabItem);
+        }
+
+        internal void RightPaneTab_Click(object sender, RoutedEventArgs e)
+        {
+            ActivatePaneTab(RightPane, (sender as FrameworkElement)?.DataContext as PaneTabItem);
+        }
+
+        internal void LeftPaneTabClose_Click(object sender, RoutedEventArgs e)
+        {
+            ClosePaneTab(LeftPane, (sender as FrameworkElement)?.DataContext as PaneTabItem);
+        }
+
+        internal void RightPaneTabClose_Click(object sender, RoutedEventArgs e)
+        {
+            ClosePaneTab(RightPane, (sender as FrameworkElement)?.DataContext as PaneTabItem);
+        }
+
         internal void LeftPaneContainer_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
+            FocusPaneList(LeftPane);
         }
 
         internal void RightPaneContainer_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(RightPane);
+            FocusPaneList(RightPane);
         }
 
         internal void LeftPaneList_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
+            FocusPaneList(LeftPane);
         }
 
         internal void LeftPaneList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            AppendDebugLog(
+                "pane-selection-debug.log",
+                $"LeftPane.SelectionChanged currentPath={LeftPane.CurrentPath} added={e.AddedItems.Count} removed={e.RemovedItems.Count} listSelected={LeftPaneListView.SelectedItems.Count}");
             SyncPaneSelectionFromListView(LeftPane, LeftPaneListView);
             ApplySelectionVisuals(LeftPaneListView);
             ScheduleSelectionSizeUpdate(LeftPane);
@@ -1235,10 +1373,14 @@ namespace nuone_tools
         internal void RightPaneList_Tapped(object sender, TappedRoutedEventArgs e)
         {
             ActivatePane(RightPane);
+            FocusPaneList(RightPane);
         }
 
         internal void RightPaneList_SelectionChanged(object sender, SelectionChangedEventArgs e)
         {
+            AppendDebugLog(
+                "pane-selection-debug.log",
+                $"RightPane.SelectionChanged currentPath={RightPane.CurrentPath} added={e.AddedItems.Count} removed={e.RemovedItems.Count} listSelected={RightPaneListView.SelectedItems.Count}");
             SyncPaneSelectionFromListView(RightPane, RightPaneListView);
             ApplySelectionVisuals(RightPaneListView);
             ScheduleSelectionSizeUpdate(RightPane);
@@ -1409,7 +1551,7 @@ namespace nuone_tools
             timer.Stop();
             if (immediate)
             {
-                _ = UpdateSelectionSizeAsync(pane);
+                RunFireAndForget(UpdateSelectionSizeAsync(pane), "update selection size immediate");
                 return;
             }
 
@@ -1419,13 +1561,13 @@ namespace nuone_tools
         private void LeftSelectionSizeTimer_Tick(DispatcherQueueTimer sender, object args)
         {
             sender.Stop();
-            _ = UpdateSelectionSizeAsync(LeftPane);
+            RunFireAndForget(UpdateSelectionSizeAsync(LeftPane), "left selection size timer");
         }
 
         private void RightSelectionSizeTimer_Tick(DispatcherQueueTimer sender, object args)
         {
             sender.Stop();
-            _ = UpdateSelectionSizeAsync(RightPane);
+            RunFireAndForget(UpdateSelectionSizeAsync(RightPane), "right selection size timer");
         }
     }
 }

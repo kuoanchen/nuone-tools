@@ -157,33 +157,63 @@ namespace nuone_tools
 
         private void Watcher_Error(object sender, ErrorEventArgs e)
         {
-            _dispatcherQueue.TryEnqueue(Start);
+            if (!_dispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        Start();
+                    }
+                    catch (Exception ex)
+                    {
+                        MainWindow.LogBoundaryException(ex, "backup automation watcher error restart");
+                    }
+                }))
+            {
+                AppLogging.Warning("Backup automation watcher restart queue rejected Profile={Profile}", _profile.Name);
+            }
         }
 
         private void ScheduleTrigger()
         {
-            _dispatcherQueue.TryEnqueue(() =>
-            {
-                if (_isDisposed)
+            if (!_dispatcherQueue.TryEnqueue(() =>
                 {
-                    return;
-                }
+                    try
+                    {
+                        if (_isDisposed)
+                        {
+                            return;
+                        }
 
-                _debounceTimer.Stop();
-                _debounceTimer.Start();
-            });
+                        _debounceTimer.Stop();
+                        _debounceTimer.Start();
+                    }
+                    catch (Exception ex)
+                    {
+                        MainWindow.LogBoundaryException(ex, "backup automation watcher schedule trigger");
+                    }
+                }))
+            {
+                AppLogging.Warning("Backup automation watcher trigger queue rejected Profile={Profile}", _profile.Name);
+            }
         }
 
         private void DebounceTimer_Tick(DispatcherQueueTimer sender, object args)
         {
-            sender.Stop();
-
-            if (_isDisposed || !_profile.IsEnabled || _profile.Mode != BackupAutomationMode.Mirror)
+            try
             {
-                return;
-            }
+                sender.Stop();
 
-            _triggerAction();
+                if (_isDisposed || !_profile.IsEnabled || _profile.Mode != BackupAutomationMode.Mirror)
+                {
+                    return;
+                }
+
+                _triggerAction();
+            }
+            catch (Exception ex)
+            {
+                MainWindow.LogBoundaryException(ex, "backup automation watcher debounce tick");
+            }
         }
 
         private void StopInternal()

@@ -23,6 +23,7 @@ namespace nuone_tools
         private const uint FO_MOVE = 0x0001;
         private const uint FO_COPY = 0x0002;
         private const ushort FOF_NOCONFIRMMKDIR = 0x0200;
+        private const string AutomationOwnerMutexName = @"Local\nuone-tools-automation-owner";
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         private struct SHFILEOPSTRUCT
@@ -63,12 +64,15 @@ namespace nuone_tools
             Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             "nuone-tools",
             "config");
+        internal static readonly string DefaultLogDirectoryPath = Path.Combine(ConfigDirectoryPath, "logs");
         private static readonly string LegacyGroupsConfigPath = Path.Combine(ConfigDirectoryPath, "groups.json");
-        private static readonly string SettingsConfigPath = Path.Combine(ConfigDirectoryPath, "settings.json");
+        private static readonly string SettingsSyncConfigPath = Path.Combine(ConfigDirectoryPath, "settings-sync.json");
+        private static readonly string SettingsLocalConfigPath = Path.Combine(ConfigDirectoryPath, "settings-local.json");
         private static readonly string LocalNotificationHistoryPath = Path.Combine(ConfigDirectoryPath, "local-notification-history.json");
         private static readonly string SyncNotificationHistoryPath = Path.Combine(ConfigDirectoryPath, "sync-notification-history.json");
         private static readonly HttpClient SharedHttpClient = new();
         private static readonly JsonSerializerOptions JsonOptions = new() { WriteIndented = true };
+        private static string _currentLogDirectoryPath = DefaultLogDirectoryPath;
         private static readonly TimeSpan PaneWatcherDebounceInterval = TimeSpan.FromMilliseconds(450);
         private static readonly TimeSpan PaneWatcherSuppressInterval = TimeSpan.FromMilliseconds(1200);
         private static readonly TimeSpan SelectionSizeDebounceInterval = TimeSpan.FromMilliseconds(180);
@@ -92,6 +96,9 @@ namespace nuone_tools
         private ShortcutSettings _editingShortcutSettings = ShortcutSettings.CreateDefault();
         private AccountSettingsState _accountSettings = AccountSettingsState.CreateDefault();
         private FileBunkerSettingsState _fileBunkerSettings = FileBunkerSettingsState.CreateDefault();
+        private LoggingSettingsState _loggingSettings = LoggingSettingsState.CreateDefault();
+        private AppUpdateState _appUpdateState = AppUpdateState.CreateDefault();
+        private string _lastLocalBackupText = "尚未備份";
         private AppSection _activeSection = AppSection.FileManager;
         private SettingsSection _activeSettingsSection = SettingsSection.General;
         private ShortcutCaptureTarget _settingsCaptureTarget = ShortcutCaptureTarget.None;
@@ -99,7 +106,10 @@ namespace nuone_tools
         private bool _isUpdatingSettingsUi;
         private bool _isUpdatingAccountUi;
         private bool _isUpdatingFileBunkerUi;
+        private bool _isUpdatingLoggingUi;
+        private bool _isClosingForAppUpdate;
         private bool _isAccountLoginRunning;
+        private bool _isAccountReloginFieldsVisible;
         private CancellationTokenSource? _leftSelectionSizeCts;
         private CancellationTokenSource? _rightSelectionSizeCts;
         private readonly Dictionary<Guid, System.Timers.Timer> _automationTimers = new();
@@ -109,15 +119,107 @@ namespace nuone_tools
         private readonly Dictionary<Guid, AutoExtractProfileWatcher> _autoExtractWatchers = new();
         private readonly Dictionary<Guid, CancellationTokenSource> _autoExtractCancellationTokens = new();
         private readonly HashSet<Guid> _runningAutoExtractIds = new();
+        private Mutex? _automationOwnerMutex;
+        private bool _isAutomationExecutionOwner;
+        private DispatcherQueueTimer? _automationOwnershipRetryTimer;
         private readonly object _backgroundWorkLock = new();
         private readonly object _notificationHistoryLock = new();
-        private readonly Dictionary<Guid, string> _backgroundWorks = new();
-        private readonly List<string> _backgroundWorkRecords = new();
+        private readonly object _syncSettingsUploadLock = new();
+        private readonly object _localSettingsUploadLock = new();
+        private readonly Dictionary<Guid, BackgroundWorkState> _backgroundWorks = new();
+        private readonly List<BackgroundWorkRecord> _backgroundWorkRecords = new();
         private readonly List<NotificationHistoryRecord> _localNotificationHistory = new();
         private readonly List<NotificationHistoryRecord> _syncNotificationHistory = new();
         private readonly HashSet<string> _hiddenDrivePaths = new(StringComparer.OrdinalIgnoreCase);
+        private bool _isSyncSettingsUploadWorkerRunning;
+        private bool _isApplyingRemoteSyncSettings;
+        private string? _pendingSyncSettingsUploadJson;
+        private bool _isLocalSettingsUploadWorkerRunning;
+        private bool _isApplyingRemoteLocalSettings;
+        private string? _pendingLocalSettingsUploadJson;
         private TerminalTabSession? _selectedTerminalTab;
         private int _nextTerminalTabNumber = 1;
+
+        internal static string CurrentLogDirectoryPath => NormalizeLogDirectoryPath(_currentLogDirectoryPath);
+
+        internal static string NormalizeLogDirectoryPath(string? path)
+        {
+            var candidate = string.IsNullOrWhiteSpace(path) ? DefaultLogDirectoryPath : path.Trim();
+
+            try
+            {
+                return Path.GetFullPath(Environment.ExpandEnvironmentVariables(candidate));
+            }
+            catch
+            {
+                return DefaultLogDirectoryPath;
+            }
+        }
+
+        internal static string ResolveConfiguredLogDirectoryPath()
+        {
+            try
+            {
+                if (!File.Exists(SettingsLocalConfigPath))
+                {
+                    return DefaultLogDirectoryPath;
+                }
+
+                using var document = JsonDocument.Parse(File.ReadAllText(SettingsLocalConfigPath));
+                return TryReadConfiguredLogDirectoryPath(document.RootElement, out var logDirectoryPath)
+                    ? NormalizeLogDirectoryPath(logDirectoryPath)
+                    : DefaultLogDirectoryPath;
+            }
+            catch
+            {
+                return DefaultLogDirectoryPath;
+            }
+        }
+
+        internal static void ApplyConfiguredLogDirectoryPath(string? path)
+        {
+            _currentLogDirectoryPath = NormalizeLogDirectoryPath(path);
+            AppLogging.Configure(_currentLogDirectoryPath);
+        }
+
+        private static bool TryReadConfiguredLogDirectoryPath(JsonElement root, out string? logDirectoryPath)
+        {
+            logDirectoryPath = null;
+
+            if (root.ValueKind != JsonValueKind.Object ||
+                !TryGetSettingsProperty(root, "logging", nameof(LocalSettingsConfig.Logging), out var loggingProperty) ||
+                loggingProperty.ValueKind != JsonValueKind.Object ||
+                !TryGetSettingsProperty(loggingProperty, "logDirectoryPath", nameof(LoggingSettingsConfig.LogDirectoryPath), out var logDirectoryPathProperty) ||
+                logDirectoryPathProperty.ValueKind != JsonValueKind.String)
+            {
+                return false;
+            }
+
+            logDirectoryPath = logDirectoryPathProperty.GetString();
+            return !string.IsNullOrWhiteSpace(logDirectoryPath);
+        }
+
+        private static bool TryGetSettingsProperty(JsonElement element, string camelName, string pascalName, out JsonElement value)
+        {
+            if (element.TryGetProperty(camelName, out value) ||
+                element.TryGetProperty(pascalName, out value))
+            {
+                return true;
+            }
+
+            foreach (var property in element.EnumerateObject())
+            {
+                if (string.Equals(property.Name, camelName, StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(property.Name, pascalName, StringComparison.OrdinalIgnoreCase))
+                {
+                    value = property.Value;
+                    return true;
+                }
+            }
+
+            value = default;
+            return false;
+        }
 
         public string AppVersionText { get; } = GetAppVersionText();
 
@@ -139,7 +241,9 @@ namespace nuone_tools
 
         public MainWindow()
         {
+            AppLogging.Information("MainWindow constructor start");
             InitializeComponent();
+            AppLogging.Information("MainWindow InitializeComponent completed");
 
             FileManagerPage.Owner = this;
             AutomationPage.Owner = this;
@@ -162,10 +266,13 @@ namespace nuone_tools
             LoadShortcutSettings();
             LoadAccountSettings();
             LoadFileBunkerSettings();
+            LoadLoggingSettings();
+            WindowsNotificationService.Initialize();
             LoadBackupAutomations();
             LoadAutoExtractProfiles();
             LoadToolbarCommands();
             LoadNotificationHistories();
+            InitializeAutomationExecutionOwnership();
             ApplyThemePreference();
             ApplySettingsToPanes();
             LoadDriveCards();
@@ -173,6 +280,8 @@ namespace nuone_tools
             ResetEditableShortcutSettings();
             UpdateAccountSettingsUi();
             UpdateFileBunkerSettingsUi();
+            UpdateLoggingSettingsUi();
+            UpdateAppUpdateUi();
             RescheduleBackupAutomations();
             RescheduleAutoExtractProfiles();
 
@@ -181,6 +290,7 @@ namespace nuone_tools
 
             LeftPane.PropertyChanged += Pane_PropertyChanged;
             RightPane.PropertyChanged += Pane_PropertyChanged;
+            Activated += MainWindow_Activated;
             Closed += MainWindow_Closed;
 
             OpenInPane(LeftPane, leftDefault);
@@ -209,6 +319,14 @@ namespace nuone_tools
 
             _terminalCursorTimer = DispatcherQueue.CreateTimer();
             InitializeTerminalCursorTimer();
+
+            RunFireAndForget(InitializeRemoteSyncSettingsAsync(), "startup remote settings sync");
+            RunFireAndForget(CheckForUpdatesAsync(isAutomatic: true), "startup app update check");
+            AppLogging.Information(
+                "MainWindow constructor completed ActiveSection={ActiveSection} LeftPath={LeftPath} RightPath={RightPath}",
+                _activeSection,
+                LeftPane.CurrentPath,
+                RightPane.CurrentPath);
         }
 
         private static string GetAppVersionText()
@@ -235,6 +353,7 @@ namespace nuone_tools
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
+            AppLogging.Information("MainWindow closing");
             SavePanePathsSafe();
             StopAllAutomationTimers();
             StopAllAutomationWatchers();
@@ -256,15 +375,174 @@ namespace nuone_tools
             StopAllTerminalProcesses();
             LeftPane.PropertyChanged -= Pane_PropertyChanged;
             RightPane.PropertyChanged -= Pane_PropertyChanged;
+            if (_automationOwnershipRetryTimer is not null)
+            {
+                _automationOwnershipRetryTimer.Stop();
+                _automationOwnershipRetryTimer.Tick -= AutomationOwnershipRetryTimer_Tick;
+                _automationOwnershipRetryTimer = null;
+            }
+            ReleaseAutomationExecutionOwnership();
+            Activated -= MainWindow_Activated;
             Closed -= MainWindow_Closed;
             _leftPaneWatcher.Dispose();
             _rightPaneWatcher.Dispose();
+            WindowsNotificationService.Uninitialize();
+            AppLogging.Flush();
+        }
+
+        internal bool IsAutomationExecutionOwner => _isAutomationExecutionOwner;
+
+        internal bool EnsureAutomationExecutionOwner(string actionDescription)
+        {
+            if (TryPromoteToAutomationExecutionOwner())
+            {
+                return true;
+            }
+
+            RunFireAndForget(
+                ShowMessageAsync(
+                    "自動化由另一個視窗執行中",
+                    $"目前只有持有自動化執行權的 nuone-tools 視窗可以{actionDescription}。"),
+                "automation ownership required");
+            return false;
+        }
+
+        private void InitializeAutomationExecutionOwnership()
+        {
+            TryAcquireAutomationExecutionOwnership();
+            _automationOwnershipRetryTimer = DispatcherQueue.CreateTimer();
+            _automationOwnershipRetryTimer.Interval = TimeSpan.FromSeconds(5);
+            _automationOwnershipRetryTimer.IsRepeating = true;
+            _automationOwnershipRetryTimer.Tick += AutomationOwnershipRetryTimer_Tick;
+            UpdateAutomationOwnershipRetryState();
+        }
+
+        private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+        {
+            if (args.WindowActivationState == WindowActivationState.Deactivated || _isAutomationExecutionOwner)
+            {
+                return;
+            }
+
+            if (TryPromoteToAutomationExecutionOwner())
+            {
+                UpdateSharedStatusBar();
+            }
+        }
+
+        private void AutomationOwnershipRetryTimer_Tick(DispatcherQueueTimer sender, object args)
+        {
+            if (_isAutomationExecutionOwner)
+            {
+                sender.Stop();
+                return;
+            }
+
+            if (TryPromoteToAutomationExecutionOwner())
+            {
+                UpdateSharedStatusBar();
+            }
+        }
+
+        private bool TryPromoteToAutomationExecutionOwner()
+        {
+            var acquired = TryAcquireAutomationExecutionOwnership();
+            if (acquired)
+            {
+                RescheduleBackupAutomations();
+                RescheduleAutoExtractProfiles();
+            }
+
+            UpdateAutomationOwnershipRetryState();
+            return acquired;
+        }
+
+        private bool TryAcquireAutomationExecutionOwnership()
+        {
+            if (_isAutomationExecutionOwner)
+            {
+                return true;
+            }
+
+            try
+            {
+                var mutex = new Mutex(initiallyOwned: false, AutomationOwnerMutexName);
+                bool acquired;
+                try
+                {
+                    acquired = mutex.WaitOne(0, false);
+                }
+                catch (AbandonedMutexException)
+                {
+                    acquired = true;
+                }
+
+                if (!acquired)
+                {
+                    mutex.Dispose();
+                    return false;
+                }
+
+                _automationOwnerMutex = mutex;
+                _isAutomationExecutionOwner = true;
+                AppLogging.Information("Automation execution ownership acquired.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLogging.Error(ex, "Automation execution ownership acquisition failed.");
+                return false;
+            }
+        }
+
+        private void ReleaseAutomationExecutionOwnership()
+        {
+            var mutex = _automationOwnerMutex;
+            _automationOwnerMutex = null;
+            if (mutex is null)
+            {
+                _isAutomationExecutionOwner = false;
+                return;
+            }
+
+            try
+            {
+                if (_isAutomationExecutionOwner)
+                {
+                    mutex.ReleaseMutex();
+                }
+            }
+            catch (ApplicationException)
+            {
+            }
+            finally
+            {
+                mutex.Dispose();
+                _isAutomationExecutionOwner = false;
+            }
+        }
+
+        private void UpdateAutomationOwnershipRetryState()
+        {
+            if (_automationOwnershipRetryTimer is null)
+            {
+                return;
+            }
+
+            if (_isAutomationExecutionOwner)
+            {
+                _automationOwnershipRetryTimer.Stop();
+                return;
+            }
+
+            _automationOwnershipRetryTimer.Stop();
+            _automationOwnershipRetryTimer.Start();
         }
 
         private Task EnqueueOnUiAsync(Action action)
         {
             var completion = new TaskCompletionSource<object?>();
-            DispatcherQueue.TryEnqueue(() =>
+            var queued = DispatcherQueue.TryEnqueue(() =>
             {
                 try
                 {
@@ -276,8 +554,68 @@ namespace nuone_tools
                     completion.SetException(ex);
                 }
             });
+            if (!queued)
+            {
+                completion.SetException(new InvalidOperationException("UI dispatcher queue rejected the action."));
+            }
 
             return completion.Task;
+        }
+
+        internal static void LogBoundaryException(Exception ex, string boundary)
+        {
+            try
+            {
+                AppLogging.Error(
+                    ex,
+                    "Unhandled boundary exception Boundary={Boundary} Type={ExceptionType} HResult=0x{HResult:X8}",
+                    boundary,
+                    ex.GetType().FullName ?? ex.GetType().Name,
+                    ex.HResult);
+            }
+            catch
+            {
+            }
+        }
+
+        private static void RunSafely(Action action, string boundary)
+        {
+            try
+            {
+                action();
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, boundary);
+            }
+        }
+
+        private void TryEnqueueUi(Action action, string boundary)
+        {
+            if (!DispatcherQueue.TryEnqueue(() => RunSafely(action, boundary)))
+            {
+                AppLogging.Warning("UI dispatcher queue rejected action Boundary={Boundary}", boundary);
+            }
+        }
+
+        private void RunFireAndForget(Task task, string boundary)
+        {
+            _ = ObserveFireAndForgetAsync(task, boundary);
+        }
+
+        private static async Task ObserveFireAndForgetAsync(Task task, string boundary)
+        {
+            try
+            {
+                await task;
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception ex)
+            {
+                LogBoundaryException(ex, boundary);
+            }
         }
 
         private static string FormatShortcutKey(Windows.System.VirtualKey key)

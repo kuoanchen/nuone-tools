@@ -289,6 +289,10 @@
 
                             <CheckBox x:Name="AutomationRunMissedOnStartupCheckBox"
                                       Content="啟動 app 時補跑錯過的排程" />
+                            <TextBlock Text="排程只會在 app 開著時生效；如果勾這個，超過排定時間後才開 app 也會立刻補跑。"
+                                       Opacity="0.78"
+                                       FontSize="12"
+                                       TextWrapping="Wrap" />
 
                             <Border Padding="11"
                                     Background="{StaticResource InputAltBrush}"
@@ -818,6 +822,10 @@
                                               Click="AutomationRunMissedOnStartupCheckBox_Click"
                                               IsEnabled="{x:Bind CanEdit, Mode=OneWay}"
                                               Content="啟動 app 時補跑錯過的排程" />
+                                    <TextBlock Text="排程只會在 app 開著時生效；如果勾這個，超過排定時間後才開 app 也會立刻補跑。"
+                                               Opacity="0.78"
+                                               FontSize="12"
+                                               TextWrapping="Wrap" />
 
                                     <Grid ColumnSpacing="12">
                                         <Grid.ColumnDefinitions>

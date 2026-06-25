@@ -37,6 +37,8 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
+        private static readonly TimeSpan BackgroundWorkToastThreshold = TimeSpan.FromMilliseconds(1200);
+
         private void ShowFileManagerApp_Click(object sender, RoutedEventArgs e)
         {
             _settingsCaptureTarget = ShortcutCaptureTarget.None;
@@ -73,14 +75,20 @@ namespace nuone_tools
 
         private void SwitchToAppSection(AppSection section)
         {
+            AppLogging.Information(
+                "SwitchToAppSection requested From={CurrentSection} To={TargetSection}",
+                _activeSection,
+                section);
             CancelPendingFlyout();
             _activeSection = section;
             UpdateAppSectionVisuals();
             UpdateSharedStatusBar();
+            AppLogging.Information("SwitchToAppSection completed Current={CurrentSection}", _activeSection);
         }
 
         private void UpdateAppSectionVisuals()
         {
+            AppLogging.Debug("UpdateAppSectionVisuals start Section={ActiveSection}", _activeSection);
             var isFileManager = _activeSection == AppSection.FileManager;
             var isAutomation = _activeSection == AppSection.Automation;
             var isTerminal = _activeSection == AppSection.Terminal;
@@ -111,6 +119,13 @@ namespace nuone_tools
                 SettingsAppButtonBorder,
                 SettingsAppIcon,
                 SettingsAppText,
+                _activeSection == AppSection.Settings);
+            AppLogging.Debug(
+                "UpdateAppSectionVisuals completed Section={ActiveSection} FileManager={IsFileManager} Automation={IsAutomation} Terminal={IsTerminal} Settings={IsSettings}",
+                _activeSection,
+                isFileManager,
+                isAutomation,
+                isTerminal,
                 _activeSection == AppSection.Settings);
         }
 
@@ -152,9 +167,11 @@ namespace nuone_tools
                             AutoExtractProfiles.Count(profile => profile.IsRunning);
                         SharedStatusSectionText.Text = "自動化";
                         SharedStatusPrimaryText.Text = $"{totalJobs} 個工作 / {enabledJobs} 個已啟用";
-                        SharedStatusDetailText.Text = runningJobs > 0
-                            ? $"{runningJobs} 個工作執行中"
-                            : "目前沒有執行中的工作";
+                        SharedStatusDetailText.Text = !IsAutomationExecutionOwner
+                            ? "自動化由另一個 nuone-tools 視窗執行中"
+                            : runningJobs > 0
+                                ? $"{runningJobs} 個工作執行中"
+                                : "目前沒有執行中的工作";
                         break;
                     }
                 case AppSection.Terminal:
@@ -194,13 +211,17 @@ namespace nuone_tools
                 : Visibility.Collapsed;
         }
 
-        private Guid BeginBackgroundWork(string label)
+        private Guid BeginBackgroundWork(string label, string? details = null, bool isAutomation = false)
         {
             var workId = Guid.NewGuid();
             lock (_backgroundWorkLock)
             {
-                _backgroundWorks[workId] = label;
-                AddBackgroundWorkRecordLocked($"開始：{label}");
+                _backgroundWorks[workId] = new BackgroundWorkState(
+                    label,
+                    string.IsNullOrWhiteSpace(details) ? label : details.Trim(),
+                    DateTimeOffset.UtcNow,
+                    isAutomation);
+                AddBackgroundWorkRecordLocked($"開始：{label}", details, isAutomation);
             }
 
             EnqueueSharedStatusBarRefresh();
@@ -210,24 +231,30 @@ namespace nuone_tools
         private void CompleteBackgroundWork(
             Guid workId,
             string? completionRecord = null,
+            string? completionDetails = null,
             bool persistToLocalHistory = true)
         {
             lock (_backgroundWorkLock)
             {
-                if (_backgroundWorks.Remove(workId, out var label))
+                if (_backgroundWorks.Remove(workId, out var work))
                 {
+                    var elapsed = DateTimeOffset.UtcNow - work.StartedAtUtc;
                     var recordText = string.IsNullOrWhiteSpace(completionRecord)
-                        ? $"完成：{NormalizeBackgroundWorkCompletionLabel(label)}"
+                        ? $"完成：{NormalizeBackgroundWorkCompletionLabel(work.Label)}"
                         : completionRecord;
-                    AddBackgroundWorkRecordLocked(recordText);
+                    var recordDetails = string.IsNullOrWhiteSpace(completionDetails)
+                        ? (string.IsNullOrWhiteSpace(work.Details) ? recordText : work.Details)
+                        : completionDetails.Trim();
+                    AddBackgroundWorkRecordLocked(recordText, recordDetails, work.IsAutomation);
 
-                    if (persistToLocalHistory)
+                    if (persistToLocalHistory && work.IsAutomation)
                     {
                         AddNotificationHistoryRecord(
                             NotificationHistoryScope.LocalOnly,
                             "背景工作",
                             recordText,
-                            recordText);
+                            recordDetails,
+                            showWindowsToast: elapsed >= BackgroundWorkToastThreshold);
                     }
                 }
             }
@@ -250,8 +277,10 @@ namespace nuone_tools
 
         private void BackgroundWorkNotification_Click(object sender, RoutedEventArgs e)
         {
+            AppLogging.Information("BackgroundWorkNotification_Click start");
             if (BackgroundWorkNotificationButton is null)
             {
+                AppLogging.Warning("BackgroundWorkNotification_Click skipped because button is null");
                 return;
             }
 
@@ -259,8 +288,11 @@ namespace nuone_tools
             {
                 Placement = FlyoutPlacementMode.Bottom,
             };
+            AppLogging.Debug("BackgroundWorkNotification_Click flyout created");
             flyout.Content = BuildBackgroundWorkNotificationContent(flyout);
+            AppLogging.Debug("BackgroundWorkNotification_Click flyout content assigned");
             flyout.ShowAt(BackgroundWorkNotificationButton);
+            AppLogging.Information("BackgroundWorkNotification_Click flyout shown");
         }
 
         private FrameworkElement BuildBackgroundWorkNotificationContent(Flyout flyout)
@@ -269,6 +301,12 @@ namespace nuone_tools
             var localHistory = GetNotificationHistorySnapshot(NotificationHistoryScope.LocalOnly);
             var syncHistory = GetNotificationHistorySnapshot(NotificationHistoryScope.Sync);
             var entries = BuildNotificationListEntries(records, localHistory, syncHistory);
+            AppLogging.Debug(
+                "BuildBackgroundWorkNotificationContent records Session={SessionCount} Local={LocalCount} Sync={SyncCount} Entries={EntryCount}",
+                records.Count,
+                localHistory.Count,
+                syncHistory.Count,
+                entries.Count);
             var panel = new StackPanel
             {
                 Width = 380,
@@ -303,6 +341,7 @@ namespace nuone_tools
             };
             panel.Children.Add(clearButton);
 
+            AppLogging.Debug("BuildBackgroundWorkNotificationContent completed");
             return panel;
         }
 
@@ -340,6 +379,7 @@ namespace nuone_tools
             Flyout flyout,
             IReadOnlyList<NotificationListEntry> entries)
         {
+            AppLogging.Debug("BuildNotificationSummaryList start EntryCount={EntryCount}", entries.Count);
             var host = new StackPanel
             {
                 Spacing = 8,
@@ -356,15 +396,37 @@ namespace nuone_tools
                 return host;
             }
 
+            var renderedCount = 0;
             foreach (var entry in entries.Take(30))
             {
+                if (entry.IsGroupHeader)
+                {
+                    host.Children.Add(BuildNotificationGroupHeader(entry.GroupHeaderText));
+                    renderedCount++;
+                    continue;
+                }
+
                 host.Children.Add(BuildSummaryButton(entry, () =>
                 {
                     flyout.Content = BuildNotificationDetailContent(flyout, entry);
                 }));
+                renderedCount++;
             }
 
+            AppLogging.Debug("BuildNotificationSummaryList completed RenderedCount={RenderedCount}", renderedCount);
             return host;
+        }
+
+        private FrameworkElement BuildNotificationGroupHeader(string text)
+        {
+            return new TextBlock
+            {
+                Text = text,
+                Foreground = new SolidColorBrush(GetBrushColor("TextSecondaryBrush", "#B9AECF")),
+                FontSize = 12,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(2, 6, 2, 0),
+            };
         }
 
         private Button BuildSummaryButton(NotificationListEntry entry, Action onClick)
@@ -401,6 +463,10 @@ namespace nuone_tools
 
         private FrameworkElement BuildNotificationDetailContent(Flyout flyout, NotificationListEntry entry)
         {
+            AppLogging.Debug(
+                "BuildNotificationDetailContent start Scope={ScopeLabel} Timestamp={Timestamp}",
+                entry.ScopeLabel,
+                entry.Timestamp);
             var panel = new StackPanel
             {
                 Width = 380,
@@ -455,6 +521,7 @@ namespace nuone_tools
             actionPanel.Children.Add(copyButton);
             panel.Children.Add(actionPanel);
 
+            AppLogging.Debug("BuildNotificationDetailContent completed");
             return panel;
         }
 
@@ -464,23 +531,42 @@ namespace nuone_tools
         }
 
         private List<NotificationListEntry> BuildNotificationListEntries(
-            IReadOnlyList<string> sessionRecords,
+            IReadOnlyList<BackgroundWorkRecord> sessionRecords,
             IReadOnlyList<NotificationHistoryRecord> localHistory,
             IReadOnlyList<NotificationHistoryRecord> syncHistory)
         {
+            AppLogging.Debug(
+                "BuildNotificationListEntries start Session={SessionCount} Local={LocalCount} Sync={SyncCount}",
+                sessionRecords.Count,
+                localHistory.Count,
+                syncHistory.Count);
             var entries = new List<NotificationListEntry>();
-            foreach (var record in sessionRecords)
+            foreach (var record in sessionRecords.Where(static record => record.IsAutomation))
             {
+                var timestampText = record.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                var summary = $"{timestampText}　{record.Summary}";
+                var detailBuilder = new StringBuilder();
+                detailBuilder.Append("時間：");
+                detailBuilder.AppendLine(timestampText);
+                detailBuilder.AppendLine();
+                detailBuilder.AppendLine(record.Summary);
+
+                if (!string.Equals(record.Details.Trim(), record.Summary.Trim(), StringComparison.Ordinal))
+                {
+                    detailBuilder.AppendLine();
+                    detailBuilder.AppendLine(record.Details.Trim());
+                }
+
                 entries.Add(new NotificationListEntry
                 {
                     ScopeLabel = "本次",
-                    Timestamp = ExtractSessionRecordTimestamp(record),
-                    CardText = record,
-                    DialogText = record,
+                    Timestamp = record.Timestamp,
+                    CardText = summary,
+                    DialogText = detailBuilder.ToString().TrimEnd(),
                 });
             }
 
-            foreach (var record in localHistory)
+            foreach (var record in localHistory.Where(static record => IsAutomationNotificationCategory(record.Category)))
             {
                 var dialogText = BuildNotificationHistoryDialogText(record);
                 entries.Add(new NotificationListEntry
@@ -492,7 +578,7 @@ namespace nuone_tools
                 });
             }
 
-            foreach (var record in syncHistory)
+            foreach (var record in syncHistory.Where(static record => IsAutomationNotificationCategory(record.Category)))
             {
                 var dialogText = BuildNotificationHistoryDialogText(record);
                 entries.Add(new NotificationListEntry
@@ -504,9 +590,26 @@ namespace nuone_tools
                 });
             }
 
-            return entries
+            var orderedEntries = entries
                 .OrderByDescending(static item => item.Timestamp)
                 .ToList();
+
+            var groupedEntries = new List<NotificationListEntry>();
+            DateTime? currentGroupDate = null;
+            foreach (var entry in orderedEntries)
+            {
+                var localDate = entry.Timestamp.ToLocalTime().Date;
+                if (currentGroupDate != localDate)
+                {
+                    groupedEntries.Add(NotificationListEntry.CreateGroupHeader(FormatNotificationGroupDate(localDate)));
+                    currentGroupDate = localDate;
+                }
+
+                groupedEntries.Add(entry);
+            }
+
+            AppLogging.Debug("BuildNotificationListEntries completed EntryCount={EntryCount}", groupedEntries.Count);
+            return groupedEntries;
         }
 
         private static string BuildNotificationHistoryCardText(NotificationHistoryRecord record)
@@ -558,26 +661,16 @@ namespace nuone_tools
             return DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
         }
 
+        private static string FormatNotificationGroupDate(DateTime date)
+        {
+            return date == DateTime.Now.Date
+                ? "今天"
+                : date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        }
+
         private static DateTimeOffset ParseNotificationTimestamp(string? createdAtUtc)
         {
             if (DateTimeOffset.TryParse(createdAtUtc, CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var parsed))
-            {
-                return parsed;
-            }
-
-            return DateTimeOffset.MinValue;
-        }
-
-        private static DateTimeOffset ExtractSessionRecordTimestamp(string record)
-        {
-            if (!string.IsNullOrWhiteSpace(record) &&
-                record.Length >= 19 &&
-                DateTimeOffset.TryParseExact(
-                    record[..19],
-                    "yyyy-MM-dd HH:mm:ss",
-                    CultureInfo.InvariantCulture,
-                    DateTimeStyles.AssumeLocal,
-                    out var parsed))
             {
                 return parsed;
             }
@@ -589,8 +682,15 @@ namespace nuone_tools
             NotificationHistoryScope scope,
             string category,
             string summary,
-            string details)
+            string details,
+            bool showWindowsToast = true,
+            bool persistRecord = true)
         {
+            if (!IsAutomationNotificationCategory(category))
+            {
+                return;
+            }
+
             var normalizedSummary = NormalizeBackgroundWorkRecordForTextBox(summary).Trim();
             if (string.IsNullOrWhiteSpace(normalizedSummary))
             {
@@ -609,19 +709,27 @@ namespace nuone_tools
                 DeviceName = Environment.MachineName,
             };
 
-            lock (_notificationHistoryLock)
+            if (persistRecord)
             {
-                var target = scope == NotificationHistoryScope.Sync
-                    ? _syncNotificationHistory
-                    : _localNotificationHistory;
-                target.Insert(0, record);
-                while (target.Count > 200)
+                lock (_notificationHistoryLock)
                 {
-                    target.RemoveAt(target.Count - 1);
+                    var target = scope == NotificationHistoryScope.Sync
+                        ? _syncNotificationHistory
+                        : _localNotificationHistory;
+                    target.Insert(0, record);
+                    while (target.Count > 200)
+                    {
+                        target.RemoveAt(target.Count - 1);
+                    }
                 }
+
+                SaveNotificationHistoriesSafe();
             }
 
-            SaveNotificationHistoriesSafe();
+            if (showWindowsToast)
+            {
+                WindowsNotificationService.Show(record);
+            }
         }
 
         private List<NotificationHistoryRecord> GetNotificationHistorySnapshot(NotificationHistoryScope scope)
@@ -645,7 +753,7 @@ namespace nuone_tools
                 target.Clear();
             }
 
-            SaveNotificationHistoriesSafe();
+            SaveNotificationHistoriesSafe(mergeExistingRecords: false);
         }
 
         private void ClearAllNotificationRecords()
@@ -661,12 +769,16 @@ namespace nuone_tools
                 _syncNotificationHistory.Clear();
             }
 
-            SaveNotificationHistoriesSafe();
+            SaveNotificationHistoriesSafe(mergeExistingRecords: false);
             UpdateSharedStatusBar();
         }
 
         private sealed class NotificationListEntry
         {
+            public bool IsGroupHeader { get; init; }
+
+            public string GroupHeaderText { get; init; } = string.Empty;
+
             public string ScopeLabel { get; init; } = string.Empty;
 
             public DateTimeOffset Timestamp { get; init; }
@@ -674,17 +786,45 @@ namespace nuone_tools
             public string CardText { get; init; } = string.Empty;
 
             public string DialogText { get; init; } = string.Empty;
+
+            public static NotificationListEntry CreateGroupHeader(string text)
+            {
+                return new NotificationListEntry
+                {
+                    IsGroupHeader = true,
+                    GroupHeaderText = text,
+                };
+            }
+        }
+
+        private static bool IsAutomationNotificationCategory(string? category)
+        {
+            return string.Equals(category?.Trim(), "自動化", StringComparison.Ordinal) ||
+                   string.Equals(category?.Trim(), "自動解壓", StringComparison.Ordinal);
+        }
+
+        private sealed record BackgroundWorkState(string Label, string Details, DateTimeOffset StartedAtUtc, bool IsAutomation);
+
+        private sealed class BackgroundWorkRecord
+        {
+            public DateTimeOffset Timestamp { get; init; }
+
+            public string Summary { get; init; } = string.Empty;
+
+            public string Details { get; init; } = string.Empty;
+
+            public bool IsAutomation { get; init; }
         }
 
         private void EnqueueSharedStatusBarRefresh()
         {
             if (DispatcherQueue.HasThreadAccess)
             {
-                UpdateSharedStatusBar();
+                RunSafely(UpdateSharedStatusBar, "shared status bar refresh");
                 return;
             }
 
-            DispatcherQueue.TryEnqueue(UpdateSharedStatusBar);
+            TryEnqueueUi(UpdateSharedStatusBar, "shared status bar refresh");
         }
 
         private static string BuildSharedStatusPath(PaneViewModel pane)
@@ -731,7 +871,9 @@ namespace nuone_tools
             List<string> labels;
             lock (_backgroundWorkLock)
             {
-                labels = _backgroundWorks.Values.ToList();
+                labels = _backgroundWorks.Values
+                    .Select(static work => work.Label)
+                    .ToList();
             }
 
             if (labels.Count == 0)
@@ -755,9 +897,24 @@ namespace nuone_tools
             }
         }
 
-        private void AddBackgroundWorkRecordLocked(string message)
+        private void AddBackgroundWorkRecordLocked(string summary, string? details = null, bool isAutomation = false)
         {
-            _backgroundWorkRecords.Insert(0, $"{DateTime.Now:yyyy-MM-dd HH:mm:ss}　{message}");
+            var normalizedSummary = NormalizeBackgroundWorkRecordForTextBox(summary).Trim();
+            if (string.IsNullOrWhiteSpace(normalizedSummary))
+            {
+                return;
+            }
+
+            var normalizedDetails = NormalizeBackgroundWorkRecordForTextBox(details ?? string.Empty).Trim();
+            _backgroundWorkRecords.Insert(0, new BackgroundWorkRecord
+            {
+                Timestamp = DateTimeOffset.Now,
+                Summary = normalizedSummary,
+                Details = string.IsNullOrWhiteSpace(normalizedDetails)
+                    ? normalizedSummary
+                    : normalizedDetails,
+                IsAutomation = isAutomation,
+            });
             while (_backgroundWorkRecords.Count > 100)
             {
                 _backgroundWorkRecords.RemoveAt(_backgroundWorkRecords.Count - 1);
@@ -768,15 +925,17 @@ namespace nuone_tools
         {
             lock (_backgroundWorkLock)
             {
-                return _backgroundWorkRecords.Count;
+                return _backgroundWorkRecords.Count(static record => record.IsAutomation);
             }
         }
 
-        private List<string> GetBackgroundWorkRecordsSnapshot()
+        private List<BackgroundWorkRecord> GetBackgroundWorkRecordsSnapshot()
         {
             lock (_backgroundWorkLock)
             {
-                return _backgroundWorkRecords.ToList();
+                return _backgroundWorkRecords
+                    .Where(static record => record.IsAutomation)
+                    .ToList();
             }
         }
 

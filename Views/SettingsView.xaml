@@ -131,190 +131,362 @@
                                FontSize="16"
                                TextWrapping="Wrap" />
 
-                    <Border x:Name="GeneralSettingsContent"
-                            Padding="24"
-                            Background="{StaticResource PanelBrush}"
-                            BorderBrush="{StaticResource PanelStrokeBrush}"
-                            BorderThickness="1"
-                            CornerRadius="18"
-                            Visibility="Visible">
-                        <StackPanel Spacing="18">
-                            <TextBlock Text="檔案顯示"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="24"
-                                       FontWeight="SemiBold" />
-
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Spacing="6">
-                                    <TextBlock Text="顯示隱藏與系統檔案"
-                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                               FontSize="18"
-                                               FontWeight="SemiBold" />
-                                    <TextBlock Text="包含 Hidden、System、ReparsePoint 項目。"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               FontSize="15"
-                                               TextWrapping="Wrap" />
-                                </StackPanel>
-
-                                <ToggleSwitch x:Name="ShowHiddenSystemItemsToggle"
-                                              Grid.Column="1"
-                                              VerticalAlignment="Center"
-                                              OffContent="關"
-                                              OnContent="開"
-                                              Toggled="ShowHiddenSystemItemsToggle_Toggled" />
-                            </Grid>
-
-                            <TextBlock Text="選取總大小"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="20"
-                                       FontWeight="SemiBold"
-                                       Margin="0,8,0,0" />
-
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Spacing="6">
-                                    <TextBlock Text="計算檔案總大小"
-                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                               FontSize="18"
-                                               FontWeight="SemiBold" />
-                                    <TextBlock Text="選取多個檔案時，顯示它們的總大小。"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               FontSize="15"
-                                               TextWrapping="Wrap" />
-                                </StackPanel>
-
-                                <ToggleSwitch x:Name="ShowSelectedFileSizeToggle"
-                                              Grid.Column="1"
-                                              VerticalAlignment="Center"
-                                              OffContent="關"
-                                              OnContent="開"
-                                              Toggled="ShowSelectedFileSizeToggle_Toggled" />
-                            </Grid>
-
-                            <Grid ColumnSpacing="16">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
-
-                                <StackPanel Spacing="6">
-                                    <TextBlock Text="計算資料夾總大小"
-                                               Foreground="{StaticResource TextPrimaryBrush}"
-                                               FontSize="18"
-                                               FontWeight="SemiBold" />
-                                    <TextBlock Text="選取資料夾時，遞迴計算資料夾內所有檔案總大小。"
-                                               Foreground="{StaticResource TextSecondaryBrush}"
-                                               FontSize="15"
-                                               TextWrapping="Wrap" />
-                                </StackPanel>
-
-                                <ToggleSwitch x:Name="ShowSelectedFolderSizeToggle"
-                                              Grid.Column="1"
-                                              VerticalAlignment="Center"
-                                              OffContent="關"
-                                              OnContent="開"
-                                              Toggled="ShowSelectedFolderSizeToggle_Toggled" />
-                            </Grid>
-
-                            <TextBlock Text="內建終端機預設"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="20"
-                                       FontWeight="SemiBold"
-                                       Margin="0,8,0,0" />
-
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="預設 shell 類型"
+                    <StackPanel x:Name="GeneralSettingsContent"
+                                Spacing="18"
+                                Visibility="Visible">
+                        <Border Padding="24"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="18">
+                                <TextBlock Text="檔案顯示"
                                            Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
+                                           FontSize="24"
                                            FontWeight="SemiBold" />
-                                <TextBlock Text="新開內建終端機 tab 和新建的 terminal 工具列按鈕，會先使用這個 shell。"
+
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="顯示隱藏與系統檔案"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="包含 Hidden、System、ReparsePoint 項目。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <ToggleSwitch x:Name="ShowHiddenSystemItemsToggle"
+                                                  Grid.Column="1"
+                                                  VerticalAlignment="Center"
+                                                  OffContent="關"
+                                                  OnContent="開"
+                                                  Toggled="ShowHiddenSystemItemsToggle_Toggled" />
+                                </Grid>
+
+                                <TextBlock Text="選取總大小"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="20"
+                                           FontWeight="SemiBold"
+                                           Margin="0,8,0,0" />
+
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="計算檔案總大小"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="選取多個檔案時，顯示它們的總大小。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <ToggleSwitch x:Name="ShowSelectedFileSizeToggle"
+                                                  Grid.Column="1"
+                                                  VerticalAlignment="Center"
+                                                  OffContent="關"
+                                                  OnContent="開"
+                                                  Toggled="ShowSelectedFileSizeToggle_Toggled" />
+                                </Grid>
+
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="計算資料夾總大小"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="選取資料夾時，遞迴計算資料夾內所有檔案總大小。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <ToggleSwitch x:Name="ShowSelectedFolderSizeToggle"
+                                                  Grid.Column="1"
+                                                  VerticalAlignment="Center"
+                                                  OffContent="關"
+                                                  OnContent="開"
+                                                  Toggled="ShowSelectedFolderSizeToggle_Toggled" />
+                                </Grid>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Padding="24"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="18">
+                                <TextBlock Text="內建終端機預設"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="24"
+                                           FontWeight="SemiBold" />
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="預設 shell 類型"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="新開內建終端機 tab 和新建的 terminal 工具列按鈕，會先使用這個 shell。"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="15"
+                                               TextWrapping="Wrap" />
+                                    <ComboBox x:Name="DefaultTerminalShellComboBox"
+                                              SelectionChanged="DefaultTerminalShellComboBox_SelectionChanged"
+                                              Background="{StaticResource InputAltBrush}"
+                                              BorderBrush="{StaticResource PanelStrokeBrush}"
+                                              Foreground="{StaticResource TextPrimaryBrush}">
+                                        <ComboBoxItem Content="PowerShell" Tag="PowerShell" />
+                                        <ComboBoxItem Content="Git Bash" Tag="GitBash" />
+                                        <ComboBoxItem Content="cmd" Tag="CommandPrompt" />
+                                    </ComboBox>
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="預設工作目錄"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock Text="控制新開內建終端機預設落在哪個資料夾。"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="15"
+                                               TextWrapping="Wrap" />
+                                    <ComboBox x:Name="DefaultTerminalWorkingDirectoryModeComboBox"
+                                              SelectionChanged="DefaultTerminalWorkingDirectoryModeComboBox_SelectionChanged"
+                                              Background="{StaticResource InputAltBrush}"
+                                              BorderBrush="{StaticResource PanelStrokeBrush}"
+                                              Foreground="{StaticResource TextPrimaryBrush}">
+                                        <ComboBoxItem Content="目前作用中的 pane" Tag="ActivePane" />
+                                        <ComboBoxItem Content="左側 pane" Tag="LeftPane" />
+                                        <ComboBoxItem Content="右側 pane" Tag="RightPane" />
+                                        <ComboBoxItem Content="自訂路徑" Tag="CustomPath" />
+                                    </ComboBox>
+                                    <TextBox x:Name="DefaultTerminalCustomWorkingDirectoryTextBox"
+                                             TextChanged="DefaultTerminalCustomWorkingDirectoryTextBox_TextChanged"
+                                             PlaceholderText="例如：C:\trabajo 或 \\dsm\video"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}"
+                                             Visibility="Collapsed" />
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Padding="24"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="18">
+                                <TextBlock Text="診斷 Log"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="24"
+                                           FontWeight="SemiBold" />
+
+                                <TextBlock Text="crash、ssh、icon、storage 等診斷 log 會寫到這個目錄。變更後立即生效。"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            FontSize="15"
                                            TextWrapping="Wrap" />
-                                <ComboBox x:Name="DefaultTerminalShellComboBox"
-                                          SelectionChanged="DefaultTerminalShellComboBox_SelectionChanged"
-                                          Background="{StaticResource InputAltBrush}"
-                                          BorderBrush="{StaticResource PanelStrokeBrush}"
-                                          Foreground="{StaticResource TextPrimaryBrush}">
-                                    <ComboBoxItem Content="PowerShell" Tag="PowerShell" />
-                                    <ComboBoxItem Content="Git Bash" Tag="GitBash" />
-                                    <ComboBoxItem Content="cmd" Tag="CommandPrompt" />
-                                </ComboBox>
-                            </StackPanel>
 
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="預設工作目錄"
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Log 目錄"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBox x:Name="LogDirectoryPathTextBox"
+                                             TextChanged="LogDirectoryPathTextBox_TextChanged"
+                                             PlaceholderText="例如：C:\Soft\nuone-tools\logs"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                    <StackPanel Orientation="Horizontal" Spacing="10">
+                                        <Button Click="UseDefaultLogDirectoryButton_Click"
+                                                Style="{StaticResource GhostButtonStyle}"
+                                                Content="使用預設" />
+                                        <Button Click="OpenLogDirectoryButton_Click"
+                                                Style="{StaticResource GhostButtonStyle}"
+                                                Content="開啟目錄" />
+                                    </StackPanel>
+                                </StackPanel>
+                            </StackPanel>
+                        </Border>
+
+                        <Border Padding="24"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="18">
+                                <TextBlock Text="線上更新"
                                            Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
+                                           FontSize="24"
                                            FontWeight="SemiBold" />
-                                <TextBlock Text="控制新開內建終端機預設落在哪個資料夾。"
+
+                                <TextBlock Text="檢查 Nuone Tools 是否有新版可用。發現新版後會先詢問是否下載，再確認是否安裝並重新啟動。"
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            FontSize="15"
                                            TextWrapping="Wrap" />
-                                <ComboBox x:Name="DefaultTerminalWorkingDirectoryModeComboBox"
-                                          SelectionChanged="DefaultTerminalWorkingDirectoryModeComboBox_SelectionChanged"
-                                          Background="{StaticResource InputAltBrush}"
-                                          BorderBrush="{StaticResource PanelStrokeBrush}"
-                                          Foreground="{StaticResource TextPrimaryBrush}">
-                                    <ComboBoxItem Content="目前作用中的 pane" Tag="ActivePane" />
-                                    <ComboBoxItem Content="左側 pane" Tag="LeftPane" />
-                                    <ComboBoxItem Content="右側 pane" Tag="RightPane" />
-                                    <ComboBoxItem Content="自訂路徑" Tag="CustomPath" />
-                                </ComboBox>
-                                <TextBox x:Name="DefaultTerminalCustomWorkingDirectoryTextBox"
-                                         TextChanged="DefaultTerminalCustomWorkingDirectoryTextBox_TextChanged"
-                                         PlaceholderText="例如：C:\trabajo 或 \\dsm\video"
-                                         Background="{StaticResource InputAltBrush}"
-                                         BorderBrush="{StaticResource PanelStrokeBrush}"
-                                         Foreground="{StaticResource TextPrimaryBrush}"
-                                         Visibility="Collapsed" />
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="目前版本"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock x:Name="CurrentAppVersionTextBlock"
+                                               Text="載入中"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="15"
+                                               TextWrapping="Wrap" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="更新來源"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBlock x:Name="UpdateManifestUrlTextBlock"
+                                               Text="https://cdn.nuone.cl/nuone-tools/manifest.json"
+                                               Foreground="{StaticResource TextSecondaryBrush}"
+                                               FontSize="15"
+                                               TextWrapping="WrapWholeWords" />
+                                </StackPanel>
+
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button x:Name="CheckForUpdatesButton"
+                                            Click="CheckForUpdatesButton_Click"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="檢查更新" />
+                                </StackPanel>
+
+                                <StackPanel x:Name="AppUpdateActionButtonsPanel"
+                                            Orientation="Horizontal"
+                                            Spacing="10"
+                                            Visibility="Collapsed">
+                                    <Button x:Name="OpenUpdateDownloadButton"
+                                            Click="OpenUpdateDownloadButton_Click"
+                                            Style="{StaticResource AccentButtonStyle}"
+                                            Content="下載並安裝" />
+                                    <Button x:Name="CopyUpdateDownloadUrlButton"
+                                            Click="CopyUpdateDownloadUrlButton_Click"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="複製下載連結" />
+                                </StackPanel>
+
+                                <TextBlock x:Name="AppUpdateStatusTextBlock"
+                                           Text="尚未檢查更新"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="15"
+                                           TextWrapping="Wrap" />
+
+                                <TextBlock x:Name="LatestAppVersionTextBlock"
+                                           Text="最新版本：尚未檢查"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="14"
+                                           TextWrapping="Wrap" />
+
+                                <TextBlock x:Name="LastAppUpdateCheckTextBlock"
+                                           Text="上次檢查：尚未檢查"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="14"
+                                           TextWrapping="Wrap" />
+
+                                <TextBlock x:Name="AppUpdateReleaseNotesTextBlock"
+                                           Text=""
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="14"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed" />
                             </StackPanel>
+                        </Border>
 
-                            <TextBlock Text="FileBunker 上傳"
-                                       Foreground="{StaticResource TextPrimaryBrush}"
-                                       FontSize="20"
-                                       FontWeight="SemiBold"
-                                       Margin="0,8,0,0" />
-
-                            <TextBlock Text="提供工具列的 FileBunker 上傳按鈕使用。設定會儲存在 Nuone Tools 的 settings.json，不再讀外部 .env。"
-                                       Foreground="{StaticResource TextSecondaryBrush}"
-                                       FontSize="15"
-                                       TextWrapping="Wrap" />
-
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="輸入端點"
+                        <Border Padding="24"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="18">
+                                <TextBlock Text="本機資料備份"
                                            Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
+                                           FontSize="24"
                                            FontWeight="SemiBold" />
-                                <TextBox x:Name="FileBunkerInputEndpointTextBox"
-                                         TextChanged="FileBunkerInputEndpointTextBox_TextChanged"
-                                         PlaceholderText="https://filein.filebunker.com"
-                                         Background="{StaticResource InputAltBrush}"
-                                         BorderBrush="{StaticResource PanelStrokeBrush}"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
-                            </StackPanel>
 
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="輸出端點"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <TextBox x:Name="FileBunkerOutputEndpointTextBox"
-                                         TextChanged="FileBunkerOutputEndpointTextBox_TextChanged"
-                                         PlaceholderText="https://out.filebunker.com"
-                                         Background="{StaticResource InputAltBrush}"
-                                         BorderBrush="{StaticResource PanelStrokeBrush}"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
+                                <TextBlock Text="settings-local.json 不再自動同步。這裡可以手動把目前本機資料備份到後端。"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="15"
+                                           TextWrapping="Wrap" />
+
+                                <StackPanel Orientation="Horizontal" Spacing="10">
+                                    <Button Click="BackupLocalSettingsButton_Click"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="備份本機資料" />
+                                </StackPanel>
+
+                                <TextBlock x:Name="LastLocalBackupTextBlock"
+                                           Text="尚未備份"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="14"
+                                           TextWrapping="Wrap" />
                             </StackPanel>
+                        </Border>
+
+                        <Border Padding="24"
+                                Background="{StaticResource PanelBrush}"
+                                BorderBrush="{StaticResource PanelStrokeBrush}"
+                                BorderThickness="1"
+                                CornerRadius="18">
+                            <StackPanel Spacing="18">
+                                <TextBlock Text="FileBunker 上傳"
+                                           Foreground="{StaticResource TextPrimaryBrush}"
+                                           FontSize="24"
+                                           FontWeight="SemiBold" />
+
+                                <TextBlock Text="提供工具列的 FileBunker 上傳按鈕使用。設定會儲存在 Nuone Tools 的 settings-sync.json，不再讀外部 .env。"
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="15"
+                                           TextWrapping="Wrap" />
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="輸入端點"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBox x:Name="FileBunkerInputEndpointTextBox"
+                                             TextChanged="FileBunkerInputEndpointTextBox_TextChanged"
+                                             PlaceholderText="https://filein.filebunker.com"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="輸出端點"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBox x:Name="FileBunkerOutputEndpointTextBox"
+                                             TextChanged="FileBunkerOutputEndpointTextBox_TextChanged"
+                                             PlaceholderText="https://out.filebunker.com"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
 
                             <Grid ColumnSpacing="16">
                                 <Grid.ColumnDefinitions>
@@ -382,20 +554,21 @@
                                 </StackPanel>
                             </Grid>
 
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="API Key"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <TextBox x:Name="FileBunkerApiKeyTextBox"
-                                         TextChanged="FileBunkerApiKeyTextBox_TextChanged"
-                                         PlaceholderText="輸入 FileBunker API key"
-                                         Background="{StaticResource InputAltBrush}"
-                                         BorderBrush="{StaticResource PanelStrokeBrush}"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="API Key"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBox x:Name="FileBunkerApiKeyTextBox"
+                                             TextChanged="FileBunkerApiKeyTextBox_TextChanged"
+                                             PlaceholderText="輸入 FileBunker API key"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
                             </StackPanel>
-                        </StackPanel>
-                    </Border>
+                        </Border>
+                    </StackPanel>
 
                     <Border x:Name="AccountSettingsContent"
                             Padding="24"
@@ -409,47 +582,50 @@
                                        Foreground="{StaticResource TextPrimaryBrush}"
                                        FontSize="24"
                                        FontWeight="SemiBold" />
-                            <TextBlock Text="連接 https://api.nuone.cl 的 identity login。密碼只用於當次登入，不會寫進 settings.json。"
+                            <TextBlock Text="連接 https://api.nuone.cl 的 identity login。密碼只用於當次登入，會寫進 settings-local.json。"
                                        Foreground="{StaticResource TextSecondaryBrush}"
                                        FontSize="15"
                                        TextWrapping="Wrap" />
 
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="API"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <TextBox x:Name="AccountApiUrlTextBox"
-                                         TextChanged="AccountApiUrlTextBox_TextChanged"
-                                         PlaceholderText="https://api.nuone.cl"
-                                         Background="{StaticResource InputAltBrush}"
-                                         BorderBrush="{StaticResource PanelStrokeBrush}"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="Email"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <TextBox x:Name="AccountEmailTextBox"
-                                         TextChanged="AccountEmailTextBox_TextChanged"
-                                         PlaceholderText="you@example.com"
-                                         Background="{StaticResource InputAltBrush}"
-                                         BorderBrush="{StaticResource PanelStrokeBrush}"
-                                         Foreground="{StaticResource TextPrimaryBrush}" />
-                            </StackPanel>
-
-                            <StackPanel Spacing="10">
-                                <TextBlock Text="Password"
-                                           Foreground="{StaticResource TextPrimaryBrush}"
-                                           FontSize="18"
-                                           FontWeight="SemiBold" />
-                                <PasswordBox x:Name="AccountPasswordBox"
-                                             PlaceholderText="輸入密碼後登入"
+                            <StackPanel x:Name="AccountLoginFieldsPanel"
+                                        Spacing="18">
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="API"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBox x:Name="AccountApiUrlTextBox"
+                                             TextChanged="AccountApiUrlTextBox_TextChanged"
+                                             PlaceholderText="https://api.nuone.cl"
                                              Background="{StaticResource InputAltBrush}"
                                              BorderBrush="{StaticResource PanelStrokeBrush}"
                                              Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Email"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <TextBox x:Name="AccountEmailTextBox"
+                                             TextChanged="AccountEmailTextBox_TextChanged"
+                                             PlaceholderText="you@example.com"
+                                             Background="{StaticResource InputAltBrush}"
+                                             BorderBrush="{StaticResource PanelStrokeBrush}"
+                                             Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
+
+                                <StackPanel Spacing="10">
+                                    <TextBlock Text="Password"
+                                               Foreground="{StaticResource TextPrimaryBrush}"
+                                               FontSize="18"
+                                               FontWeight="SemiBold" />
+                                    <PasswordBox x:Name="AccountPasswordBox"
+                                                 PlaceholderText="輸入密碼後登入"
+                                                 Background="{StaticResource InputAltBrush}"
+                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                </StackPanel>
                             </StackPanel>
 
                             <StackPanel Orientation="Horizontal" Spacing="10">
@@ -457,13 +633,10 @@
                                         Click="LoginAccountButton_Click"
                                         Style="{StaticResource AccentButtonStyle}"
                                         Content="登入" />
-                                <Button x:Name="ClearAccountSessionButton"
-                                        Click="ClearAccountSessionButton_Click"
-                                        Style="{StaticResource GhostButtonStyle}"
-                                        Content="清除登入狀態" />
                             </StackPanel>
 
-                            <Border Padding="16"
+                            <Border x:Name="AccountConnectionStatusCard"
+                                    Padding="16"
                                     Background="{StaticResource CardBrush}"
                                     BorderBrush="{StaticResource PanelStrokeBrush}"
                                     BorderThickness="1"
@@ -542,6 +715,23 @@
                                                    FontSize="14"
                                                    TextWrapping="Wrap" />
                                     </Grid>
+
+                                    <StackPanel Spacing="8">
+                                        <TextBlock Text="Login payload"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="14" />
+                                        <TextBox x:Name="AccountPayloadJsonTextBox"
+                                                 IsReadOnly="True"
+                                                 AcceptsReturn="True"
+                                                 TextWrapping="Wrap"
+                                                 MinHeight="120"
+                                                 MaxHeight="260"
+                                                 ScrollViewer.VerticalScrollBarVisibility="Auto"
+                                                 ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                                                 Background="{StaticResource InputAltBrush}"
+                                                 BorderBrush="{StaticResource PanelStrokeBrush}"
+                                                 Foreground="{StaticResource TextPrimaryBrush}" />
+                                    </StackPanel>
                                 </StackPanel>
                             </Border>
                         </StackPanel>
@@ -820,7 +1010,8 @@
                                                         BorderThickness="1"
                                                         CornerRadius="12">
                                                     <Grid Tag="{x:Bind}"
-                                                          Loaded="ToolbarIconPresenter_Loaded">
+                                                          Loaded="ToolbarIconPresenter_Loaded"
+                                                          DataContextChanged="ToolbarIconPresenter_DataContextChanged">
                                                         <Image Width="24"
                                                                Height="24"
                                                                HorizontalAlignment="Center"

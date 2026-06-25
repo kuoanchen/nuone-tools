@@ -138,7 +138,20 @@ namespace nuone_tools
                 _suppressRefreshUntil = until;
             }
 
-            _dispatcherQueue.TryEnqueue(() => _debounceTimer.Stop());
+            if (!_dispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        _debounceTimer.Stop();
+                    }
+                    catch (Exception ex)
+                    {
+                        MainWindow.LogBoundaryException(ex, "pane watcher suppress refresh");
+                    }
+                }))
+            {
+                AppLogging.Warning("Pane watcher suppress refresh queue rejected Path={Path}", _watchedPath);
+            }
         }
 
         private void Watcher_Changed(object sender, FileSystemEventArgs e)
@@ -154,14 +167,63 @@ namespace nuone_tools
         private void Watcher_Error(object sender, ErrorEventArgs e)
         {
             var currentPath = _watchedPath;
-            _dispatcherQueue.TryEnqueue(() => Watch(currentPath));
+            if (!_dispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        Watch(currentPath);
+                    }
+                    catch (Exception ex)
+                    {
+                        MainWindow.LogBoundaryException(ex, "pane watcher error restart");
+                    }
+                }))
+            {
+                AppLogging.Warning("Pane watcher error restart queue rejected Path={Path}", currentPath);
+            }
         }
 
         private void ScheduleRefresh()
         {
-            _dispatcherQueue.TryEnqueue(() =>
+            if (!_dispatcherQueue.TryEnqueue(() =>
+                {
+                    try
+                    {
+                        if (_isDisposed)
+                        {
+                            return;
+                        }
+
+                        if (DateTimeOffset.UtcNow < _suppressRefreshUntil)
+                        {
+                            return;
+                        }
+
+                        _debounceTimer.Stop();
+                        _debounceTimer.Start();
+                    }
+                    catch (Exception ex)
+                    {
+                        MainWindow.LogBoundaryException(ex, "pane watcher schedule refresh");
+                    }
+                }))
             {
-                if (_isDisposed)
+                AppLogging.Warning("Pane watcher schedule refresh queue rejected Path={Path}", _watchedPath);
+            }
+        }
+
+        private void DebounceTimer_Tick(DispatcherQueueTimer sender, object args)
+        {
+            try
+            {
+                sender.Stop();
+
+                if (_isDisposed || string.IsNullOrWhiteSpace(_pane.CurrentPath))
+                {
+                    return;
+                }
+
+                if (!string.Equals(_watchedPath, Path.GetFullPath(_pane.CurrentPath), StringComparison.OrdinalIgnoreCase))
                 {
                     return;
                 }
@@ -171,31 +233,12 @@ namespace nuone_tools
                     return;
                 }
 
-                _debounceTimer.Stop();
-                _debounceTimer.Start();
-            });
-        }
-
-        private void DebounceTimer_Tick(DispatcherQueueTimer sender, object args)
-        {
-            sender.Stop();
-
-            if (_isDisposed || string.IsNullOrWhiteSpace(_pane.CurrentPath))
-            {
-                return;
+                _refreshAction(_pane);
             }
-
-            if (!string.Equals(_watchedPath, Path.GetFullPath(_pane.CurrentPath), StringComparison.OrdinalIgnoreCase))
+            catch (Exception ex)
             {
-                return;
+                MainWindow.LogBoundaryException(ex, "pane watcher debounce tick");
             }
-
-            if (DateTimeOffset.UtcNow < _suppressRefreshUntil)
-            {
-                return;
-            }
-
-            _refreshAction(_pane);
         }
 
         private void StopWatching()

@@ -131,6 +131,7 @@
                         BorderThickness="1"
                         CornerRadius="10"
                         IsTabStop="True"
+                        SizeChanged="TerminalHost_SizeChanged"
                         KeyDown="TerminalHost_KeyDown"
                         CharacterReceived="TerminalHost_CharacterReceived"
                         GotFocus="TerminalHost_GotFocus"
