@@ -59,11 +59,7 @@ namespace nuone_tools
 
         private void ShowTerminalApp_Click(object sender, RoutedEventArgs e)
         {
-            var preferredWorkingDirectory = _shortcutSettings.DefaultTerminalWorkingDirectoryMode == ToolbarWorkingDirectoryMode.ActivePane
-                ? _activePane.CurrentPath?.Trim()
-                : null;
-            EnsureTerminalTabExists(preferredWorkingDirectory);
-            SwitchToAppSection(AppSection.Terminal);
+            OpenTerminalSection(useActivePaneWhenAvailable: true);
         }
 
         private void OpenSettings_Click(object sender, RoutedEventArgs e)
@@ -84,6 +80,19 @@ namespace nuone_tools
             UpdateAppSectionVisuals();
             UpdateSharedStatusBar();
             AppLogging.Information("SwitchToAppSection completed Current={CurrentSection}", _activeSection);
+        }
+
+        private void OpenTerminalSection(bool useActivePaneWhenAvailable = false, string? workingDirectoryOverride = null)
+        {
+            var preferredWorkingDirectory = !string.IsNullOrWhiteSpace(workingDirectoryOverride)
+                ? workingDirectoryOverride.Trim()
+                : useActivePaneWhenAvailable &&
+                    _shortcutSettings.DefaultTerminalWorkingDirectoryMode == ToolbarWorkingDirectoryMode.ActivePane
+                    ? _activePane.CurrentPath?.Trim()
+                    : null;
+            EnsureTerminalTabExists(preferredWorkingDirectory);
+            SwitchToAppSection(AppSection.Terminal);
+            FocusTerminalHost();
         }
 
         private void UpdateAppSectionVisuals()
