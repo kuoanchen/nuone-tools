@@ -766,6 +766,16 @@ namespace nuone_tools
                 Content = "啟動 app 時補跑錯過的排程",
                 IsChecked = profile.RunMissedOnStartup,
             };
+            var notificationEnabledCheckBox = new CheckBox
+            {
+                Content = "寫入通知記錄",
+                IsChecked = profile.NotificationEnabled,
+            };
+            var toastEnabledCheckBox = new CheckBox
+            {
+                Content = "顯示 Windows toast",
+                IsChecked = profile.ToastEnabled,
+            };
 
             var filePanel = new StackPanel { Spacing = 8 };
             filePanel.Children.Add(new TextBlock { Text = "來源路徑" });
@@ -859,9 +869,11 @@ namespace nuone_tools
             panel.Children.Add(intervalPanel);
             panel.Children.Add(scheduledPanel);
             panel.Children.Add(runMissedCheckBox);
+            panel.Children.Add(notificationEnabledCheckBox);
+            panel.Children.Add(toastEnabledCheckBox);
             panel.Children.Add(new TextBlock
             {
-                Text = "排程只會在 app 開著時生效；如果勾這個，超過排定時間後才開 app 也會立刻補跑。",
+                Text = "排程只會在 app 開著時生效；如果勾這個，超過排定時間後才開 app 也會立刻補跑。通知記錄與 toast 可分開控制。",
                 Opacity = 0.78,
                 TextWrapping = TextWrapping.Wrap,
             });
@@ -953,6 +965,8 @@ namespace nuone_tools
             profile.IntervalMinutesText = intervalMinutes.ToString(CultureInfo.InvariantCulture);
             profile.ScheduleTimeText = scheduleTimeTextBox.Text.Trim();
             profile.RunMissedOnStartup = runMissedCheckBox.IsChecked == true;
+            profile.NotificationEnabled = notificationEnabledCheckBox.IsChecked == true;
+            profile.ToastEnabled = toastEnabledCheckBox.IsChecked == true;
             profile.WeeklyDaysMask = 0;
             profile.SetWeekdaySelected(DayOfWeek.Monday, monday.IsChecked == true);
             profile.SetWeekdaySelected(DayOfWeek.Tuesday, tuesday.IsChecked == true);
@@ -1008,6 +1022,16 @@ namespace nuone_tools
             passwordsTextBox.Text = string.Join(Environment.NewLine, passwordValues);
 
             var panel = new StackPanel { Spacing = 10, Width = 680 };
+            var notificationEnabledCheckBox = new CheckBox
+            {
+                Content = "寫入通知記錄",
+                IsChecked = profile.NotificationEnabled,
+            };
+            var toastEnabledCheckBox = new CheckBox
+            {
+                Content = "顯示 Windows toast",
+                IsChecked = profile.ToastEnabled,
+            };
             panel.Children.Add(new TextBlock { Text = "名稱" });
             panel.Children.Add(nameTextBox);
             panel.Children.Add(new TextBlock { Text = "監看目錄" });
@@ -1022,6 +1046,8 @@ namespace nuone_tools
                 Text = $"目前已載入 {passwordValues.Count} 組密碼",
                 Opacity = 0.78,
             });
+            panel.Children.Add(notificationEnabledCheckBox);
+            panel.Children.Add(toastEnabledCheckBox);
             panel.Children.Add(new ScrollViewer
             {
                 Content = passwordsTextBox,
@@ -1059,6 +1085,8 @@ namespace nuone_tools
             profile.WatchPath = watchPath;
             profile.ExtractorPath = extractorPathTextBox.Text.Trim();
             profile.ExtensionFilter = extensionFilterTextBox.Text.Trim();
+            profile.NotificationEnabled = notificationEnabledCheckBox.IsChecked == true;
+            profile.ToastEnabled = toastEnabledCheckBox.IsChecked == true;
             profile.Passwords.Clear();
             foreach (var password in passwordsTextBox.Text
                 .Split(new[] { '\r', '\n' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)

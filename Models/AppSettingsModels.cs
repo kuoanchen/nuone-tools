@@ -260,6 +260,43 @@ namespace nuone_tools
         public string LogDirectoryPath { get; set; } = MainWindow.DefaultLogDirectoryPath;
     }
 
+    public sealed class AppUpdateManifest
+    {
+        public string App { get; set; } = string.Empty;
+
+        public string Channel { get; set; } = string.Empty;
+
+        public string Version { get; set; } = string.Empty;
+
+        [JsonPropertyName("published_at")]
+        public string PublishedAt { get; set; } = string.Empty;
+
+        public AppUpdatePackageManifest Package { get; set; } = new();
+
+        [JsonPropertyName("release_notes")]
+        public string ReleaseNotes { get; set; } = string.Empty;
+
+        public bool Mandatory { get; set; }
+
+        [JsonPropertyName("min_supported_version")]
+        public string MinSupportedVersion { get; set; } = string.Empty;
+    }
+
+    public sealed class AppUpdatePackageManifest
+    {
+        public string Platform { get; set; } = string.Empty;
+
+        public string Type { get; set; } = string.Empty;
+
+        public string Filename { get; set; } = string.Empty;
+
+        public string Url { get; set; } = string.Empty;
+
+        public string Sha256 { get; set; } = string.Empty;
+
+        public long Size { get; set; }
+    }
+
     public sealed class NotificationHistoryRecord
     {
         public Guid Id { get; set; }
@@ -373,6 +410,10 @@ namespace nuone_tools
 
         public bool IsEnabled { get; set; } = true;
 
+        public bool NotificationEnabled { get; set; } = true;
+
+        public bool ToastEnabled { get; set; } = true;
+
         public string LastRunText { get; set; } = "尚未執行";
 
         public string LastResultText { get; set; } = "等待排程";
@@ -397,6 +438,10 @@ namespace nuone_tools
         public string PasswordListText { get; set; } = string.Empty;
 
         public bool IsEnabled { get; set; } = true;
+
+        public bool NotificationEnabled { get; set; } = true;
+
+        public bool ToastEnabled { get; set; } = true;
 
         public string LastRunText { get; set; } = "尚未執行";
 

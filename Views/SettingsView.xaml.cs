@@ -55,9 +55,19 @@ namespace nuone_tools.Views
         internal TextBox FileBunkerInputEndpointTextBoxElement => FileBunkerInputEndpointTextBox;
         internal TextBox FileBunkerKeyLengthTextBoxElement => FileBunkerKeyLengthTextBox;
         internal TextBox FileBunkerOutputEndpointTextBoxElement => FileBunkerOutputEndpointTextBox;
+        internal TextBlock CurrentAppVersionTextBlockElement => CurrentAppVersionTextBlock;
+        internal Button CheckForUpdatesButtonElement => CheckForUpdatesButton;
+        internal StackPanel AppUpdateActionButtonsPanelElement => AppUpdateActionButtonsPanel;
+        internal Button OpenUpdateDownloadButtonElement => OpenUpdateDownloadButton;
+        internal Button CopyUpdateDownloadUrlButtonElement => CopyUpdateDownloadUrlButton;
         internal TextBox LogDirectoryPathTextBoxElement => LogDirectoryPathTextBox;
+        internal TextBlock AppUpdateManifestUrlTextBlockElement => UpdateManifestUrlTextBlock;
+        internal TextBlock AppUpdateReleaseNotesTextBlockElement => AppUpdateReleaseNotesTextBlock;
+        internal TextBlock AppUpdateStatusTextBlockElement => AppUpdateStatusTextBlock;
+        internal TextBlock LatestAppVersionTextBlockElement => LatestAppVersionTextBlock;
+        internal TextBlock LastAppUpdateCheckTextBlockElement => LastAppUpdateCheckTextBlock;
         internal TextBlock LastLocalBackupTextBlockElement => LastLocalBackupTextBlock;
-        internal Border GeneralSettingsContentElement => GeneralSettingsContent;
+        internal StackPanel GeneralSettingsContentElement => GeneralSettingsContent;
         internal Border GeneralSettingsNavBorderElement => GeneralSettingsNavBorder;
         internal TextBlock GeneralSettingsNavTextElement => GeneralSettingsNavText;
         internal Button LoginAccountButtonElement => LoginAccountButton;
@@ -194,6 +204,21 @@ namespace nuone_tools.Views
         private void BackupLocalSettingsButton_Click(object sender, RoutedEventArgs e)
         {
             Owner?.BackupLocalSettingsButton_Click(sender, e);
+        }
+
+        private void CheckForUpdatesButton_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.CheckForUpdatesButton_Click(sender, e);
+        }
+
+        private void OpenUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.OpenUpdateDownloadButton_Click(sender, e);
+        }
+
+        private void CopyUpdateDownloadUrlButton_Click(object sender, RoutedEventArgs e)
+        {
+            Owner?.CopyUpdateDownloadUrlButton_Click(sender, e);
         }
 
         private void ShowAccountSettings_Click(object sender, RoutedEventArgs e)

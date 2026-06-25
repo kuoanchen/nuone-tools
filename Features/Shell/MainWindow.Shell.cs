@@ -167,9 +167,11 @@ namespace nuone_tools
                             AutoExtractProfiles.Count(profile => profile.IsRunning);
                         SharedStatusSectionText.Text = "自動化";
                         SharedStatusPrimaryText.Text = $"{totalJobs} 個工作 / {enabledJobs} 個已啟用";
-                        SharedStatusDetailText.Text = runningJobs > 0
-                            ? $"{runningJobs} 個工作執行中"
-                            : "目前沒有執行中的工作";
+                        SharedStatusDetailText.Text = !IsAutomationExecutionOwner
+                            ? "自動化由另一個 nuone-tools 視窗執行中"
+                            : runningJobs > 0
+                                ? $"{runningJobs} 個工作執行中"
+                                : "目前沒有執行中的工作";
                         break;
                     }
                 case AppSection.Terminal:
@@ -681,7 +683,8 @@ namespace nuone_tools
             string category,
             string summary,
             string details,
-            bool showWindowsToast = true)
+            bool showWindowsToast = true,
+            bool persistRecord = true)
         {
             if (!IsAutomationNotificationCategory(category))
             {
@@ -706,19 +709,23 @@ namespace nuone_tools
                 DeviceName = Environment.MachineName,
             };
 
-            lock (_notificationHistoryLock)
+            if (persistRecord)
             {
-                var target = scope == NotificationHistoryScope.Sync
-                    ? _syncNotificationHistory
-                    : _localNotificationHistory;
-                target.Insert(0, record);
-                while (target.Count > 200)
+                lock (_notificationHistoryLock)
                 {
-                    target.RemoveAt(target.Count - 1);
+                    var target = scope == NotificationHistoryScope.Sync
+                        ? _syncNotificationHistory
+                        : _localNotificationHistory;
+                    target.Insert(0, record);
+                    while (target.Count > 200)
+                    {
+                        target.RemoveAt(target.Count - 1);
+                    }
                 }
+
+                SaveNotificationHistoriesSafe();
             }
 
-            SaveNotificationHistoriesSafe();
             if (showWindowsToast)
             {
                 WindowsNotificationService.Show(record);
@@ -746,7 +753,7 @@ namespace nuone_tools
                 target.Clear();
             }
 
-            SaveNotificationHistoriesSafe();
+            SaveNotificationHistoriesSafe(mergeExistingRecords: false);
         }
 
         private void ClearAllNotificationRecords()
@@ -762,7 +769,7 @@ namespace nuone_tools
                 _syncNotificationHistory.Clear();
             }
 
-            SaveNotificationHistoriesSafe();
+            SaveNotificationHistoriesSafe(mergeExistingRecords: false);
             UpdateSharedStatusBar();
         }
 

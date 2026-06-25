@@ -5,6 +5,7 @@ using System.ComponentModel;
 using System.Diagnostics;
 using System.Globalization;
 using System.IO;
+using System.IO.Compression;
 using System.Linq;
 using System.Net.Http;
 using System.Reflection;
@@ -53,6 +54,7 @@ namespace nuone_tools
             UpdateDefaultTerminalCustomWorkingDirectoryVisibility();
             UpdateFileBunkerSettingsUi();
             UpdateLoggingSettingsUi();
+            UpdateAppUpdateUi();
             CaptureHintTextBlock.Text = "按「修改」後，再按下實體鍵，會立即套用。";
             _isUpdatingSettingsUi = false;
         }
@@ -105,6 +107,637 @@ namespace nuone_tools
             {
                 _isUpdatingLoggingUi = false;
             }
+        }
+
+        private void UpdateAppUpdateUi()
+        {
+            if (CurrentAppVersionTextBlock is null ||
+                AppUpdateManifestUrlTextBlock is null ||
+                AppUpdateStatusTextBlock is null ||
+                LatestAppVersionTextBlock is null ||
+                LastAppUpdateCheckTextBlock is null ||
+                AppUpdateReleaseNotesTextBlock is null ||
+                CheckForUpdatesButton is null ||
+                AppUpdateActionButtonsPanel is null ||
+                OpenUpdateDownloadButton is null ||
+                CopyUpdateDownloadUrlButton is null)
+            {
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(_appUpdateState.CurrentVersionText))
+            {
+                _appUpdateState.CurrentVersionText = GetCurrentAppVersion();
+            }
+
+            CurrentAppVersionTextBlock.Text = _appUpdateState.CurrentVersionText;
+            AppUpdateManifestUrlTextBlock.Text = _appUpdateState.ManifestUrl;
+            AppUpdateStatusTextBlock.Text = _appUpdateState.StatusText;
+            LatestAppVersionTextBlock.Text = $"最新版本：{_appUpdateState.LatestVersionText}";
+            LastAppUpdateCheckTextBlock.Text = $"上次檢查：{_appUpdateState.LastCheckedText}";
+            AppUpdateReleaseNotesTextBlock.Text = _appUpdateState.ReleaseNotes;
+            AppUpdateReleaseNotesTextBlock.Visibility = string.IsNullOrWhiteSpace(_appUpdateState.ReleaseNotes)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+            CheckForUpdatesButton.IsEnabled = !_appUpdateState.IsChecking && !_appUpdateState.IsInstalling;
+            CheckForUpdatesButton.Content = _appUpdateState.IsInstalling
+                ? "更新中..."
+                : _appUpdateState.IsChecking
+                    ? "檢查中..."
+                    : "檢查更新";
+            var hasDownloadAction = !_appUpdateState.IsInstalling &&
+                                    _appUpdateState.IsUpdateAvailable &&
+                                    !string.IsNullOrWhiteSpace(_appUpdateState.DownloadUrl);
+            AppUpdateActionButtonsPanel.Visibility = hasDownloadAction
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            OpenUpdateDownloadButton.IsEnabled = hasDownloadAction;
+            CopyUpdateDownloadUrlButton.IsEnabled = hasDownloadAction;
+        }
+
+        internal async void CheckForUpdatesButton_Click(object sender, RoutedEventArgs e)
+        {
+            await CheckForUpdatesAsync(isAutomatic: false);
+        }
+
+        internal async void OpenUpdateDownloadButton_Click(object sender, RoutedEventArgs e)
+        {
+            var downloadUrl = _appUpdateState.DownloadUrl?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(downloadUrl))
+            {
+                await ShowMessageAsync("下載新版失敗", "目前沒有可用的下載連結。");
+                return;
+            }
+
+            try
+            {
+                using var response = await SharedHttpClient.GetAsync(_appUpdateState.ManifestUrl);
+                response.EnsureSuccessStatusCode();
+
+                var rawManifest = await response.Content.ReadAsStringAsync();
+                var manifest = DeserializeAppUpdateManifest(rawManifest);
+                var resolvedDownloadUrl = ResolveUpdateDownloadUrl(_appUpdateState.ManifestUrl, manifest.Package?.Url);
+                var latestVersion = string.IsNullOrWhiteSpace(manifest.Version)
+                    ? _appUpdateState.LatestVersionText
+                    : manifest.Version.Trim();
+                var currentVersion = string.IsNullOrWhiteSpace(_appUpdateState.CurrentVersionText)
+                    ? GetCurrentAppVersion()
+                    : _appUpdateState.CurrentVersionText;
+
+                if (string.IsNullOrWhiteSpace(resolvedDownloadUrl))
+                {
+                    await ShowMessageAsync("下載新版失敗", "目前沒有可用的下載連結。");
+                    return;
+                }
+
+                await InstallAppUpdateAsync(manifest, resolvedDownloadUrl, latestVersion, currentVersion);
+            }
+            catch (Exception ex)
+            {
+                await ShowMessageAsync("下載新版失敗", ex.Message);
+            }
+        }
+
+        internal async void CopyUpdateDownloadUrlButton_Click(object sender, RoutedEventArgs e)
+        {
+            var downloadUrl = _appUpdateState.DownloadUrl?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(downloadUrl))
+            {
+                await ShowMessageAsync("複製下載連結失敗", "目前沒有可用的下載連結。");
+                return;
+            }
+
+            var dataPackage = new DataPackage();
+            dataPackage.SetText(downloadUrl);
+            Clipboard.SetContent(dataPackage);
+            Clipboard.Flush();
+            CaptureHintTextBlock.Text = "已複製新版下載連結。";
+        }
+
+        private async Task CheckForUpdatesAsync(bool isAutomatic)
+        {
+            if (_appUpdateState.IsChecking)
+            {
+                return;
+            }
+
+            _appUpdateState.IsChecking = true;
+            _appUpdateState.CurrentVersionText = GetCurrentAppVersion();
+            _appUpdateState.StatusText = "檢查更新中...";
+            UpdateAppUpdateUi();
+
+            try
+            {
+                using var response = await SharedHttpClient.GetAsync(_appUpdateState.ManifestUrl);
+                response.EnsureSuccessStatusCode();
+
+                var rawManifest = await response.Content.ReadAsStringAsync();
+                var manifest = DeserializeAppUpdateManifest(rawManifest);
+                var resolvedDownloadUrl = ResolveUpdateDownloadUrl(_appUpdateState.ManifestUrl, manifest.Package?.Url);
+                var currentVersion = _appUpdateState.CurrentVersionText;
+                var latestVersion = string.IsNullOrWhiteSpace(manifest.Version)
+                    ? currentVersion
+                    : manifest.Version.Trim();
+                var isUpdateAvailable = CompareAppVersions(latestVersion, currentVersion) > 0;
+
+                _appUpdateState.LatestVersionText = latestVersion;
+                _appUpdateState.ReleaseNotes = BuildAppUpdateReleaseNotesText(manifest, resolvedDownloadUrl);
+                _appUpdateState.DownloadUrl = resolvedDownloadUrl;
+                _appUpdateState.IsUpdateAvailable = isUpdateAvailable;
+                _appUpdateState.LastCheckedText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                _appUpdateState.StatusText = isUpdateAvailable
+                    ? isAutomatic
+                        ? $"發現新版本：{latestVersion}，等待你確認下載與重啟。"
+                        : $"發現新版本：{latestVersion}，請確認是否下載與安裝。"
+                    : "目前已是最新版本";
+                UpdateAppUpdateUi();
+
+                AppLogging.Information(
+                    "App update check completed Automatic={IsAutomatic} CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} UpdateAvailable={IsUpdateAvailable}",
+                    isAutomatic,
+                    currentVersion,
+                    latestVersion,
+                    isUpdateAvailable);
+
+                if (isAutomatic && isUpdateAvailable)
+                {
+                    var shouldDownload = await ConfirmAsync(
+                        "發現新版",
+                        $"目前版本是 {currentVersion}，發現新版 {latestVersion}。要現在下載更新包嗎？");
+                    if (!shouldDownload)
+                    {
+                        AppLogging.Information(
+                            "App update automatic prompt cancelled by user CurrentVersion={CurrentVersion} LatestVersion={LatestVersion}",
+                            currentVersion,
+                            latestVersion);
+                        _appUpdateState.StatusText = $"發現新版本：{latestVersion}，你已取消本次更新。";
+                        UpdateAppUpdateUi();
+                        return;
+                    }
+
+                    var updateInstalled = await InstallAppUpdateAsync(
+                        manifest,
+                        resolvedDownloadUrl,
+                        latestVersion,
+                        currentVersion,
+                        skipDownloadConfirmation: true);
+                    if (updateInstalled)
+                    {
+                        return;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _appUpdateState.IsUpdateAvailable = false;
+                _appUpdateState.LastCheckedText = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                _appUpdateState.StatusText = $"檢查更新失敗：{ex.Message}";
+                _appUpdateState.ReleaseNotes = string.Empty;
+                AppLogging.Error(ex, "App update check failed Automatic={IsAutomatic}", isAutomatic);
+
+                if (!isAutomatic)
+                {
+                    await ShowMessageAsync("檢查更新失敗", ex.Message);
+                }
+            }
+            finally
+            {
+                _appUpdateState.IsChecking = false;
+                if (!_isClosingForAppUpdate)
+                {
+                    UpdateAppUpdateUi();
+                }
+            }
+        }
+
+        private async Task<bool> InstallAppUpdateAsync(
+            AppUpdateManifest manifest,
+            string resolvedDownloadUrl,
+            string latestVersion,
+            string currentVersion,
+            bool skipDownloadConfirmation = false)
+        {
+            if (string.IsNullOrWhiteSpace(resolvedDownloadUrl))
+            {
+                return false;
+            }
+
+            var currentExecutablePath = GetCurrentExecutablePath();
+            if (string.IsNullOrWhiteSpace(currentExecutablePath) || !File.Exists(currentExecutablePath))
+            {
+                AppLogging.Warning("App update install skipped because current executable path is unavailable.");
+                return false;
+            }
+
+            var installDirectory = Path.GetDirectoryName(currentExecutablePath);
+            if (string.IsNullOrWhiteSpace(installDirectory))
+            {
+                AppLogging.Warning("App update install skipped because install directory could not be resolved. Executable={Executable}", currentExecutablePath);
+                return false;
+            }
+
+            if (IsDevelopmentInstallDirectory(installDirectory))
+            {
+                AppLogging.Information("App update install skipped for development directory. Directory={InstallDirectory}", installDirectory);
+                _appUpdateState.StatusText = "發現新版本，但目前是開發版執行目錄，已略過自動套用。";
+                UpdateAppUpdateUi();
+                return false;
+            }
+
+            if (!CanWriteToDirectory(installDirectory))
+            {
+                AppLogging.Warning("App update install skipped because install directory is not writable. Directory={InstallDirectory}", installDirectory);
+                _appUpdateState.StatusText = "發現新版本，但目前安裝目錄不可寫入，請用手動下載更新。";
+                UpdateAppUpdateUi();
+                return false;
+            }
+
+            var updateRoot = Path.Combine(
+                Path.GetTempPath(),
+                "nuone-tools-update",
+                latestVersion,
+                Guid.NewGuid().ToString("N"));
+            var downloadFileName = GetDownloadFileName(manifest, resolvedDownloadUrl);
+            var downloadPath = Path.Combine(updateRoot, downloadFileName);
+            var extractDirectory = Path.Combine(updateRoot, "extract");
+
+            try
+            {
+                if (!skipDownloadConfirmation &&
+                    !await ConfirmAsync(
+                        "下載新版",
+                        $"目前版本是 {currentVersion}，發現新版 {latestVersion}。要現在下載更新包嗎？"))
+                {
+                    AppLogging.Information("App update download cancelled by user CurrentVersion={CurrentVersion} LatestVersion={LatestVersion}", currentVersion, latestVersion);
+                    _appUpdateState.StatusText = $"已取消下載 {latestVersion}。";
+                    UpdateAppUpdateUi();
+                    return false;
+                }
+
+                Directory.CreateDirectory(updateRoot);
+                Directory.CreateDirectory(extractDirectory);
+
+                _appUpdateState.IsInstalling = true;
+                _appUpdateState.StatusText = "下載新版中...";
+                UpdateAppUpdateUi();
+
+                using (var response = await SharedHttpClient.GetAsync(resolvedDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
+                {
+                    response.EnsureSuccessStatusCode();
+                    await using var responseStream = await response.Content.ReadAsStreamAsync();
+                    await using var fileStream = new FileStream(downloadPath, FileMode.Create, FileAccess.Write, FileShare.None);
+                    await responseStream.CopyToAsync(fileStream);
+                }
+
+                ValidateDownloadedUpdateHash(manifest.Package?.Sha256, downloadPath);
+
+                _appUpdateState.StatusText = "解壓更新中...";
+                UpdateAppUpdateUi();
+
+                ZipFile.ExtractToDirectory(downloadPath, extractDirectory, overwriteFiles: true);
+                var payloadDirectory = ResolveAppUpdatePayloadDirectory(extractDirectory, Path.GetFileName(currentExecutablePath));
+
+                _appUpdateState.IsInstalling = false;
+                _appUpdateState.StatusText = $"新版 {latestVersion} 已下載完成，等待安裝確認。";
+                UpdateAppUpdateUi();
+
+                if (!await ConfirmAsync(
+                        "安裝並重新啟動",
+                        $"新版 {latestVersion} 已下載完成。要現在關閉 Nuone Tools、套用更新並重新啟動嗎？"))
+                {
+                    AppLogging.Information("App update install postponed by user CurrentVersion={CurrentVersion} LatestVersion={LatestVersion}", currentVersion, latestVersion);
+                    _appUpdateState.StatusText = $"新版 {latestVersion} 已下載完成，尚未安裝。";
+                    CaptureHintTextBlock.Text = $"新版 {latestVersion} 已下載完成，等待你確認安裝。";
+                    UpdateAppUpdateUi();
+                    return false;
+                }
+
+                _appUpdateState.IsInstalling = true;
+                _appUpdateState.StatusText = "套用更新中...";
+                UpdateAppUpdateUi();
+
+                var installerScriptPath = Path.Combine(updateRoot, "apply-update.ps1");
+                File.WriteAllText(installerScriptPath, BuildAppUpdateInstallerScript(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+
+                var startInfo = new ProcessStartInfo
+                {
+                    FileName = "powershell.exe",
+                    UseShellExecute = false,
+                    CreateNoWindow = true,
+                    WorkingDirectory = updateRoot,
+                };
+                startInfo.ArgumentList.Add("-NoProfile");
+                startInfo.ArgumentList.Add("-ExecutionPolicy");
+                startInfo.ArgumentList.Add("Bypass");
+                startInfo.ArgumentList.Add("-File");
+                startInfo.ArgumentList.Add(installerScriptPath);
+                startInfo.ArgumentList.Add("-InstallDirectory");
+                startInfo.ArgumentList.Add(installDirectory);
+                startInfo.ArgumentList.Add("-PayloadDirectory");
+                startInfo.ArgumentList.Add(payloadDirectory);
+                startInfo.ArgumentList.Add("-CurrentProcessId");
+                startInfo.ArgumentList.Add(Process.GetCurrentProcess().Id.ToString(CultureInfo.InvariantCulture));
+                startInfo.ArgumentList.Add("-ExecutableName");
+                startInfo.ArgumentList.Add(Path.GetFileName(currentExecutablePath));
+
+                Process.Start(startInfo);
+                AppLogging.Information(
+                    "App update install scheduled CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} InstallDirectory={InstallDirectory} PayloadDirectory={PayloadDirectory} DownloadUrl={DownloadUrl}",
+                    currentVersion,
+                    latestVersion,
+                    installDirectory,
+                    payloadDirectory,
+                    resolvedDownloadUrl);
+                _appUpdateState.StatusText = $"已確認安裝 {latestVersion}，完成後會重新啟動。";
+                CaptureHintTextBlock.Text = $"已開始安裝 {latestVersion}，接著會重新啟動。";
+                UpdateAppUpdateUi();
+                _isClosingForAppUpdate = true;
+                Close();
+                return true;
+            }
+            catch (Exception ex)
+            {
+                _appUpdateState.IsInstalling = false;
+                _appUpdateState.StatusText = $"自動更新失敗：{ex.Message}";
+                AppLogging.Error(ex, "App update install failed CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} DownloadUrl={DownloadUrl}", currentVersion, latestVersion, resolvedDownloadUrl);
+                UpdateAppUpdateUi();
+                return false;
+            }
+        }
+
+        private static string GetCurrentAppVersion()
+        {
+            var informationalVersion = Assembly.GetExecutingAssembly()
+                .GetCustomAttribute<AssemblyInformationalVersionAttribute>()?
+                .InformationalVersion;
+
+            if (!string.IsNullOrWhiteSpace(informationalVersion))
+            {
+                var plusIndex = informationalVersion.IndexOf('+', StringComparison.Ordinal);
+                return plusIndex >= 0
+                    ? informationalVersion[..plusIndex]
+                    : informationalVersion;
+            }
+
+            return Assembly.GetExecutingAssembly().GetName().Version?.ToString() ?? "0.0.0.0";
+        }
+
+        private static AppUpdateManifest DeserializeAppUpdateManifest(string rawManifest)
+        {
+            var normalizedManifest = NormalizeManifestPayload(rawManifest);
+            var serializerOptions = new JsonSerializerOptions
+            {
+                PropertyNameCaseInsensitive = true,
+            };
+
+            var manifest = JsonSerializer.Deserialize<AppUpdateManifest>(normalizedManifest, serializerOptions);
+            if (manifest is null)
+            {
+                throw new InvalidOperationException("manifest.json 無法解析。");
+            }
+
+            return manifest;
+        }
+
+        private static string NormalizeManifestPayload(string rawManifest)
+        {
+            var candidate = (rawManifest ?? string.Empty).Trim().TrimStart('\uFEFF');
+            if (string.IsNullOrWhiteSpace(candidate))
+            {
+                throw new InvalidOperationException("manifest.json 是空的。");
+            }
+
+            if (candidate.StartsWith("\"", StringComparison.Ordinal))
+            {
+                var unwrapped = JsonSerializer.Deserialize<string>(candidate);
+                candidate = (unwrapped ?? string.Empty).Trim().TrimStart('\uFEFF');
+            }
+
+            return candidate;
+        }
+
+        private static string ResolveUpdateDownloadUrl(string manifestUrl, string? packageUrl)
+        {
+            if (string.IsNullOrWhiteSpace(packageUrl))
+            {
+                return string.Empty;
+            }
+
+            if (Uri.TryCreate(packageUrl.Trim(), UriKind.Absolute, out var absoluteUri))
+            {
+                return absoluteUri.ToString();
+            }
+
+            if (!Uri.TryCreate(manifestUrl, UriKind.Absolute, out var manifestUri))
+            {
+                return packageUrl.Trim();
+            }
+
+            return new Uri(manifestUri, packageUrl.Trim()).ToString();
+        }
+
+        private static string GetCurrentExecutablePath()
+        {
+            if (!string.IsNullOrWhiteSpace(Environment.ProcessPath))
+            {
+                return Environment.ProcessPath!;
+            }
+
+            var mainModulePath = Process.GetCurrentProcess().MainModule?.FileName;
+            if (!string.IsNullOrWhiteSpace(mainModulePath))
+            {
+                return mainModulePath;
+            }
+
+            return Path.Combine(AppContext.BaseDirectory, "nuone-tools.exe");
+        }
+
+        private static string GetDownloadFileName(AppUpdateManifest manifest, string resolvedDownloadUrl)
+        {
+            var packageFileName = manifest.Package?.Filename?.Trim();
+            if (!string.IsNullOrWhiteSpace(packageFileName))
+            {
+                return packageFileName;
+            }
+
+            if (Uri.TryCreate(resolvedDownloadUrl, UriKind.Absolute, out var absoluteUri))
+            {
+                var leafName = Path.GetFileName(absoluteUri.LocalPath);
+                if (!string.IsNullOrWhiteSpace(leafName))
+                {
+                    return leafName;
+                }
+            }
+
+            return "nuone-tools-update.zip";
+        }
+
+        private static void ValidateDownloadedUpdateHash(string? expectedHash, string downloadPath)
+        {
+            var normalizedExpectedHash = (expectedHash ?? string.Empty).Trim();
+            if (string.IsNullOrWhiteSpace(normalizedExpectedHash))
+            {
+                return;
+            }
+
+            using var stream = File.OpenRead(downloadPath);
+            var hash = Convert.ToHexString(SHA256.HashData(stream)).ToLowerInvariant();
+            if (!string.Equals(hash, normalizedExpectedHash.ToLowerInvariant(), StringComparison.OrdinalIgnoreCase))
+            {
+                throw new InvalidOperationException("下載的更新包 SHA256 驗證失敗。");
+            }
+        }
+
+        private static bool IsDevelopmentInstallDirectory(string installDirectory)
+        {
+            var normalized = Path.GetFullPath(installDirectory)
+                .TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            return normalized.Contains(@"\bin\", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains(@"\obj\", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string ResolveAppUpdatePayloadDirectory(string extractDirectory, string executableName)
+        {
+            if (File.Exists(Path.Combine(extractDirectory, executableName)))
+            {
+                return extractDirectory;
+            }
+
+            var candidate = Directory
+                .EnumerateDirectories(extractDirectory, "*", SearchOption.AllDirectories)
+                .FirstOrDefault(directory => File.Exists(Path.Combine(directory, executableName)));
+
+            if (!string.IsNullOrWhiteSpace(candidate))
+            {
+                return candidate;
+            }
+
+            throw new InvalidOperationException($"更新包中找不到 {executableName}。");
+        }
+
+        private static bool CanWriteToDirectory(string directoryPath)
+        {
+            try
+            {
+                Directory.CreateDirectory(directoryPath);
+                var probePath = Path.Combine(directoryPath, $".nuone-tools-write-test-{Guid.NewGuid():N}.tmp");
+                File.WriteAllText(probePath, "ok");
+                File.Delete(probePath);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        private static string BuildAppUpdateInstallerScript()
+        {
+            return """
+param(
+    [Parameter(Mandatory = $true)]
+    [string]$InstallDirectory,
+    [Parameter(Mandatory = $true)]
+    [string]$PayloadDirectory,
+    [Parameter(Mandatory = $true)]
+    [int]$CurrentProcessId,
+    [Parameter(Mandatory = $true)]
+    [string]$ExecutableName
+)
+
+$ErrorActionPreference = 'Stop'
+$LogPath = Join-Path $PSScriptRoot 'apply-update.log'
+
+function Write-UpdateLog {
+    param([string]$Message)
+    Add-Content -LiteralPath $LogPath -Value ("{0} {1}" -f [DateTime]::Now.ToString('yyyy-MM-dd HH:mm:ss.fff'), $Message)
+}
+
+try {
+    Write-UpdateLog "Updater started. Payload=$PayloadDirectory Install=$InstallDirectory ProcessId=$CurrentProcessId Executable=$ExecutableName"
+
+    while (Get-Process -Id $CurrentProcessId -ErrorAction SilentlyContinue) {
+        Start-Sleep -Milliseconds 500
+    }
+
+    Write-UpdateLog "Source process exited. Starting robocopy."
+    & robocopy $PayloadDirectory $InstallDirectory /MIR /R:3 /W:1 /NFL /NDL /NJH /NJS /NP | Out-Null
+    Write-UpdateLog "Robocopy finished. ExitCode=$LASTEXITCODE"
+    if ($LASTEXITCODE -ge 8) {
+        throw "robocopy failed with exit code $LASTEXITCODE"
+    }
+
+    $targetPath = Join-Path $InstallDirectory $ExecutableName
+    Write-UpdateLog "Starting updated app. Path=$targetPath"
+    $process = Start-Process -FilePath $targetPath -WorkingDirectory $InstallDirectory -PassThru
+    Write-UpdateLog "Updated app started. ProcessId=$($process.Id)"
+    Start-Sleep -Seconds 1
+    Write-UpdateLog "Cleaning updater folder."
+    Remove-Item -LiteralPath $PSScriptRoot -Recurse -Force -ErrorAction SilentlyContinue
+}
+catch {
+    Write-UpdateLog ("Updater failed. " + $_.Exception.ToString())
+    throw
+}
+""";
+        }
+
+        private static int CompareAppVersions(string left, string right)
+        {
+            if (Version.TryParse(left, out var leftVersion) &&
+                Version.TryParse(right, out var rightVersion))
+            {
+                return leftVersion.CompareTo(rightVersion);
+            }
+
+            return string.Compare(left, right, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static string BuildAppUpdateReleaseNotesText(AppUpdateManifest manifest, string resolvedDownloadUrl)
+        {
+            var lines = new List<string>();
+
+            if (!string.IsNullOrWhiteSpace(manifest.ReleaseNotes))
+            {
+                lines.Add($"更新內容：{manifest.ReleaseNotes.Trim()}");
+            }
+
+            if (!string.IsNullOrWhiteSpace(manifest.PublishedAt))
+            {
+                lines.Add($"發佈時間：{FormatAppUpdatePublishedAt(manifest.PublishedAt)}");
+            }
+
+            if (manifest.Mandatory)
+            {
+                lines.Add("這個版本標記為必要更新。");
+            }
+
+            if (!string.IsNullOrWhiteSpace(resolvedDownloadUrl))
+            {
+                lines.Add($"下載位置：{resolvedDownloadUrl}");
+            }
+
+            return string.Join(Environment.NewLine, lines);
+        }
+
+        private static string FormatAppUpdatePublishedAt(string? publishedAt)
+        {
+            var value = publishedAt?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            if (DateTimeOffset.TryParse(
+                    value,
+                    CultureInfo.InvariantCulture,
+                    DateTimeStyles.AllowWhiteSpaces | DateTimeStyles.AssumeUniversal,
+                    out var parsed))
+            {
+                return parsed.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+            }
+
+            return value;
         }
 
         private void SyncThemeModeSelection()

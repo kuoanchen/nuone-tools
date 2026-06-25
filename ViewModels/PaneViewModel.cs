@@ -692,7 +692,7 @@ namespace nuone_tools
             if (!string.IsNullOrWhiteSpace(query))
             {
                 var startsWithMatches = source
-                    .Where(item => item.Name.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+                    .Where(item => MatchesPrefixFilter(item.Name, query))
                     .ToList();
 
                 if (startsWithMatches.Count > 0)
@@ -722,6 +722,22 @@ namespace nuone_tools
                 $"Pane.ApplyFilter pane={Name} currentPath={CurrentPath} visibleItems={Items.Count} allItems={_allItems.Count} filter={query} defaultSelection={defaultSelection?.FullPath ?? "<null>"}");
             UpdateSelection(defaultSelection is null ? Array.Empty<FileEntry>() : new[] { defaultSelection });
             UpdateSummaryTexts();
+        }
+
+        private static bool MatchesPrefixFilter(string? name, string query)
+        {
+            if (string.IsNullOrWhiteSpace(name) || string.IsNullOrWhiteSpace(query))
+            {
+                return false;
+            }
+
+            if (name.StartsWith(query, StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var segments = name.Split(new[] { '-', '_', ' ', '.' }, StringSplitOptions.RemoveEmptyEntries);
+            return segments.Any(segment => segment.StartsWith(query, StringComparison.OrdinalIgnoreCase));
         }
 
         private void ReplaceVisibleItems(IEnumerable<FileEntry> entries)

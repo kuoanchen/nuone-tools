@@ -105,4 +105,32 @@ namespace nuone_tools
             return new LoggingSettingsState();
         }
     }
+
+    public sealed class AppUpdateState
+    {
+        public string ManifestUrl { get; set; } = "https://cdn.nuone.cl/nuone-tools/manifest.json";
+
+        public string CurrentVersionText { get; set; } = string.Empty;
+
+        public string LatestVersionText { get; set; } = "尚未檢查";
+
+        public string StatusText { get; set; } = "尚未檢查更新";
+
+        public string LastCheckedText { get; set; } = "尚未檢查";
+
+        public string ReleaseNotes { get; set; } = string.Empty;
+
+        public string DownloadUrl { get; set; } = string.Empty;
+
+        public bool IsChecking { get; set; }
+
+        public bool IsInstalling { get; set; }
+
+        public bool IsUpdateAvailable { get; set; }
+
+        public static AppUpdateState CreateDefault()
+        {
+            return new AppUpdateState();
+        }
+    }
 }

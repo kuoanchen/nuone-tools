@@ -23,6 +23,7 @@ namespace nuone_tools
         private const uint FO_MOVE = 0x0001;
         private const uint FO_COPY = 0x0002;
         private const ushort FOF_NOCONFIRMMKDIR = 0x0200;
+        private const string AutomationOwnerMutexName = @"Local\nuone-tools-automation-owner";
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
         private struct SHFILEOPSTRUCT
@@ -96,6 +97,7 @@ namespace nuone_tools
         private AccountSettingsState _accountSettings = AccountSettingsState.CreateDefault();
         private FileBunkerSettingsState _fileBunkerSettings = FileBunkerSettingsState.CreateDefault();
         private LoggingSettingsState _loggingSettings = LoggingSettingsState.CreateDefault();
+        private AppUpdateState _appUpdateState = AppUpdateState.CreateDefault();
         private string _lastLocalBackupText = "尚未備份";
         private AppSection _activeSection = AppSection.FileManager;
         private SettingsSection _activeSettingsSection = SettingsSection.General;
@@ -105,6 +107,7 @@ namespace nuone_tools
         private bool _isUpdatingAccountUi;
         private bool _isUpdatingFileBunkerUi;
         private bool _isUpdatingLoggingUi;
+        private bool _isClosingForAppUpdate;
         private bool _isAccountLoginRunning;
         private bool _isAccountReloginFieldsVisible;
         private CancellationTokenSource? _leftSelectionSizeCts;
@@ -116,6 +119,9 @@ namespace nuone_tools
         private readonly Dictionary<Guid, AutoExtractProfileWatcher> _autoExtractWatchers = new();
         private readonly Dictionary<Guid, CancellationTokenSource> _autoExtractCancellationTokens = new();
         private readonly HashSet<Guid> _runningAutoExtractIds = new();
+        private Mutex? _automationOwnerMutex;
+        private bool _isAutomationExecutionOwner;
+        private DispatcherQueueTimer? _automationOwnershipRetryTimer;
         private readonly object _backgroundWorkLock = new();
         private readonly object _notificationHistoryLock = new();
         private readonly object _syncSettingsUploadLock = new();
@@ -266,6 +272,7 @@ namespace nuone_tools
             LoadAutoExtractProfiles();
             LoadToolbarCommands();
             LoadNotificationHistories();
+            InitializeAutomationExecutionOwnership();
             ApplyThemePreference();
             ApplySettingsToPanes();
             LoadDriveCards();
@@ -274,6 +281,7 @@ namespace nuone_tools
             UpdateAccountSettingsUi();
             UpdateFileBunkerSettingsUi();
             UpdateLoggingSettingsUi();
+            UpdateAppUpdateUi();
             RescheduleBackupAutomations();
             RescheduleAutoExtractProfiles();
 
@@ -282,6 +290,7 @@ namespace nuone_tools
 
             LeftPane.PropertyChanged += Pane_PropertyChanged;
             RightPane.PropertyChanged += Pane_PropertyChanged;
+            Activated += MainWindow_Activated;
             Closed += MainWindow_Closed;
 
             OpenInPane(LeftPane, leftDefault);
@@ -312,6 +321,7 @@ namespace nuone_tools
             InitializeTerminalCursorTimer();
 
             RunFireAndForget(InitializeRemoteSyncSettingsAsync(), "startup remote settings sync");
+            RunFireAndForget(CheckForUpdatesAsync(isAutomatic: true), "startup app update check");
             AppLogging.Information(
                 "MainWindow constructor completed ActiveSection={ActiveSection} LeftPath={LeftPath} RightPath={RightPath}",
                 _activeSection,
@@ -365,11 +375,168 @@ namespace nuone_tools
             StopAllTerminalProcesses();
             LeftPane.PropertyChanged -= Pane_PropertyChanged;
             RightPane.PropertyChanged -= Pane_PropertyChanged;
+            if (_automationOwnershipRetryTimer is not null)
+            {
+                _automationOwnershipRetryTimer.Stop();
+                _automationOwnershipRetryTimer.Tick -= AutomationOwnershipRetryTimer_Tick;
+                _automationOwnershipRetryTimer = null;
+            }
+            ReleaseAutomationExecutionOwnership();
+            Activated -= MainWindow_Activated;
             Closed -= MainWindow_Closed;
             _leftPaneWatcher.Dispose();
             _rightPaneWatcher.Dispose();
             WindowsNotificationService.Uninitialize();
             AppLogging.Flush();
+        }
+
+        internal bool IsAutomationExecutionOwner => _isAutomationExecutionOwner;
+
+        internal bool EnsureAutomationExecutionOwner(string actionDescription)
+        {
+            if (TryPromoteToAutomationExecutionOwner())
+            {
+                return true;
+            }
+
+            RunFireAndForget(
+                ShowMessageAsync(
+                    "自動化由另一個視窗執行中",
+                    $"目前只有持有自動化執行權的 nuone-tools 視窗可以{actionDescription}。"),
+                "automation ownership required");
+            return false;
+        }
+
+        private void InitializeAutomationExecutionOwnership()
+        {
+            TryAcquireAutomationExecutionOwnership();
+            _automationOwnershipRetryTimer = DispatcherQueue.CreateTimer();
+            _automationOwnershipRetryTimer.Interval = TimeSpan.FromSeconds(5);
+            _automationOwnershipRetryTimer.IsRepeating = true;
+            _automationOwnershipRetryTimer.Tick += AutomationOwnershipRetryTimer_Tick;
+            UpdateAutomationOwnershipRetryState();
+        }
+
+        private void MainWindow_Activated(object sender, WindowActivatedEventArgs args)
+        {
+            if (args.WindowActivationState == WindowActivationState.Deactivated || _isAutomationExecutionOwner)
+            {
+                return;
+            }
+
+            if (TryPromoteToAutomationExecutionOwner())
+            {
+                UpdateSharedStatusBar();
+            }
+        }
+
+        private void AutomationOwnershipRetryTimer_Tick(DispatcherQueueTimer sender, object args)
+        {
+            if (_isAutomationExecutionOwner)
+            {
+                sender.Stop();
+                return;
+            }
+
+            if (TryPromoteToAutomationExecutionOwner())
+            {
+                UpdateSharedStatusBar();
+            }
+        }
+
+        private bool TryPromoteToAutomationExecutionOwner()
+        {
+            var acquired = TryAcquireAutomationExecutionOwnership();
+            if (acquired)
+            {
+                RescheduleBackupAutomations();
+                RescheduleAutoExtractProfiles();
+            }
+
+            UpdateAutomationOwnershipRetryState();
+            return acquired;
+        }
+
+        private bool TryAcquireAutomationExecutionOwnership()
+        {
+            if (_isAutomationExecutionOwner)
+            {
+                return true;
+            }
+
+            try
+            {
+                var mutex = new Mutex(initiallyOwned: false, AutomationOwnerMutexName);
+                bool acquired;
+                try
+                {
+                    acquired = mutex.WaitOne(0, false);
+                }
+                catch (AbandonedMutexException)
+                {
+                    acquired = true;
+                }
+
+                if (!acquired)
+                {
+                    mutex.Dispose();
+                    return false;
+                }
+
+                _automationOwnerMutex = mutex;
+                _isAutomationExecutionOwner = true;
+                AppLogging.Information("Automation execution ownership acquired.");
+                return true;
+            }
+            catch (Exception ex)
+            {
+                AppLogging.Error(ex, "Automation execution ownership acquisition failed.");
+                return false;
+            }
+        }
+
+        private void ReleaseAutomationExecutionOwnership()
+        {
+            var mutex = _automationOwnerMutex;
+            _automationOwnerMutex = null;
+            if (mutex is null)
+            {
+                _isAutomationExecutionOwner = false;
+                return;
+            }
+
+            try
+            {
+                if (_isAutomationExecutionOwner)
+                {
+                    mutex.ReleaseMutex();
+                }
+            }
+            catch (ApplicationException)
+            {
+            }
+            finally
+            {
+                mutex.Dispose();
+                _isAutomationExecutionOwner = false;
+            }
+        }
+
+        private void UpdateAutomationOwnershipRetryState()
+        {
+            if (_automationOwnershipRetryTimer is null)
+            {
+                return;
+            }
+
+            if (_isAutomationExecutionOwner)
+            {
+                _automationOwnershipRetryTimer.Stop();
+                return;
+            }
+
+            _automationOwnershipRetryTimer.Stop();
+            _automationOwnershipRetryTimer.Start();
         }
 
         private Task EnqueueOnUiAsync(Action action)

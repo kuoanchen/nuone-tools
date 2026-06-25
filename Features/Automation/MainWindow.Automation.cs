@@ -116,6 +116,11 @@ namespace nuone_tools
 
         private async Task CreateBackupAutomationFromDialogAsync()
         {
+            if (!EnsureAutomationExecutionOwner("新增自動化工作"))
+            {
+                return;
+            }
+
             var profile = new BackupAutomationProfile
             {
                 JobType = AutomationJobType.FileBackup,
@@ -162,11 +167,16 @@ namespace nuone_tools
             SaveAutomationProfilesSafe();
             ActivateAutomation(profile);
             UpdateSharedStatusBar();
-            AddAutomationNotification("自動化", $"已新增備份工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
+            AddAutomationNotification("自動化", $"已新增備份工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
         }
 
         private async Task CreateAutoExtractProfileFromDialogAsync()
         {
+            if (!EnsureAutomationExecutionOwner("新增自動解壓工作"))
+            {
+                return;
+            }
+
             var profile = new AutoExtractProfile
             {
                 ExtensionFilter = ".zip, .rar, .7z",
@@ -189,7 +199,7 @@ namespace nuone_tools
             SaveAutoExtractProfilesSafe();
             ActivateAutoExtractProfile(profile);
             UpdateSharedStatusBar();
-            AddAutomationNotification("自動解壓", $"已新增自動解壓：{profile.Name}", BuildAutoExtractProfileDetail(profile));
+            AddAutomationNotification("自動解壓", $"已新增自動解壓：{profile.Name}", BuildAutoExtractProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
         }
 
         internal void AddAutomationJob_Click(object sender, RoutedEventArgs e)
@@ -299,7 +309,7 @@ namespace nuone_tools
             SaveAutomationProfilesSafe();
             ActivateAutomation(profile);
             UpdateSharedStatusBar();
-            AddAutomationNotification("自動化", $"已新增備份工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
+            AddAutomationNotification("自動化", $"已新增備份工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
 
             AutomationNameTextBox.Text = string.Empty;
             AutomationSourcePathTextBox.Text = string.Empty;
@@ -336,6 +346,11 @@ namespace nuone_tools
                     return;
                 }
 
+                if (!EnsureAutomationExecutionOwner("手動執行自動化"))
+                {
+                    return;
+                }
+
                 await RunBackupAutomationAsync(profile, triggeredByTimer: false);
             }
             catch (Exception ex)
@@ -349,6 +364,11 @@ namespace nuone_tools
         {
             try
             {
+                if (!EnsureAutomationExecutionOwner("編輯自動化工作"))
+                {
+                    return;
+                }
+
                 if (!TryGetBackupAutomationProfile(sender, out var profile) ||
                     !await ShowBackupAutomationEditorAsync(profile))
                 {
@@ -361,7 +381,7 @@ namespace nuone_tools
                     ActivateAutomation(profile);
                 }
                 UpdateSharedStatusBar();
-                AddAutomationNotification("自動化", $"已更新工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
+                AddAutomationNotification("自動化", $"已更新工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
             }
             catch (Exception ex)
             {
@@ -374,6 +394,11 @@ namespace nuone_tools
         {
             try
             {
+                if (!EnsureAutomationExecutionOwner("啟用自動化工作"))
+                {
+                    return;
+                }
+
                 if (!TryGetBackupAutomationProfile(sender, out var profile))
                 {
                     return;
@@ -388,7 +413,7 @@ namespace nuone_tools
                         : "排程已啟動";
                 SaveAutomationProfilesSafe();
                 UpdateSharedStatusBar();
-                AddAutomationNotification("自動化", $"已啟用工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
+                AddAutomationNotification("自動化", $"已啟用工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
 
                 await RunBackupAutomationAsync(profile, triggeredByTimer: false);
             }
@@ -401,6 +426,11 @@ namespace nuone_tools
 
         internal void DeleteAutomationJob_Click(object sender, RoutedEventArgs e)
         {
+            if (!EnsureAutomationExecutionOwner("刪除自動化工作"))
+            {
+                return;
+            }
+
             if (!TryGetBackupAutomationProfile(sender, out var profile))
             {
                 return;
@@ -411,11 +441,16 @@ namespace nuone_tools
             BackupAutomations.Remove(profile);
             SaveAutomationProfilesSafe();
             UpdateSharedStatusBar();
-            AddAutomationNotification("自動化", $"已刪除工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
+            AddAutomationNotification("自動化", $"已刪除工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
         }
 
         internal void StopAutomationJob_Click(object sender, RoutedEventArgs e)
         {
+            if (!EnsureAutomationExecutionOwner("停止自動化工作"))
+            {
+                return;
+            }
+
             if (!TryGetBackupAutomationProfile(sender, out var profile))
             {
                 return;
@@ -433,13 +468,24 @@ namespace nuone_tools
                     : "排程已停止";
             SaveAutomationProfilesSafe();
             UpdateSharedStatusBar();
-            AddAutomationNotification("自動化", $"已停止工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile));
+            AddAutomationNotification("自動化", $"已停止工作：{profile.Name}", BuildBackupAutomationProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
         }
 
         internal void AutomationEnabledToggle_Toggled(object sender, RoutedEventArgs e)
         {
             if (sender is not ToggleSwitch toggleSwitch || !TryGetBackupAutomationProfile(toggleSwitch, out var profile))
             {
+                return;
+            }
+
+            if (toggleSwitch.IsOn == profile.IsEnabled)
+            {
+                return;
+            }
+
+            if (!EnsureAutomationExecutionOwner($"{(toggleSwitch.IsOn ? "啟用" : "停用")}自動化工作"))
+            {
+                toggleSwitch.IsOn = profile.IsEnabled;
                 return;
             }
 
@@ -466,7 +512,9 @@ namespace nuone_tools
             AddAutomationNotification(
                 "自動化",
                 $"{(profile.IsEnabled ? "已啟用" : "已停用")}工作：{profile.Name}",
-                BuildBackupAutomationProfileDetail(profile));
+                BuildBackupAutomationProfileDetail(profile),
+                profile.NotificationEnabled,
+                profile.ToastEnabled);
         }
 
         internal void AutomationNameTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -825,6 +873,11 @@ namespace nuone_tools
 
         internal void AddAutoExtractProfile_Click(object sender, RoutedEventArgs e)
         {
+            if (!EnsureAutomationExecutionOwner("新增自動解壓工作"))
+            {
+                return;
+            }
+
             var watchPath = AutoExtractWatchPathTextBox.Text.Trim();
             if (string.IsNullOrWhiteSpace(watchPath))
             {
@@ -855,7 +908,7 @@ namespace nuone_tools
             SaveAutoExtractProfilesSafe();
             ActivateAutoExtractProfile(profile);
             UpdateSharedStatusBar();
-            AddAutomationNotification("自動解壓", $"已新增工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
+            AddAutomationNotification("自動解壓", $"已新增工作：{profile.Name}", BuildAutoExtractProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
 
             AutoExtractNameTextBox.Text = string.Empty;
             AutoExtractWatchPathTextBox.Text = string.Empty;
@@ -868,6 +921,11 @@ namespace nuone_tools
             try
             {
                 if (!TryGetAutoExtractProfile(sender, out var profile))
+                {
+                    return;
+                }
+
+                if (!EnsureAutomationExecutionOwner("手動執行自動解壓"))
                 {
                     return;
                 }
@@ -885,6 +943,11 @@ namespace nuone_tools
         {
             try
             {
+                if (!EnsureAutomationExecutionOwner("編輯自動解壓工作"))
+                {
+                    return;
+                }
+
                 if (!TryGetAutoExtractProfile(sender, out var profile) ||
                     !await ShowAutoExtractProfileEditorAsync(profile))
                 {
@@ -897,7 +960,7 @@ namespace nuone_tools
                     ActivateAutoExtractProfile(profile);
                 }
                 UpdateSharedStatusBar();
-                AddAutomationNotification("自動解壓", $"已更新工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
+                AddAutomationNotification("自動解壓", $"已更新工作：{profile.Name}", BuildAutoExtractProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
             }
             catch (Exception ex)
             {
@@ -910,6 +973,11 @@ namespace nuone_tools
         {
             try
             {
+                if (!EnsureAutomationExecutionOwner("啟用自動解壓工作"))
+                {
+                    return;
+                }
+
                 if (!TryGetAutoExtractProfile(sender, out var profile))
                 {
                     return;
@@ -920,7 +988,7 @@ namespace nuone_tools
                 profile.LastResultText = "監看已啟動";
                 SaveAutoExtractProfilesSafe();
                 UpdateSharedStatusBar();
-                AddAutomationNotification("自動解壓", $"已啟用工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
+                AddAutomationNotification("自動解壓", $"已啟用工作：{profile.Name}", BuildAutoExtractProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
 
                 await RunAutoExtractProfileAsync(profile, triggeredByWatcher: false);
             }
@@ -933,6 +1001,11 @@ namespace nuone_tools
 
         internal void StopAutoExtractProfile_Click(object sender, RoutedEventArgs e)
         {
+            if (!EnsureAutomationExecutionOwner("停止自動解壓工作"))
+            {
+                return;
+            }
+
             if (!TryGetAutoExtractProfile(sender, out var profile))
             {
                 return;
@@ -944,11 +1017,16 @@ namespace nuone_tools
             profile.LastResultText = "監看已停止";
             SaveAutoExtractProfilesSafe();
             UpdateSharedStatusBar();
-            AddAutomationNotification("自動解壓", $"已停止工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
+            AddAutomationNotification("自動解壓", $"已停止工作：{profile.Name}", BuildAutoExtractProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
         }
 
         internal void DeleteAutoExtractProfile_Click(object sender, RoutedEventArgs e)
         {
+            if (!EnsureAutomationExecutionOwner("刪除自動解壓工作"))
+            {
+                return;
+            }
+
             if (!TryGetAutoExtractProfile(sender, out var profile))
             {
                 return;
@@ -959,13 +1037,24 @@ namespace nuone_tools
             AutoExtractProfiles.Remove(profile);
             SaveAutoExtractProfilesSafe();
             UpdateSharedStatusBar();
-            AddAutomationNotification("自動解壓", $"已刪除工作：{profile.Name}", BuildAutoExtractProfileDetail(profile));
+            AddAutomationNotification("自動解壓", $"已刪除工作：{profile.Name}", BuildAutoExtractProfileDetail(profile), profile.NotificationEnabled, profile.ToastEnabled);
         }
 
         internal void AutoExtractEnabledToggle_Toggled(object sender, RoutedEventArgs e)
         {
             if (sender is not ToggleSwitch toggleSwitch || !TryGetAutoExtractProfile(toggleSwitch, out var profile))
             {
+                return;
+            }
+
+            if (toggleSwitch.IsOn == profile.IsEnabled)
+            {
+                return;
+            }
+
+            if (!EnsureAutomationExecutionOwner($"{(toggleSwitch.IsOn ? "啟用" : "停用")}自動解壓工作"))
+            {
+                toggleSwitch.IsOn = profile.IsEnabled;
                 return;
             }
 
@@ -986,7 +1075,9 @@ namespace nuone_tools
             AddAutomationNotification(
                 "自動解壓",
                 $"{(profile.IsEnabled ? "已啟用" : "已停用")}工作：{profile.Name}",
-                BuildAutoExtractProfileDetail(profile));
+                BuildAutoExtractProfileDetail(profile),
+                profile.NotificationEnabled,
+                profile.ToastEnabled);
         }
 
         internal void AutoExtractNameTextBox_TextChanged(object sender, TextChangedEventArgs e)
@@ -1137,6 +1228,8 @@ namespace nuone_tools
                             WeeklyDaysMask = config.WeeklyDaysMask == 0 ? 62 : config.WeeklyDaysMask,
                             RunMissedOnStartup = config.RunMissedOnStartup,
                             IsEnabled = config.IsEnabled,
+                            NotificationEnabled = config.NotificationEnabled,
+                            ToastEnabled = config.ToastEnabled,
                             LastRunText = string.IsNullOrWhiteSpace(config.LastRunText) ? "尚未執行" : config.LastRunText,
                             LastResultText = string.IsNullOrWhiteSpace(config.LastResultText) ? (config.IsEnabled ? "等待排程" : "已停用") : config.LastResultText,
                         };
@@ -1176,6 +1269,8 @@ namespace nuone_tools
                                 ? ".zip, .rar, .7z"
                                 : config.ExtensionFilter,
                             IsEnabled = config.IsEnabled,
+                            NotificationEnabled = config.NotificationEnabled,
+                            ToastEnabled = config.ToastEnabled,
                             LastRunText = string.IsNullOrWhiteSpace(config.LastRunText) ? "尚未執行" : config.LastRunText,
                             LastResultText = string.IsNullOrWhiteSpace(config.LastResultText)
                                 ? (config.IsEnabled ? "等待監看" : "已停用")
@@ -1208,6 +1303,11 @@ namespace nuone_tools
             StopAllAutomationTimers();
             StopAllAutomationWatchers();
 
+            if (!IsAutomationExecutionOwner)
+            {
+                return;
+            }
+
             foreach (var profile in BackupAutomations)
             {
                 ActivateAutomation(profile, triggeredByStartup: true);
@@ -1218,6 +1318,11 @@ namespace nuone_tools
         {
             StopAllAutoExtractWatchers();
 
+            if (!IsAutomationExecutionOwner)
+            {
+                return;
+            }
+
             foreach (var profile in AutoExtractProfiles)
             {
                 ActivateAutoExtractProfile(profile);
@@ -1226,6 +1331,13 @@ namespace nuone_tools
 
         private void ActivateAutomation(BackupAutomationProfile profile, bool triggeredByStartup = false)
         {
+            if (!IsAutomationExecutionOwner)
+            {
+                StopAutomationTimer(profile.Id);
+                StopAutomationWatcher(profile.Id);
+                return;
+            }
+
             if (triggeredByStartup && profile.IsEnabled && profile.RunMissedOnStartup && ShouldRunMissedAutomationOnStartup(profile, DateTime.Now))
             {
                 profile.NextRunText = "啟動後補跑中...";
@@ -1369,6 +1481,12 @@ namespace nuone_tools
 
         private void ActivateAutoExtractProfile(AutoExtractProfile profile)
         {
+            if (!IsAutomationExecutionOwner)
+            {
+                StopAutoExtractWatcher(profile.Id);
+                return;
+            }
+
             StopAutoExtractWatcher(profile.Id);
 
             if (!profile.IsEnabled)
@@ -1519,7 +1637,7 @@ namespace nuone_tools
 
                 if (!string.IsNullOrWhiteSpace(notificationSummary))
                 {
-                    AddAutomationNotification("自動化", notificationSummary, notificationDetails ?? notificationSummary);
+                    AddAutomationNotification("自動化", notificationSummary, notificationDetails ?? notificationSummary, profile.NotificationEnabled, profile.ToastEnabled);
                 }
             }
         }
@@ -1951,9 +2069,20 @@ namespace nuone_tools
             return $"{profile.Name} {(profile.Mode == BackupAutomationMode.Mirror ? "同步中" : "備份中")}";
         }
 
-        private void AddAutomationNotification(string category, string summary, string details)
+        private void AddAutomationNotification(string category, string summary, string details, bool notificationEnabled = true, bool toastEnabled = true)
         {
-            AddNotificationHistoryRecord(NotificationHistoryScope.LocalOnly, category, summary, details);
+            if (!notificationEnabled && !toastEnabled)
+            {
+                return;
+            }
+
+            AddNotificationHistoryRecord(
+                NotificationHistoryScope.LocalOnly,
+                category,
+                summary,
+                details,
+                showWindowsToast: toastEnabled,
+                persistRecord: notificationEnabled);
         }
 
         private static string BuildBackupAutomationProfileDetail(BackupAutomationProfile profile)
@@ -2636,7 +2765,7 @@ namespace nuone_tools
 
                 if (!string.IsNullOrWhiteSpace(notificationSummary))
                 {
-                    AddAutomationNotification("自動解壓", notificationSummary, notificationDetails ?? notificationSummary);
+                    AddAutomationNotification("自動解壓", notificationSummary, notificationDetails ?? notificationSummary, profile.NotificationEnabled, profile.ToastEnabled);
                 }
 
                 if (!string.IsNullOrWhiteSpace(retryPassword))

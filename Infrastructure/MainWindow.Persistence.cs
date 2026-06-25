@@ -37,6 +37,10 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
+        private const string SyncSettingsMutexName = @"Local\nuone-tools-settings-sync";
+        private const string LocalSettingsMutexName = @"Local\nuone-tools-settings-local";
+        private const string NotificationHistoryMutexName = @"Local\nuone-tools-notification-history";
+
         private void LoadShortcutSettings()
         {
             _shortcutSettings = ShortcutSettings.CreateDefault();
@@ -293,7 +297,10 @@ namespace nuone_tools
         private void SaveCustomGroups()
         {
             Directory.CreateDirectory(ConfigDirectoryPath);
-            SaveAllSettingsFiles();
+            SaveLocalSettingsSections(config =>
+            {
+                config.Groups = BuildGroupConfigs();
+            });
         }
 
         private async void SaveCustomGroupsSafe()
@@ -311,7 +318,30 @@ namespace nuone_tools
         private void SaveShortcutSettings()
         {
             Directory.CreateDirectory(ConfigDirectoryPath);
-            SaveAllSettingsFiles();
+            SaveSyncSettingsSections(config =>
+            {
+                config.CopyToOtherPaneKey = _shortcutSettings.CopyToOtherPaneKey;
+                config.MoveToOtherPaneKey = _shortcutSettings.MoveToOtherPaneKey;
+                config.NavigateUpKey = _shortcutSettings.NavigateUpKey;
+                config.CreateFolderKey = _shortcutSettings.CreateFolderKey;
+                config.DeleteKey = _shortcutSettings.DeleteKey;
+                config.ThemeMode = _shortcutSettings.ThemeMode;
+                config.ShowSelectedFileSize = _shortcutSettings.ShowSelectedFileSize;
+                config.ShowSelectedFolderSize = _shortcutSettings.ShowSelectedFolderSize;
+                config.ShowHiddenSystemItems = _shortcutSettings.ShowHiddenSystemItems;
+                config.DefaultTerminalShellKind = _shortcutSettings.DefaultTerminalShellKind;
+                config.DefaultTerminalWorkingDirectoryMode = _shortcutSettings.DefaultTerminalWorkingDirectoryMode;
+                config.DefaultTerminalCustomWorkingDirectory = _shortcutSettings.DefaultTerminalCustomWorkingDirectory;
+                config.HiddenDrivePaths = _hiddenDrivePaths
+                    .OrderBy(static path => path, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+                config.FileBunker = BuildFileBunkerSettingsConfig();
+            });
+
+            SaveLocalSettingsSections(config =>
+            {
+                config.Logging = BuildLoggingSettingsConfig();
+            });
         }
 
         private async void SaveToolbarCommandsSafe()
@@ -319,7 +349,10 @@ namespace nuone_tools
             try
             {
                 Directory.CreateDirectory(ConfigDirectoryPath);
-                SaveAllSettingsFiles();
+                SaveSyncSettingsSections(config =>
+                {
+                    config.ToolbarCommands = BuildToolbarCommandConfigs();
+                });
             }
             catch (Exception ex)
             {
@@ -331,6 +364,171 @@ namespace nuone_tools
         {
             SaveAppSettings();
             SaveLocalSettings();
+        }
+
+        private void SaveSyncSettingsSections(Action<ShortcutSettingsConfig> update, bool queueUpload = true)
+        {
+            string? json = null;
+            WithCrossProcessMutex(
+                SyncSettingsMutexName,
+                () =>
+                {
+                    var settings = LoadSyncSettingsConfigFromDisk();
+                    update(settings);
+                    json = JsonSerializer.Serialize(settings, JsonOptions);
+                    WriteTextFileAtomically(SettingsSyncConfigPath, json);
+                });
+
+            if (queueUpload && !string.IsNullOrWhiteSpace(json))
+            {
+                QueueSyncSettingsUpload(json);
+            }
+        }
+
+        private void SaveLocalSettingsSections(Action<LocalSettingsConfig> update)
+        {
+            WithCrossProcessMutex(
+                LocalSettingsMutexName,
+                () =>
+                {
+                    var settings = LoadLocalSettingsConfigFromDisk() ?? new LocalSettingsConfig();
+                    update(settings);
+                    WriteTextFileAtomically(SettingsLocalConfigPath, JsonSerializer.Serialize(settings, JsonOptions));
+                });
+        }
+
+        private void SaveNotificationHistories(bool mergeExistingRecords)
+        {
+            Directory.CreateDirectory(ConfigDirectoryPath);
+
+            List<NotificationHistoryRecord> localRecords;
+            List<NotificationHistoryRecord> syncRecords;
+            lock (_notificationHistoryLock)
+            {
+                localRecords = _localNotificationHistory.ToList();
+                syncRecords = _syncNotificationHistory.ToList();
+            }
+
+            WithCrossProcessMutex(
+                NotificationHistoryMutexName,
+                () =>
+                {
+                    if (mergeExistingRecords)
+                    {
+                        localRecords = MergeNotificationHistoryRecords(
+                            LoadNotificationHistoryFile(LocalNotificationHistoryPath, NotificationHistoryScope.LocalOnly),
+                            localRecords);
+                        syncRecords = MergeNotificationHistoryRecords(
+                            LoadNotificationHistoryFile(SyncNotificationHistoryPath, NotificationHistoryScope.Sync),
+                            syncRecords);
+                    }
+
+                    WriteTextFileAtomically(LocalNotificationHistoryPath, JsonSerializer.Serialize(localRecords, JsonOptions));
+                    WriteTextFileAtomically(SyncNotificationHistoryPath, JsonSerializer.Serialize(syncRecords, JsonOptions));
+                });
+        }
+
+        private static ShortcutSettingsConfig LoadSyncSettingsConfigFromDisk()
+        {
+            if (!File.Exists(SettingsSyncConfigPath))
+            {
+                return new ShortcutSettingsConfig();
+            }
+
+            try
+            {
+                return JsonSerializer.Deserialize<ShortcutSettingsConfig>(File.ReadAllText(SettingsSyncConfigPath), JsonOptions)
+                    ?? new ShortcutSettingsConfig();
+            }
+            catch
+            {
+                return new ShortcutSettingsConfig();
+            }
+        }
+
+        private static LocalSettingsConfig? LoadLocalSettingsConfigFromDisk()
+        {
+            return LoadLocalSettingsConfig();
+        }
+
+        private static List<NotificationHistoryRecord> MergeNotificationHistoryRecords(
+            IEnumerable<NotificationHistoryRecord> existingRecords,
+            IEnumerable<NotificationHistoryRecord> incomingRecords)
+        {
+            return existingRecords
+                .Concat(incomingRecords)
+                .GroupBy(static record => record.Id)
+                .Select(static group => group
+                    .OrderByDescending(static record => ParseNotificationHistorySortTimestamp(record.CreatedAtUtc))
+                    .First())
+                .OrderByDescending(static record => ParseNotificationHistorySortTimestamp(record.CreatedAtUtc))
+                .Take(200)
+                .ToList();
+        }
+
+        private static DateTime ParseNotificationHistorySortTimestamp(string? createdAtUtc)
+        {
+            return DateTime.TryParse(
+                createdAtUtc,
+                CultureInfo.InvariantCulture,
+                DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeUniversal,
+                out var timestamp)
+                ? timestamp
+                : DateTime.MinValue;
+        }
+
+        private static void WithCrossProcessMutex(string mutexName, Action action)
+        {
+            using var mutex = new Mutex(initiallyOwned: false, mutexName);
+            var acquired = false;
+            try
+            {
+                try
+                {
+                    acquired = mutex.WaitOne(TimeSpan.FromSeconds(10));
+                }
+                catch (AbandonedMutexException)
+                {
+                    acquired = true;
+                }
+
+                if (!acquired)
+                {
+                    throw new TimeoutException($"無法取得設定鎖：{mutexName}");
+                }
+
+                action();
+            }
+            finally
+            {
+                if (acquired)
+                {
+                    mutex.ReleaseMutex();
+                }
+            }
+        }
+
+        private static void WriteTextFileAtomically(string path, string content)
+        {
+            var directory = Path.GetDirectoryName(path);
+            if (!string.IsNullOrWhiteSpace(directory))
+            {
+                Directory.CreateDirectory(directory);
+            }
+
+            var tempPath = Path.Combine(directory ?? ConfigDirectoryPath, $"{Path.GetFileName(path)}.{Guid.NewGuid():N}.tmp");
+            try
+            {
+                File.WriteAllText(tempPath, content, Encoding.UTF8);
+                File.Move(tempPath, path, overwrite: true);
+            }
+            finally
+            {
+                if (File.Exists(tempPath))
+                {
+                    File.Delete(tempPath);
+                }
+            }
         }
 
         private void AddSyncOperationNotification(
@@ -987,7 +1185,9 @@ namespace nuone_tools
                     _isApplyingRemoteLocalSettings = true;
                     var mergedSettings = MergeLocalExecutionState(LoadLocalSettingsConfig(), settings);
                     Directory.CreateDirectory(ConfigDirectoryPath);
-                    File.WriteAllText(SettingsLocalConfigPath, JsonSerializer.Serialize(mergedSettings, JsonOptions));
+                    WithCrossProcessMutex(
+                        LocalSettingsMutexName,
+                        () => WriteTextFileAtomically(SettingsLocalConfigPath, JsonSerializer.Serialize(mergedSettings, JsonOptions)));
 
                     LoadAccountSettings();
                     LoadLoggingSettings();
@@ -1144,7 +1344,9 @@ namespace nuone_tools
                 {
                     _isApplyingRemoteSyncSettings = true;
                     Directory.CreateDirectory(ConfigDirectoryPath);
-                    File.WriteAllText(SettingsSyncConfigPath, JsonSerializer.Serialize(settings, JsonOptions));
+                    WithCrossProcessMutex(
+                        SyncSettingsMutexName,
+                        () => WriteTextFileAtomically(SettingsSyncConfigPath, JsonSerializer.Serialize(settings, JsonOptions)));
 
                     LoadShortcutSettings();
                     LoadFileBunkerSettings();
@@ -1482,10 +1684,25 @@ namespace nuone_tools
 
         private void SaveAppSettings()
         {
-            var settings = BuildSyncSettingsConfig();
-            var json = JsonSerializer.Serialize(settings, JsonOptions);
-            File.WriteAllText(SettingsSyncConfigPath, json);
-            QueueSyncSettingsUpload(json);
+            SaveSyncSettingsSections(config =>
+            {
+                var current = BuildSyncSettingsConfig();
+                config.CopyToOtherPaneKey = current.CopyToOtherPaneKey;
+                config.MoveToOtherPaneKey = current.MoveToOtherPaneKey;
+                config.NavigateUpKey = current.NavigateUpKey;
+                config.CreateFolderKey = current.CreateFolderKey;
+                config.DeleteKey = current.DeleteKey;
+                config.ThemeMode = current.ThemeMode;
+                config.ShowSelectedFileSize = current.ShowSelectedFileSize;
+                config.ShowSelectedFolderSize = current.ShowSelectedFolderSize;
+                config.ShowHiddenSystemItems = current.ShowHiddenSystemItems;
+                config.DefaultTerminalShellKind = current.DefaultTerminalShellKind;
+                config.DefaultTerminalWorkingDirectoryMode = current.DefaultTerminalWorkingDirectoryMode;
+                config.DefaultTerminalCustomWorkingDirectory = current.DefaultTerminalCustomWorkingDirectory;
+                config.HiddenDrivePaths = current.HiddenDrivePaths;
+                config.FileBunker = current.FileBunker;
+                config.ToolbarCommands = current.ToolbarCommands;
+            });
         }
 
         private LocalSettingsConfig BuildLocalSettingsConfig()
@@ -1506,32 +1723,26 @@ namespace nuone_tools
 
         private void SaveLocalSettings()
         {
-            var settings = BuildLocalSettingsConfig();
-            var json = JsonSerializer.Serialize(settings, JsonOptions);
-            File.WriteAllText(SettingsLocalConfigPath, json);
-        }
-
-        private void SaveNotificationHistories()
-        {
-            Directory.CreateDirectory(ConfigDirectoryPath);
-
-            List<NotificationHistoryRecord> localRecords;
-            List<NotificationHistoryRecord> syncRecords;
-            lock (_notificationHistoryLock)
+            SaveLocalSettingsSections(config =>
             {
-                localRecords = _localNotificationHistory.ToList();
-                syncRecords = _syncNotificationHistory.ToList();
-            }
-
-            File.WriteAllText(LocalNotificationHistoryPath, JsonSerializer.Serialize(localRecords, JsonOptions));
-            File.WriteAllText(SyncNotificationHistoryPath, JsonSerializer.Serialize(syncRecords, JsonOptions));
+                var current = BuildLocalSettingsConfig();
+                config.Account = current.Account;
+                config.BackupAutomations = current.BackupAutomations;
+                config.AutoExtractProfiles = current.AutoExtractProfiles;
+                config.Groups = current.Groups;
+                config.LeftPanePath = current.LeftPanePath;
+                config.RightPanePath = current.RightPanePath;
+                config.WindowPlacement = current.WindowPlacement;
+                config.Logging = current.Logging;
+                config.LastLocalBackupText = current.LastLocalBackupText;
+            });
         }
 
-        private void SaveNotificationHistoriesSafe()
+        private void SaveNotificationHistoriesSafe(bool mergeExistingRecords = true)
         {
             try
             {
-                SaveNotificationHistories();
+                SaveNotificationHistories(mergeExistingRecords);
             }
             catch
             {
@@ -1651,6 +1862,8 @@ namespace nuone_tools
                     WeeklyDaysMask = profile.WeeklyDaysMask,
                     RunMissedOnStartup = profile.RunMissedOnStartup,
                     IsEnabled = profile.IsEnabled,
+                    NotificationEnabled = profile.NotificationEnabled,
+                    ToastEnabled = profile.ToastEnabled,
                     LastRunText = profile.LastRunText,
                     LastResultText = profile.LastResultText,
                 })
@@ -1673,6 +1886,8 @@ namespace nuone_tools
                         .Distinct(StringComparer.Ordinal)
                         .ToList(),
                     IsEnabled = profile.IsEnabled,
+                    NotificationEnabled = profile.NotificationEnabled,
+                    ToastEnabled = profile.ToastEnabled,
                     LastRunText = profile.LastRunText,
                     LastResultText = profile.LastResultText,
                 })
@@ -1696,7 +1911,10 @@ namespace nuone_tools
             try
             {
                 Directory.CreateDirectory(ConfigDirectoryPath);
-                SaveLocalSettings();
+                SaveLocalSettingsSections(config =>
+                {
+                    config.Account = BuildAccountSettingsConfig();
+                });
             }
             catch (Exception ex)
             {
@@ -1709,7 +1927,10 @@ namespace nuone_tools
             try
             {
                 Directory.CreateDirectory(ConfigDirectoryPath);
-                SaveAllSettingsFiles();
+                SaveLocalSettingsSections(config =>
+                {
+                    config.BackupAutomations = BuildBackupAutomationConfigs();
+                });
             }
             catch
             {
@@ -1721,7 +1942,10 @@ namespace nuone_tools
             try
             {
                 Directory.CreateDirectory(ConfigDirectoryPath);
-                SaveAllSettingsFiles();
+                SaveLocalSettingsSections(config =>
+                {
+                    config.AutoExtractProfiles = BuildAutoExtractConfigs();
+                });
             }
             catch
             {
@@ -1734,7 +1958,12 @@ namespace nuone_tools
             try
             {
                 Directory.CreateDirectory(ConfigDirectoryPath);
-                SaveAllSettingsFiles();
+                SaveLocalSettingsSections(config =>
+                {
+                    config.LeftPanePath = LeftPane.CurrentPath;
+                    config.RightPanePath = RightPane.CurrentPath;
+                    config.WindowPlacement = BuildWindowPlacementConfig();
+                });
             }
             catch
             {

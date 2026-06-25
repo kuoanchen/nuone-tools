@@ -3,7 +3,13 @@ param(
     [string]$Configuration = 'Release',
     [string]$PublishDir = '',
     [string]$OutputDir = 'artifacts',
-    [string]$ZipName = ''
+    [string]$ZipName = '',
+    [string]$ManifestBaseUrl = 'https://cdn.nuone.cl/nuone-tools',
+    [string]$Channel = 'stable',
+    [string]$ReleaseNotes = '',
+    [string]$MinSupportedVersion = '',
+    [string]$ManifestDeployDir = '\\dsm\web\cdn\nuone-tools',
+    [switch]$Mandatory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -92,6 +98,90 @@ function Get-7ZipExecutable {
     }
 
     return ''
+}
+
+function Join-Url {
+    param(
+        [string]$BaseUrl,
+        [string]$ChildPath
+    )
+
+    $trimmedBaseUrl = $BaseUrl.Trim().TrimEnd('/')
+    $trimmedChildPath = $ChildPath.Trim().TrimStart('/')
+
+    if ([string]::IsNullOrWhiteSpace($trimmedBaseUrl)) {
+        return $trimmedChildPath
+    }
+
+    if ([string]::IsNullOrWhiteSpace($trimmedChildPath)) {
+        return $trimmedBaseUrl
+    }
+
+    return "$trimmedBaseUrl/$trimmedChildPath"
+}
+
+function New-UpdateManifest {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version,
+        [Parameter(Mandatory = $true)]
+        [string]$RuntimeIdentifier,
+        [Parameter(Mandatory = $true)]
+        [string]$ZipPath,
+        [Parameter(Mandatory = $true)]
+        [string]$ManifestPath,
+        [string]$ManifestBaseUrl,
+        [string]$Channel,
+        [string]$ReleaseNotes,
+        [string]$MinSupportedVersion,
+        [bool]$Mandatory
+    )
+
+    $zipFile = Get-Item -LiteralPath $ZipPath
+    $zipHash = Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256
+    $zipUrl = Join-Url -BaseUrl $ManifestBaseUrl -ChildPath $zipFile.Name
+
+    $manifest = [ordered]@{
+        app = 'nuone-tools'
+        channel = $Channel
+        version = $Version
+        published_at = [DateTime]::UtcNow.ToString('O')
+        package = [ordered]@{
+            platform = $RuntimeIdentifier
+            type = 'zip'
+            filename = $zipFile.Name
+            url = $zipUrl
+            sha256 = $zipHash.Hash.ToLowerInvariant()
+            size = $zipFile.Length
+        }
+        release_notes = $ReleaseNotes
+        mandatory = $Mandatory
+    }
+
+    if (-not [string]::IsNullOrWhiteSpace($MinSupportedVersion)) {
+        $manifest.min_supported_version = $MinSupportedVersion
+    }
+
+    $manifestJson = $manifest | ConvertTo-Json -Depth 6
+    Set-Content -LiteralPath $ManifestPath -Value $manifestJson -Encoding UTF8
+}
+
+function Publish-ReleaseFile {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$SourcePath,
+        [Parameter(Mandatory = $true)]
+        [string]$DeployDirectory
+    )
+
+    if ([string]::IsNullOrWhiteSpace($DeployDirectory)) {
+        return ''
+    }
+
+    New-Item -ItemType Directory -Path $DeployDirectory -Force | Out-Null
+    $destinationPath = Join-Path $DeployDirectory (Split-Path -Path $SourcePath -Leaf)
+    Copy-Item -LiteralPath $SourcePath -Destination $destinationPath -Force
+    return $destinationPath
 }
 
 $repoRoot = Split-Path -Parent $PSScriptRoot
@@ -193,10 +283,10 @@ if (-not [string]::IsNullOrWhiteSpace($sevenZipExe)) {
         '-tzip',
         '-mx=9',
         $zipPath,
-        $archiveBaseName
+        '.\*'
     )
 
-    Push-Location -LiteralPath $stagingRoot
+    Push-Location -LiteralPath $stagingDir
     try {
         & $sevenZipExe @sevenZipArguments | Out-Null
         if ($LASTEXITCODE -ne 0) {
@@ -206,10 +296,30 @@ if (-not [string]::IsNullOrWhiteSpace($sevenZipExe)) {
         Pop-Location
     }
 } else {
-    Compress-Archive -Path $stagingDir -DestinationPath $zipPath -CompressionLevel Optimal
+    Compress-Archive -Path (Join-Path $stagingDir '*') -DestinationPath $zipPath -CompressionLevel Optimal
 }
 
 Remove-Item -LiteralPath $stagingDir -Recurse -Force
+
+$manifestPath = Join-Path $resolvedOutputDir 'manifest.json'
+New-UpdateManifest `
+    -Version $version `
+    -RuntimeIdentifier $runtimeIdentifier `
+    -ZipPath $zipPath `
+    -ManifestPath $manifestPath `
+    -ManifestBaseUrl $ManifestBaseUrl `
+    -Channel $Channel `
+    -ReleaseNotes $ReleaseNotes `
+    -MinSupportedVersion $MinSupportedVersion `
+    -Mandatory:$Mandatory
+
+$deployedZipPath = Publish-ReleaseFile `
+    -SourcePath $zipPath `
+    -DeployDirectory $ManifestDeployDir
+
+$deployedManifestPath = Publish-ReleaseFile `
+    -SourcePath $manifestPath `
+    -DeployDirectory $ManifestDeployDir
 
 Write-Host "完成打包"
 Write-Host "Version      : $version"
@@ -217,3 +327,10 @@ Write-Host "Runtime      : $runtimeIdentifier"
 Write-Host "PublishDir   : $resolvedPublishDir"
 Write-Host "ZipTool      : $zipTool"
 Write-Host "Zip          : $zipPath"
+Write-Host "Manifest     : $manifestPath"
+if (-not [string]::IsNullOrWhiteSpace($deployedZipPath)) {
+    Write-Host "ZipCdn       : $deployedZipPath"
+}
+if (-not [string]::IsNullOrWhiteSpace($deployedManifestPath)) {
+    Write-Host "ManifestCdn  : $deployedManifestPath"
+}

@@ -81,6 +81,11 @@ namespace nuone_tools
         private TextBox DefaultTerminalCustomWorkingDirectoryTextBox => SettingsPage.DefaultTerminalCustomWorkingDirectoryTextBoxElement;
         private ComboBox DefaultTerminalShellComboBox => SettingsPage.DefaultTerminalShellComboBoxElement;
         private ComboBox DefaultTerminalWorkingDirectoryModeComboBox => SettingsPage.DefaultTerminalWorkingDirectoryModeComboBoxElement;
+        private TextBlock CurrentAppVersionTextBlock => SettingsPage.CurrentAppVersionTextBlockElement;
+        private StackPanel AppUpdateActionButtonsPanel => SettingsPage.AppUpdateActionButtonsPanelElement;
+        private Button CheckForUpdatesButton => SettingsPage.CheckForUpdatesButtonElement;
+        private Button OpenUpdateDownloadButton => SettingsPage.OpenUpdateDownloadButtonElement;
+        private Button CopyUpdateDownloadUrlButton => SettingsPage.CopyUpdateDownloadUrlButtonElement;
         private TextBox FileBunkerApiKeyTextBox => SettingsPage.FileBunkerApiKeyTextBoxElement;
         private TextBox FileBunkerClientIdTextBox => SettingsPage.FileBunkerClientIdTextBoxElement;
         private TextBox FileBunkerDaysToExpirationTextBox => SettingsPage.FileBunkerDaysToExpirationTextBoxElement;
@@ -89,8 +94,13 @@ namespace nuone_tools
         private TextBox FileBunkerKeyLengthTextBox => SettingsPage.FileBunkerKeyLengthTextBoxElement;
         private TextBox FileBunkerOutputEndpointTextBox => SettingsPage.FileBunkerOutputEndpointTextBoxElement;
         private TextBox LogDirectoryPathTextBox => SettingsPage.LogDirectoryPathTextBoxElement;
+        private TextBlock AppUpdateManifestUrlTextBlock => SettingsPage.AppUpdateManifestUrlTextBlockElement;
+        private TextBlock AppUpdateReleaseNotesTextBlock => SettingsPage.AppUpdateReleaseNotesTextBlockElement;
+        private TextBlock AppUpdateStatusTextBlock => SettingsPage.AppUpdateStatusTextBlockElement;
+        private TextBlock LatestAppVersionTextBlock => SettingsPage.LatestAppVersionTextBlockElement;
+        private TextBlock LastAppUpdateCheckTextBlock => SettingsPage.LastAppUpdateCheckTextBlockElement;
         private TextBlock LastLocalBackupTextBlock => SettingsPage.LastLocalBackupTextBlockElement;
-        private Border GeneralSettingsContent => SettingsPage.GeneralSettingsContentElement;
+        private StackPanel GeneralSettingsContent => SettingsPage.GeneralSettingsContentElement;
         private Border GeneralSettingsNavBorder => SettingsPage.GeneralSettingsNavBorderElement;
         private TextBlock GeneralSettingsNavText => SettingsPage.GeneralSettingsNavTextElement;
         private Button LoginAccountButton => SettingsPage.LoginAccountButtonElement;

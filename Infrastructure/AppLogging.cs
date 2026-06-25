@@ -52,37 +52,22 @@ namespace nuone_tools
                     return;
                 }
 
-                Directory.CreateDirectory(normalizedDirectoryPath);
-                DeleteLegacyLogFiles(normalizedDirectoryPath);
-
-                var outputTemplate =
-                    "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj} " +
-                    "{Properties:j}{NewLine}{Exception}";
-
-                var logger = new LoggerConfiguration()
-                    .MinimumLevel.Debug()
-                    .Enrich.WithProperty("App", "nuone-tools")
-                    .WriteTo.File(
-                        Path.Combine(normalizedDirectoryPath, "nuone-tools-.log"),
-                        rollingInterval: RollingInterval.Day,
-                        retainedFileCountLimit: 14,
-                        shared: true,
-                        outputTemplate: outputTemplate)
-                    .CreateLogger();
-
-                var previousLogger = Log.Logger;
-                Log.Logger = logger;
-                _configuredDirectoryPath = normalizedDirectoryPath;
-
-                try
+                if (TryConfigureLogger(normalizedDirectoryPath, out _))
                 {
-                    (previousLogger as IDisposable)?.Dispose();
-                }
-                catch
-                {
+                    return;
                 }
 
-                Log.Information("Serilog configured. Directory={LogDirectory}", normalizedDirectoryPath);
+                var fallbackDirectoryPath = MainWindow.DefaultLogDirectoryPath;
+                if (!string.Equals(fallbackDirectoryPath, normalizedDirectoryPath, StringComparison.OrdinalIgnoreCase) &&
+                    TryConfigureLogger(fallbackDirectoryPath, out _))
+                {
+                    System.Diagnostics.Debug.WriteLine(
+                        $"nuone-tools logging fallback activated. Primary={normalizedDirectoryPath} Fallback={fallbackDirectoryPath}");
+                    return;
+                }
+
+                System.Diagnostics.Debug.WriteLine(
+                    $"nuone-tools logging setup failed. Primary={normalizedDirectoryPath} Fallback={fallbackDirectoryPath}");
             }
         }
 
@@ -143,6 +128,53 @@ namespace nuone_tools
             }
             catch
             {
+            }
+        }
+
+        private static bool TryConfigureLogger(string directoryPath, out string configuredDirectoryPath)
+        {
+            configuredDirectoryPath = string.Empty;
+
+            try
+            {
+                Directory.CreateDirectory(directoryPath);
+                DeleteLegacyLogFiles(directoryPath);
+
+                var outputTemplate =
+                    "{Timestamp:yyyy-MM-dd HH:mm:ss.fff} [{Level:u3}] {Message:lj} " +
+                    "{Properties:j}{NewLine}{Exception}";
+
+                var logger = new LoggerConfiguration()
+                    .MinimumLevel.Debug()
+                    .Enrich.WithProperty("App", "nuone-tools")
+                    .WriteTo.File(
+                        Path.Combine(directoryPath, "nuone-tools-.log"),
+                        rollingInterval: RollingInterval.Day,
+                        retainedFileCountLimit: 14,
+                        shared: true,
+                        outputTemplate: outputTemplate)
+                    .CreateLogger();
+
+                var previousLogger = Log.Logger;
+                Log.Logger = logger;
+                configuredDirectoryPath = directoryPath;
+                _configuredDirectoryPath = directoryPath;
+
+                try
+                {
+                    (previousLogger as IDisposable)?.Dispose();
+                }
+                catch
+                {
+                }
+
+                Log.Information("Serilog configured. Directory={LogDirectory}", directoryPath);
+                return true;
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"nuone-tools logging configure failed. Directory={directoryPath} Error={ex}");
+                return false;
             }
         }
     }

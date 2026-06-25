@@ -29,6 +29,8 @@
   `Features/Shared/MainWindow.Dialogs.cs`
 - toolbar command 執行：
   `Infrastructure/MainWindow.Persistence.cs`
+- 內建 toolbar command 定義與 Node.js Docker 部署：
+  `Features/FileManager/MainWindow.NodeDockerDeploy.cs`
 - toolbar/view 綁定橋接：
   `Features/Shared/MainWindow.ViewBindings.cs`
 - FileBunker 上傳：
@@ -68,6 +70,16 @@
 - 群組/sidebar/context menu：
   `Features/FileManager/MainWindow.Groups.cs`,
   `Services/ShellContextMenuHost.cs`
+- 檔案列表即時篩選、`開頭為 / 包含` 文案與 prefix/filter 規則：
+  `ViewModels/PaneViewModel.cs`,
+  `Views/FileManagerView.xaml`
+- 通知中心 / background work 歷史 / toast 條件：
+  `Features/Shell/MainWindow.Shell.cs`,
+  `Infrastructure/WindowsNotificationService.cs`
+- 自動化單一執行權（避免雙開重複跑）：
+  `MainWindow.xaml.cs`,
+  `Features/Automation/MainWindow.Automation.cs`,
+  `Features/Shell/MainWindow.Shell.cs`
 - 主題/外觀：
   `Styles/AppStyles.xaml`,
   `App.xaml`,
@@ -80,10 +92,14 @@
 - 新增設定通常需要同步改：
   XAML、XAML.cs event、ViewBindings、`MainWindow.Settings.cs`、`Models/AppSettingsModels.cs`、`Infrastructure/MainWindow.Persistence.cs`。
 - 內建 toolbar command 用常數字串，並透過 `IsBuiltInToolbarCommand(...)` / `ExecuteBuiltInToolbarCommandAsync(...)` 分流。
+- `ViewModels/PaneViewModel.cs` 內的 `ApplyFilter()` 會決定檔案清單的即時篩選結果，也會產生 `開頭為：...` / `包含：...` 文案；畫面看到的篩選提示先查這裡。
+- notification / toast 目前不是全站共用；`AddNotificationHistoryRecord(...)` 內有分類過濾，是否真的寫入歷史與跳 toast 先看 `Features/Shell/MainWindow.Shell.cs`。
+- 若遇到雙開 `nuone-tools` 互相影響，自動化與自動解壓優先查 `IsAutomationExecutionOwner`、`EnsureAutomationExecutionOwner(...)` 與 automation mutex 相關邏輯。
+- 設定檔目前分成 sync / local / notification history 三類，共用檔案的跨程序鎖與 section-based merge 在 `Infrastructure/MainWindow.Persistence.cs`。
 - 要拿目前 pane 選取檔案，優先用 `GetSelectedEntriesInDisplayOrder(_activePane)`。
 - 一般提示用 `ShowMessageAsync(...)`；需要複製按鈕、checkbox、輸入欄等互動時用 `ContentDialog`。
 - 不要回復或覆蓋使用者未要求處理的 dirty changes。
-- 如果是間歇性、非同步、跨執行緒、SSH、watcher 或其他難重現問題，先補聚焦的 diagnostic log，再根據 log 修；不要只靠猜測。log 優先寫到本機 config 目錄，方便使用者直接貼內容追錯。
+- 如果是間歇性、非同步、跨執行緒、SSH、watcher 或其他難重現問題，先補聚焦的 diagnostic log，再根據 log 修；不要只靠猜測。使用者目前的 log 目錄是 `\\dsm\web\logs\tools`，查閃退、同步、toast、update 問題時先看這裡；若 share 無法存取，程式會 fallback 到本機 config logs。
 
 ## 目前已知功能點
 
@@ -94,6 +110,9 @@
 - 上傳 multipart file part 需要設定正確 `Content-Type`，圖片才會被 FileBunker 當圖片顯示。
 - 單檔重新命名預設不顯示副檔名；checkbox `包含副檔名` 開啟後才一起編輯副檔名。
 - 檔案縮圖可能回傳 null；讀取 Shell thumbnail 要先做 null/size guard。
+- `resource` 這種關鍵字篩選，現在 prefix match 不只比整個檔名開頭，也會比 `-`、`_`、空白、`.` 切開後的片段開頭；例如 `mb-mui-resource-v3` 也會命中 `resource`。
+- `nuone:deploy-node-docker` 是內建 toolbar command，不是讓使用者手打 shell 的外部 command；實作在 `Features/FileManager/MainWindow.NodeDockerDeploy.cs`。
+- automation 類通知與 toast 現在限定在 `自動化` / `自動解壓` 類別；一般設定同步、terminal 等不會進同一套通知歷史。
 
 ## 驗證注意
 
@@ -105,6 +124,6 @@
 
 1. 先讀本檔。
 2. 依「修改路線」只打開 1 到 4 個最相關檔案。
-3. 若找不到，再用 `rg` 搜尋精準 symbol，不做全 repo 大量讀檔。
+3. 若找不到，先從 UI 綁定字串回推 property 名稱，例如 `FilterModeText`、`LoadingText`、`SharedStatusDetailText`，再用 `rg` 搜尋精準 symbol，不做全 repo 大量讀檔。
 4. 修改前先看 `git status --short`，避免踩到使用者改動。
 5. 回覆時只講改了什麼、沒驗證什麼、還有什麼風險。
