@@ -1,5 +1,14 @@
 ﻿# Changelog
 
+## 1.202606.4 (2026-06-25)
+
+### 新功能
+
+* 啟動時自動安裝 tools 命令別名 ([655411c](https://github.com/kuoanchen/nuone-tools/commit/655411cba1e82afed6fb440ac8be5795fcb7d7df))
+  - 在 `App.xaml.cs` 新增 `tools.cmd` 與 `tools` wrapper 自動建立流程，啟動時會把 `nuone-tools.exe` 暴露成可從 cmd 與 Git Bash 呼叫的 `tools` 命令
+* 支援單實例終端機喚起與外部啟動導向 ([184eed3](https://github.com/kuoanchen/nuone-tools/commit/184eed37fb6b9bd2d09f7055abdb69152db69f0a))
+  - 新增 app 單實例註冊與 named pipe 轉送機制，支援將後續啟動請求導向既有 nuone-tools 視窗
+
 ## 1.202606.3 (2026-06-24)
 
 ### 新功能

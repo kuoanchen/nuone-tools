@@ -49,6 +49,8 @@ nuone-tools.exe -w -it 2
   - 共用既有其中一個 UI，直接切到終端機，工作目錄跟隨目前外部終端機路徑。
 - `nuone-tools.exe -w -it 2`
   - 指定切到第 2 個已開啟的 UI 視窗，再進終端機。
+- `tools.cmd` 與 Git Bash 用的 `tools` wrapper 會在 app 啟動時自動建立到「目前使用者 PATH 中可寫入的資料夾」。
+  - 若 `WindowsApps` 不可寫，會改放到像 `C:\Users\<user>\.local\bin` 這類可寫且已在 PATH 的位置。
 
 ## 文件產生方式
 
