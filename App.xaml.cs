@@ -35,6 +35,8 @@ namespace nuone_tools
         private const string InstanceRegistryMutexName = @"Local\nuone-tools-instance-registry";
         private const string InstancePipeNamePrefix = "nuone-tools-instance-pipe-";
         private const string DetachedLaunchToken = "--nuone-detached-launch";
+        private const string ToolsCommandAliasFileName = "tools.cmd";
+        private const string ToolsBashAliasFileName = "tools";
         private static readonly JsonSerializerOptions LaunchRequestJsonOptions = new(JsonSerializerDefaults.Web);
         private Window? _window;
         private MainWindow? _mainWindow;
@@ -75,6 +77,7 @@ namespace nuone_tools
                 launchWorkingDirectory,
                 shouldReuseExistingWindow,
                 targetInstanceIndex);
+            EnsureToolsCommandAliases();
 
             if (shouldReuseExistingWindow && ForwardLaunchRequestToRegisteredInstance(launchRequest, targetInstanceIndex))
             {
@@ -393,6 +396,159 @@ namespace nuone_tools
             }
 
             return System.IO.Path.Combine(AppContext.BaseDirectory, "nuone-tools.exe");
+        }
+
+        private static void EnsureToolsCommandAliases()
+        {
+            try
+            {
+                var aliasDirectory = ResolveToolsCommandAliasDirectory();
+                if (string.IsNullOrWhiteSpace(aliasDirectory))
+                {
+                    AppLogging.Warning("tools alias auto-install skipped because no suitable user PATH directory was found.");
+                    return;
+                }
+
+                Directory.CreateDirectory(aliasDirectory);
+                var executablePath = GetCurrentExecutablePath();
+                EnsureToolsCmdAlias(aliasDirectory, executablePath);
+                EnsureToolsBashAlias(aliasDirectory, executablePath);
+            }
+            catch (Exception ex)
+            {
+                AppLogging.Warning("tools alias auto-install failed Error={Error}", ex.Message);
+            }
+        }
+
+        private static void EnsureToolsCmdAlias(string aliasDirectory, string executablePath)
+        {
+            var aliasPath = System.IO.Path.Combine(aliasDirectory, ToolsCommandAliasFileName);
+            if (File.Exists(aliasPath))
+            {
+                return;
+            }
+
+            var script = string.Join(
+                Environment.NewLine,
+                "@echo off",
+                $"\"{executablePath}\" %*",
+                string.Empty);
+            File.WriteAllText(aliasPath, script, Encoding.ASCII);
+            AppLogging.Information("tools.cmd created AliasPath={AliasPath} ExecutablePath={ExecutablePath}", aliasPath, executablePath);
+        }
+
+        private static void EnsureToolsBashAlias(string aliasDirectory, string executablePath)
+        {
+            var aliasPath = System.IO.Path.Combine(aliasDirectory, ToolsBashAliasFileName);
+            if (File.Exists(aliasPath))
+            {
+                return;
+            }
+
+            var gitBashExecutablePath = executablePath.Replace("\\", "/", StringComparison.Ordinal);
+            if (gitBashExecutablePath.Length >= 2 && gitBashExecutablePath[1] == ':')
+            {
+                gitBashExecutablePath = $"/{char.ToLowerInvariant(gitBashExecutablePath[0])}{gitBashExecutablePath[2..]}";
+            }
+
+            var script = string.Join(
+                "\n",
+                "#!/usr/bin/env bash",
+                $"\"{gitBashExecutablePath}\" \"$@\"",
+                string.Empty);
+            File.WriteAllText(aliasPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
+            AppLogging.Information("tools bash wrapper created AliasPath={AliasPath} ExecutablePath={ExecutablePath}", aliasPath, executablePath);
+        }
+
+        private static string? ResolveToolsCommandAliasDirectory()
+        {
+            var userProfilePath = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            var localAppDataPath = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var preferredWindowsAppsPath = System.IO.Path.Combine(localAppDataPath, "Microsoft", "WindowsApps");
+            var userPathEntries = (Environment.GetEnvironmentVariable("PATH", EnvironmentVariableTarget.User) ?? string.Empty)
+                .Split(System.IO.Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(NormalizeDirectoryPath)
+                .Where(static path => !string.IsNullOrWhiteSpace(path))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .ToList();
+
+            if (userPathEntries.Any(path => string.Equals(path, preferredWindowsAppsPath, StringComparison.OrdinalIgnoreCase)) &&
+                IsDirectoryWritable(preferredWindowsAppsPath))
+            {
+                return preferredWindowsAppsPath;
+            }
+
+            var firstWritableUserScopedPath = userPathEntries.FirstOrDefault(path =>
+                path.StartsWith(userProfilePath, StringComparison.OrdinalIgnoreCase) &&
+                IsDirectoryWritable(path));
+            if (!string.IsNullOrWhiteSpace(firstWritableUserScopedPath))
+            {
+                return firstWritableUserScopedPath;
+            }
+
+            var fallbackLocalBinPath = System.IO.Path.Combine(userProfilePath, ".local", "bin");
+            if (IsDirectoryWritable(fallbackLocalBinPath))
+            {
+                return fallbackLocalBinPath;
+            }
+
+            var fallbackScriptsPath = System.IO.Path.Combine(userProfilePath, "AppData", "Roaming", "npm");
+            if (IsDirectoryWritable(fallbackScriptsPath))
+            {
+                return fallbackScriptsPath;
+            }
+
+            var firstUserScopedPath = userPathEntries.FirstOrDefault(path =>
+                path.StartsWith(userProfilePath, StringComparison.OrdinalIgnoreCase));
+            if (!string.IsNullOrWhiteSpace(firstUserScopedPath))
+            {
+                return firstUserScopedPath;
+            }
+
+            if (!string.IsNullOrWhiteSpace(localAppDataPath) && IsDirectoryWritable(preferredWindowsAppsPath))
+            {
+                return preferredWindowsAppsPath;
+            }
+
+            return null;
+        }
+
+        private static string NormalizeDirectoryPath(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return string.Empty;
+            }
+
+            try
+            {
+                return System.IO.Path.GetFullPath(Environment.ExpandEnvironmentVariables(path.Trim()));
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        private static bool IsDirectoryWritable(string? path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            try
+            {
+                Directory.CreateDirectory(path);
+                var probePath = System.IO.Path.Combine(path, $".tools-write-test-{Environment.ProcessId}.tmp");
+                File.WriteAllText(probePath, "ok", Encoding.ASCII);
+                File.Delete(probePath);
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
         }
 
         private void RegisterCurrentInstance()
