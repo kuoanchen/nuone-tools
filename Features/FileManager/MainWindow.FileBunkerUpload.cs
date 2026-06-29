@@ -439,6 +439,11 @@ namespace nuone_tools
             var backgroundWorkId = BeginBackgroundWork(
                 $"上傳檔案到 Storage 中（{eligibleFiles.Count.ToString(CultureInfo.InvariantCulture)}）");
             string? completionRecord = null;
+            AppLogging.Information(
+                "Storage upload started EligibleCount={EligibleCount} SkippedCount={SkippedCount} ServiceAccount={ServiceAccount}",
+                eligibleFiles.Count,
+                skippedEntries.Count,
+                config.ServiceAccountCode);
 
             AppendDebugLog(
                 "storage-upload-debug.log",
@@ -474,6 +479,11 @@ namespace nuone_tools
                     "Storage",
                     BuildStorageUploadNotificationSummary(uploadedFiles.Count, skippedFiles.Count),
                     completionRecord);
+                AppLogging.Information(
+                    "Storage upload completed UploadedCount={UploadedCount} SkippedCount={SkippedCount} ServiceAccount={ServiceAccount}",
+                    uploadedFiles.Count,
+                    skippedFiles.Count,
+                    config.ServiceAccountCode);
 
                 AppendDebugLog(
                     "storage-upload-debug.log",
@@ -736,6 +746,10 @@ namespace nuone_tools
                 request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", config.Token);
                 request.Headers.TryAddWithoutValidation("x-service-account", config.ServiceAccountCode);
                 request.Headers.TryAddWithoutValidation("x-client-app", "nuone-tools");
+                AppLogging.Debug(
+                    "Storage upload request prepared FileCount={FileCount} ServiceAccount={ServiceAccount}",
+                    filePaths.Count,
+                    config.ServiceAccountCode);
 
                 AppendDebugLog(
                     "storage-upload-debug.log",

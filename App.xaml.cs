@@ -68,11 +68,12 @@ namespace nuone_tools
             var commandLineArgs = Environment.GetCommandLineArgs().Skip(1).ToArray();
             var launchWorkingDirectory = Environment.CurrentDirectory;
             var launchRequest = new LaunchRequestPayload(args.Arguments, commandLineArgs, launchWorkingDirectory);
-            var shouldReuseExistingWindow = commandLineArgs.Any(static argument => string.Equals(argument, "-w", StringComparison.OrdinalIgnoreCase));
+            var shouldReuseExistingWindow = commandLineArgs.Any(static argument =>
+                string.Equals(argument, "-w", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(argument, "-f", StringComparison.OrdinalIgnoreCase));
             var targetInstanceIndex = ParseTargetInstanceIndex(commandLineArgs);
             AppLogging.Information(
-                "App launched RawArguments={RawArguments} CommandLineArgs={CommandLineArgs} WorkingDirectory={WorkingDirectory} ReuseExistingWindow={ReuseExistingWindow} TargetInstanceIndex={TargetInstanceIndex}",
-                args.Arguments,
+                "App launch received CommandLineArgs={CommandLineArgs} WorkingDirectory={WorkingDirectory} ReuseExistingWindow={ReuseExistingWindow} TargetInstanceIndex={TargetInstanceIndex}",
                 commandLineArgs,
                 launchWorkingDirectory,
                 shouldReuseExistingWindow,
@@ -82,8 +83,7 @@ namespace nuone_tools
             if (shouldReuseExistingWindow && ForwardLaunchRequestToRegisteredInstance(launchRequest, targetInstanceIndex))
             {
                 AppLogging.Information(
-                    "Secondary launch redirected RawArguments={RawArguments} WorkingDirectory={WorkingDirectory} TargetInstanceIndex={TargetInstanceIndex}",
-                    args.Arguments,
+                    "App launch redirected to existing instance WorkingDirectory={WorkingDirectory} TargetInstanceIndex={TargetInstanceIndex}",
                     launchWorkingDirectory,
                     targetInstanceIndex);
                 Environment.Exit(0);
@@ -94,8 +94,7 @@ namespace nuone_tools
                 TryLaunchDetachedInstance(commandLineArgs, launchWorkingDirectory))
             {
                 AppLogging.Information(
-                    "Primary launch detached to background instance CommandLineArgs={CommandLineArgs} WorkingDirectory={WorkingDirectory}",
-                    commandLineArgs,
+                    "App launch detached to background instance WorkingDirectory={WorkingDirectory}",
                     launchWorkingDirectory);
                 Environment.Exit(0);
                 return;
@@ -107,6 +106,10 @@ namespace nuone_tools
             _window.Closed += MainWindow_Closed;
             StartSingleInstanceListener();
             _window.Activate();
+            AppLogging.Information(
+                "App launch completed ProcessId={ProcessId} PipeName={PipeName}",
+                Environment.ProcessId,
+                _instancePipeName);
         }
 
         private static void CurrentDomain_ProcessExit(object? sender, EventArgs e)
@@ -126,7 +129,7 @@ namespace nuone_tools
             _mainWindow = null;
             _window = null;
             UnregisterCurrentProcessInstance();
-            AppLogging.Information("App main window closed. Exiting process.");
+            AppLogging.Information("App main window closed ProcessId={ProcessId}", Environment.ProcessId);
             Environment.Exit(0);
         }
 
@@ -175,6 +178,7 @@ namespace nuone_tools
 
             _singleInstanceListenerCts = new CancellationTokenSource();
             _singleInstanceListenerTask = Task.Run(() => ListenForSecondaryLaunchesAsync(_singleInstanceListenerCts.Token));
+            AppLogging.Information("Single-instance listener started PipeName={PipeName}", _instancePipeName);
         }
 
         private void StopSingleInstanceListener()
@@ -196,6 +200,7 @@ namespace nuone_tools
 
             cts.Dispose();
             _singleInstanceListenerTask = null;
+            AppLogging.Information("Single-instance listener stopped PipeName={PipeName}", _instancePipeName);
         }
 
         private async Task ListenForSecondaryLaunchesAsync(CancellationToken cancellationToken)
@@ -231,11 +236,6 @@ namespace nuone_tools
                         continue;
                     }
 
-                    AppLogging.Information(
-                        "Received secondary launch request RawArguments={RawArguments} CommandLineArgs={CommandLineArgs} WorkingDirectory={WorkingDirectory}",
-                        payload.RawArguments,
-                        payload.CommandLineArgs,
-                        payload.WorkingDirectory);
                     _mainWindow?.HandleExternalLaunchRequest(payload.RawArguments, payload.CommandLineArgs, payload.WorkingDirectory);
                 }
                 catch (OperationCanceledException)
@@ -283,14 +283,8 @@ namespace nuone_tools
                     writer.Flush();
                     return true;
                 }
-                catch (Exception ex) when (attempt < 10)
+                catch (Exception) when (attempt < 10)
                 {
-                    AppLogging.Warning(
-                        "Forward launch request retry Attempt={Attempt} RawArguments={RawArguments} TargetProcessId={TargetProcessId} Error={Error}",
-                        attempt,
-                        payload.RawArguments,
-                        selectedRegistration.ProcessId,
-                        ex.Message);
                     Thread.Sleep(150);
                 }
                 catch (Exception ex)
@@ -323,10 +317,6 @@ namespace nuone_tools
                     return registrations[zeroBasedIndex];
                 }
 
-                AppLogging.Warning(
-                    "Requested target instance is out of range RequestedIndex={RequestedIndex} AvailableCount={AvailableCount}. Falling back to first instance.",
-                    targetInstanceIndex.Value,
-                    registrations.Count);
             }
 
             return registrations[0];
@@ -349,7 +339,6 @@ namespace nuone_tools
                 var executablePath = GetCurrentExecutablePath();
                 if (string.IsNullOrWhiteSpace(executablePath) || !File.Exists(executablePath))
                 {
-                    AppLogging.Warning("Detached launch skipped because executable path is unavailable. Path={ExecutablePath}", executablePath);
                     return false;
                 }
 
@@ -405,7 +394,6 @@ namespace nuone_tools
                 var aliasDirectory = ResolveToolsCommandAliasDirectory();
                 if (string.IsNullOrWhiteSpace(aliasDirectory))
                 {
-                    AppLogging.Warning("tools alias auto-install skipped because no suitable user PATH directory was found.");
                     return;
                 }
 
@@ -434,7 +422,6 @@ namespace nuone_tools
                 $"\"{executablePath}\" %*",
                 string.Empty);
             File.WriteAllText(aliasPath, script, Encoding.ASCII);
-            AppLogging.Information("tools.cmd created AliasPath={AliasPath} ExecutablePath={ExecutablePath}", aliasPath, executablePath);
         }
 
         private static void EnsureToolsBashAlias(string aliasDirectory, string executablePath)
@@ -457,7 +444,6 @@ namespace nuone_tools
                 $"\"{gitBashExecutablePath}\" \"$@\"",
                 string.Empty);
             File.WriteAllText(aliasPath, script, new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
-            AppLogging.Information("tools bash wrapper created AliasPath={AliasPath} ExecutablePath={ExecutablePath}", aliasPath, executablePath);
         }
 
         private static string? ResolveToolsCommandAliasDirectory()

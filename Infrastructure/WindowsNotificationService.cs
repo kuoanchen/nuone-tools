@@ -21,12 +21,8 @@ namespace nuone_tools
 
                 try
                 {
-                    var isSupported = AppNotificationManager.IsSupported();
-                    AppLogging.Information("Windows notification support check IsSupported={IsSupported}", isSupported);
-
                     AppNotificationManager.Default.Register("Nuone Tools", BuildNotificationIconUri());
                     _isInitialized = true;
-                    AppLogging.Information("Windows notification service initialized");
                 }
                 catch (Exception ex)
                 {
@@ -51,7 +47,6 @@ namespace nuone_tools
                 try
                 {
                     AppNotificationManager.Default.Unregister();
-                    AppLogging.Information("Windows notification service unregistered");
                 }
                 catch (Exception ex)
                 {
@@ -71,14 +66,12 @@ namespace nuone_tools
                 var squareLogoPath = Path.Combine(baseDirectory, "Assets", "Square44x44Logo.scale-200.png");
                 if (File.Exists(squareLogoPath))
                 {
-                    AppLogging.Information("Windows notification icon path resolved Path={IconPath}", squareLogoPath);
                     return new Uri(squareLogoPath, UriKind.Absolute);
                 }
 
                 var appIconPath = Path.Combine(baseDirectory, "Assets", "AppIcon.ico");
                 if (File.Exists(appIconPath))
                 {
-                    AppLogging.Information("Windows notification icon path resolved Path={IconPath}", appIconPath);
                     return new Uri(appIconPath, UriKind.Absolute);
                 }
             }
@@ -114,10 +107,6 @@ namespace nuone_tools
         {
             if (!_isInitialized)
             {
-                AppLogging.Warning(
-                    "Windows notification show skipped because service is not initialized Category={Category} Summary={Summary}",
-                    record.Category,
-                    record.Summary);
                 return;
             }
 
@@ -134,10 +123,6 @@ namespace nuone_tools
                 }
 
                 AppNotificationManager.Default.Show(builder.BuildNotification());
-                AppLogging.Information(
-                    "Windows notification show submitted Category={Category} Summary={Summary}",
-                    record.Category,
-                    record.Summary);
             }
             catch (Exception ex)
             {

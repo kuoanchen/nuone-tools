@@ -132,7 +132,7 @@ namespace nuone_tools
 
         private void Watcher_Error(object sender, ErrorEventArgs e)
         {
-            if (!_dispatcherQueue.TryEnqueue(() =>
+            _dispatcherQueue.TryEnqueue(() =>
                 {
                     try
                     {
@@ -142,15 +142,12 @@ namespace nuone_tools
                     {
                         MainWindow.LogBoundaryException(ex, "auto extract watcher error restart");
                     }
-                }))
-            {
-                AppLogging.Warning("Auto extract watcher restart queue rejected Profile={Profile}", _profile.Name);
-            }
+                });
         }
 
         private void ScheduleTrigger()
         {
-            if (!_dispatcherQueue.TryEnqueue(() =>
+            _dispatcherQueue.TryEnqueue(() =>
                 {
                     try
                     {
@@ -166,10 +163,7 @@ namespace nuone_tools
                     {
                         MainWindow.LogBoundaryException(ex, "auto extract watcher schedule trigger");
                     }
-                }))
-            {
-                AppLogging.Warning("Auto extract watcher trigger queue rejected Profile={Profile}", _profile.Name);
-            }
+                });
         }
 
         private void DebounceTimer_Tick(DispatcherQueueTimer sender, object args)

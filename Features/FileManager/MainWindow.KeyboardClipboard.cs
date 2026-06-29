@@ -874,13 +874,25 @@ namespace nuone_tools
             var backgroundDetails = BuildTransferBackgroundDetails(sourcePaths, targetDirectory, actionLabel);
             var completionLabel = $"完成：{BuildTransferBackgroundLabel(sourcePaths, actionLabel, includeInProgressSuffix: false)}";
             var backgroundWorkId = BeginBackgroundWork(backgroundLabel, backgroundDetails);
+            var transferId = Interlocked.Increment(ref _transferDiagnosticSequence);
+            var stopwatch = Stopwatch.StartNew();
+            AppendFileOperationDebugLog(
+                $"paste-transfer[{transferId}] start action={actionLabel} targetPane={targetPane.Name} targetPanePath={targetPane.CurrentPath} " +
+                $"targetDirectory={targetDirectory} count={sourcePaths.Count} backgroundWorkId={backgroundWorkId} paths={string.Join(" | ", sourcePaths)}");
 
             try
             {
                 await ExecuteNativeTransferAsync(sourcePaths, targetDirectory, move);
+                AppendFileOperationDebugLog(
+                    $"paste-transfer[{transferId}] native-transfer-complete action={actionLabel} elapsedMs={stopwatch.ElapsedMilliseconds} " +
+                    $"leftPaneCurrent={LeftPane.CurrentPath} rightPaneCurrent={RightPane.CurrentPath} targetPaneCurrent={targetPane.CurrentPath}");
 
+                AppendFileOperationDebugLog(
+                    $"paste-transfer[{transferId}] queue-ui-refresh leftPaneCurrent={LeftPane.CurrentPath} rightPaneCurrent={RightPane.CurrentPath}");
                 await EnqueueOnUiAsync(() =>
                 {
+                    AppendFileOperationDebugLog(
+                        $"paste-transfer[{transferId}] ui-refresh-begin leftPaneCurrent={LeftPane.CurrentPath} rightPaneCurrent={RightPane.CurrentPath}");
                     RefreshPane(LeftPane);
                     RefreshPane(RightPane);
 
@@ -891,17 +903,27 @@ namespace nuone_tools
                             Path.GetFileName(sourcePaths[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
                         targetPane.SelectedItem = targetPane.Items.FirstOrDefault(item => PathEquals(item.FullPath, destinationPath));
                     }
+
+                    AppendFileOperationDebugLog(
+                        $"paste-transfer[{transferId}] ui-refresh-end leftPaneCurrent={LeftPane.CurrentPath} rightPaneCurrent={RightPane.CurrentPath}");
                 });
             }
             catch (OperationCanceledException)
             {
+                AppendFileOperationDebugLog(
+                    $"paste-transfer[{transferId}] cancelled action={actionLabel} elapsedMs={stopwatch.ElapsedMilliseconds}");
             }
             catch (Exception ex)
             {
+                AppendFileOperationDebugLog(
+                    $"paste-transfer[{transferId}] error action={actionLabel} elapsedMs={stopwatch.ElapsedMilliseconds} error={ex}");
                 await ShowMessageAsync(move ? "貼上搬移失敗" : "貼上複製失敗", ex.Message);
             }
             finally
             {
+                stopwatch.Stop();
+                AppendFileOperationDebugLog(
+                    $"paste-transfer[{transferId}] complete action={actionLabel} elapsedMs={stopwatch.ElapsedMilliseconds} targetPaneCurrent={targetPane.CurrentPath}");
                 CompleteBackgroundWork(backgroundWorkId, completionLabel, backgroundDetails);
             }
         }
@@ -1057,7 +1079,11 @@ namespace nuone_tools
                 return;
             }
 
+            var deleteId = Interlocked.Increment(ref _deleteDiagnosticSequence);
+            var stopwatch = Stopwatch.StartNew();
             var backgroundWorkId = BeginBackgroundWork($"刪除 {selectedEntries.Count} 個項目中");
+            AppendFileOperationDebugLog(
+                $"delete-batch[{deleteId}] start pane={_activePane.Name} paneCurrentPath={_activePane.CurrentPath} count={selectedEntries.Count} backgroundWorkId={backgroundWorkId}");
             try
             {
                 foreach (var entry in selectedEntries.ToList())
@@ -1065,6 +1091,8 @@ namespace nuone_tools
                     try
                     {
                         var deleted = await DeletePathCoreAsync(entry.FullPath);
+                        AppendFileOperationDebugLog(
+                            $"delete-batch[{deleteId}] item-complete path={entry.FullPath} deleted={deleted} elapsedMs={stopwatch.ElapsedMilliseconds} paneCurrentPath={_activePane.CurrentPath}");
                         if (!deleted)
                         {
                             continue;
@@ -1072,15 +1100,29 @@ namespace nuone_tools
                     }
                     catch (Exception ex)
                     {
+                        AppendFileOperationDebugLog(
+                            $"delete-batch[{deleteId}] item-error path={entry.FullPath} elapsedMs={stopwatch.ElapsedMilliseconds} error={ex}");
                         await ShowMessageAsync("刪除失敗", $"{entry.Name}\n{ex.Message}");
                         break;
                     }
                 }
 
-                await EnqueueOnUiAsync(() => RefreshPaneAfterLocalChange(_activePane));
+                AppendFileOperationDebugLog(
+                    $"delete-batch[{deleteId}] queue-ui-refresh pane={_activePane.Name} paneCurrentPath={_activePane.CurrentPath}");
+                await EnqueueOnUiAsync(() =>
+                {
+                    AppendFileOperationDebugLog(
+                        $"delete-batch[{deleteId}] ui-refresh-begin pane={_activePane.Name} paneCurrentPath={_activePane.CurrentPath}");
+                    RefreshPaneAfterLocalChange(_activePane);
+                    AppendFileOperationDebugLog(
+                        $"delete-batch[{deleteId}] ui-refresh-end pane={_activePane.Name} paneCurrentPath={_activePane.CurrentPath}");
+                });
             }
             finally
             {
+                stopwatch.Stop();
+                AppendFileOperationDebugLog(
+                    $"delete-batch[{deleteId}] complete pane={_activePane.Name} paneCurrentPath={_activePane.CurrentPath} elapsedMs={stopwatch.ElapsedMilliseconds}");
                 CompleteBackgroundWork(backgroundWorkId);
             }
         }

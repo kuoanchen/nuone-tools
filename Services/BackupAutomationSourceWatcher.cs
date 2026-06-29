@@ -157,7 +157,7 @@ namespace nuone_tools
 
         private void Watcher_Error(object sender, ErrorEventArgs e)
         {
-            if (!_dispatcherQueue.TryEnqueue(() =>
+            _dispatcherQueue.TryEnqueue(() =>
                 {
                     try
                     {
@@ -167,15 +167,12 @@ namespace nuone_tools
                     {
                         MainWindow.LogBoundaryException(ex, "backup automation watcher error restart");
                     }
-                }))
-            {
-                AppLogging.Warning("Backup automation watcher restart queue rejected Profile={Profile}", _profile.Name);
-            }
+                });
         }
 
         private void ScheduleTrigger()
         {
-            if (!_dispatcherQueue.TryEnqueue(() =>
+            _dispatcherQueue.TryEnqueue(() =>
                 {
                     try
                     {
@@ -191,10 +188,7 @@ namespace nuone_tools
                     {
                         MainWindow.LogBoundaryException(ex, "backup automation watcher schedule trigger");
                     }
-                }))
-            {
-                AppLogging.Warning("Backup automation watcher trigger queue rejected Profile={Profile}", _profile.Name);
-            }
+                });
         }
 
         private void DebounceTimer_Tick(DispatcherQueueTimer sender, object args)

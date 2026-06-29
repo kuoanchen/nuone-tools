@@ -228,6 +228,7 @@ namespace nuone_tools
 
             try
             {
+                AppLogging.Information("App update check started Automatic={IsAutomatic}", isAutomatic);
                 using var response = await SharedHttpClient.GetAsync(_appUpdateState.ManifestUrl);
                 response.EnsureSuccessStatusCode();
 
@@ -251,7 +252,6 @@ namespace nuone_tools
                         : $"發現新版本：{latestVersion}，請確認是否下載與安裝。"
                     : "目前已是最新版本";
                 UpdateAppUpdateUi();
-
                 AppLogging.Information(
                     "App update check completed Automatic={IsAutomatic} CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} UpdateAvailable={IsUpdateAvailable}",
                     isAutomatic,
@@ -266,10 +266,6 @@ namespace nuone_tools
                         $"目前版本是 {currentVersion}，發現新版 {latestVersion}。要現在下載更新包嗎？");
                     if (!shouldDownload)
                     {
-                        AppLogging.Information(
-                            "App update automatic prompt cancelled by user CurrentVersion={CurrentVersion} LatestVersion={LatestVersion}",
-                            currentVersion,
-                            latestVersion);
                         _appUpdateState.StatusText = $"發現新版本：{latestVersion}，你已取消本次更新。";
                         UpdateAppUpdateUi();
                         return;
@@ -325,20 +321,17 @@ namespace nuone_tools
             var currentExecutablePath = GetCurrentExecutablePath();
             if (string.IsNullOrWhiteSpace(currentExecutablePath) || !File.Exists(currentExecutablePath))
             {
-                AppLogging.Warning("App update install skipped because current executable path is unavailable.");
                 return false;
             }
 
             var installDirectory = Path.GetDirectoryName(currentExecutablePath);
             if (string.IsNullOrWhiteSpace(installDirectory))
             {
-                AppLogging.Warning("App update install skipped because install directory could not be resolved. Executable={Executable}", currentExecutablePath);
                 return false;
             }
 
             if (IsDevelopmentInstallDirectory(installDirectory))
             {
-                AppLogging.Information("App update install skipped for development directory. Directory={InstallDirectory}", installDirectory);
                 _appUpdateState.StatusText = "發現新版本，但目前是開發版執行目錄，已略過自動套用。";
                 UpdateAppUpdateUi();
                 return false;
@@ -346,7 +339,6 @@ namespace nuone_tools
 
             if (!CanWriteToDirectory(installDirectory))
             {
-                AppLogging.Warning("App update install skipped because install directory is not writable. Directory={InstallDirectory}", installDirectory);
                 _appUpdateState.StatusText = "發現新版本，但目前安裝目錄不可寫入，請用手動下載更新。";
                 UpdateAppUpdateUi();
                 return false;
@@ -368,7 +360,6 @@ namespace nuone_tools
                         "下載新版",
                         $"目前版本是 {currentVersion}，發現新版 {latestVersion}。要現在下載更新包嗎？"))
                 {
-                    AppLogging.Information("App update download cancelled by user CurrentVersion={CurrentVersion} LatestVersion={LatestVersion}", currentVersion, latestVersion);
                     _appUpdateState.StatusText = $"已取消下載 {latestVersion}。";
                     UpdateAppUpdateUi();
                     return false;
@@ -380,6 +371,11 @@ namespace nuone_tools
                 _appUpdateState.IsInstalling = true;
                 _appUpdateState.StatusText = "下載新版中...";
                 UpdateAppUpdateUi();
+                AppLogging.Information(
+                    "App update install started CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} DownloadUrl={DownloadUrl}",
+                    currentVersion,
+                    latestVersion,
+                    resolvedDownloadUrl);
 
                 using (var response = await SharedHttpClient.GetAsync(resolvedDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
                 {
@@ -405,7 +401,6 @@ namespace nuone_tools
                         "安裝並重新啟動",
                         $"新版 {latestVersion} 已下載完成。要現在關閉 Nuone Tools、套用更新並重新啟動嗎？"))
                 {
-                    AppLogging.Information("App update install postponed by user CurrentVersion={CurrentVersion} LatestVersion={LatestVersion}", currentVersion, latestVersion);
                     _appUpdateState.StatusText = $"新版 {latestVersion} 已下載完成，尚未安裝。";
                     CaptureHintTextBlock.Text = $"新版 {latestVersion} 已下載完成，等待你確認安裝。";
                     UpdateAppUpdateUi();
@@ -442,12 +437,11 @@ namespace nuone_tools
 
                 Process.Start(startInfo);
                 AppLogging.Information(
-                    "App update install scheduled CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} InstallDirectory={InstallDirectory} PayloadDirectory={PayloadDirectory} DownloadUrl={DownloadUrl}",
+                    "App update install scheduled CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} InstallDirectory={InstallDirectory} PayloadDirectory={PayloadDirectory}",
                     currentVersion,
                     latestVersion,
                     installDirectory,
-                    payloadDirectory,
-                    resolvedDownloadUrl);
+                    payloadDirectory);
                 _appUpdateState.StatusText = $"已確認安裝 {latestVersion}，完成後會重新啟動。";
                 CaptureHintTextBlock.Text = $"已開始安裝 {latestVersion}，接著會重新啟動。";
                 UpdateAppUpdateUi();
@@ -1566,7 +1560,6 @@ catch {
 
             _loggingSettings.LogDirectoryPath = NormalizeLogDirectoryPath(LogDirectoryPathTextBox.Text);
             ApplyConfiguredLogDirectoryPath(_loggingSettings.LogDirectoryPath);
-            AppLogging.Information("Logging directory updated. Directory={LogDirectory}", _loggingSettings.LogDirectoryPath);
             SaveShortcutSettingsSafe();
             CaptureHintTextBlock.Text = $"已立即儲存 log 目錄：{_loggingSettings.LogDirectoryPath}";
         }
@@ -1575,7 +1568,6 @@ catch {
         {
             _loggingSettings.LogDirectoryPath = DefaultLogDirectoryPath;
             ApplyConfiguredLogDirectoryPath(_loggingSettings.LogDirectoryPath);
-            AppLogging.Information("Logging directory reset to default. Directory={LogDirectory}", _loggingSettings.LogDirectoryPath);
             UpdateLoggingSettingsUi();
             SaveShortcutSettingsSafe();
             CaptureHintTextBlock.Text = $"已切回預設 log 目錄：{_loggingSettings.LogDirectoryPath}";

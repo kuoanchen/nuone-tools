@@ -2180,12 +2180,6 @@ namespace nuone_tools
                     }
                 }
 
-                AppLogging.Information(
-                    "BackupAutomation ProfileId={ProfileId} Profile={ProfileName} JobType={JobType} Message={AutomationMessage}",
-                    _profileId,
-                    _profileName,
-                    _jobType,
-                    message);
             }
 
             public void Dispose()

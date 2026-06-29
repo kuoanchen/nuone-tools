@@ -38,6 +38,7 @@ namespace nuone_tools
     public sealed partial class MainWindow
     {
         private static readonly TimeSpan BackgroundWorkToastThreshold = TimeSpan.FromMilliseconds(1200);
+        private Flyout? _backgroundWorkNotificationFlyout;
 
         private void ShowFileManagerApp_Click(object sender, RoutedEventArgs e)
         {
@@ -71,15 +72,10 @@ namespace nuone_tools
 
         private void SwitchToAppSection(AppSection section)
         {
-            AppLogging.Information(
-                "SwitchToAppSection requested From={CurrentSection} To={TargetSection}",
-                _activeSection,
-                section);
             CancelPendingFlyout();
             _activeSection = section;
             UpdateAppSectionVisuals();
             UpdateSharedStatusBar();
-            AppLogging.Information("SwitchToAppSection completed Current={CurrentSection}", _activeSection);
         }
 
         private void OpenTerminalSection(bool useActivePaneWhenAvailable = false, string? workingDirectoryOverride = null)
@@ -97,7 +93,6 @@ namespace nuone_tools
 
         private void UpdateAppSectionVisuals()
         {
-            AppLogging.Debug("UpdateAppSectionVisuals start Section={ActiveSection}", _activeSection);
             var isFileManager = _activeSection == AppSection.FileManager;
             var isAutomation = _activeSection == AppSection.Automation;
             var isTerminal = _activeSection == AppSection.Terminal;
@@ -128,13 +123,6 @@ namespace nuone_tools
                 SettingsAppButtonBorder,
                 SettingsAppIcon,
                 SettingsAppText,
-                _activeSection == AppSection.Settings);
-            AppLogging.Debug(
-                "UpdateAppSectionVisuals completed Section={ActiveSection} FileManager={IsFileManager} Automation={IsAutomation} Terminal={IsTerminal} Settings={IsSettings}",
-                _activeSection,
-                isFileManager,
-                isAutomation,
-                isTerminal,
                 _activeSection == AppSection.Settings);
         }
 
@@ -286,22 +274,23 @@ namespace nuone_tools
 
         private void BackgroundWorkNotification_Click(object sender, RoutedEventArgs e)
         {
-            AppLogging.Information("BackgroundWorkNotification_Click start");
             if (BackgroundWorkNotificationButton is null)
             {
-                AppLogging.Warning("BackgroundWorkNotification_Click skipped because button is null");
                 return;
             }
 
-            var flyout = new Flyout
+            var flyout = _backgroundWorkNotificationFlyout ??= new Flyout
             {
                 Placement = FlyoutPlacementMode.Bottom,
             };
-            AppLogging.Debug("BackgroundWorkNotification_Click flyout created");
             flyout.Content = BuildBackgroundWorkNotificationContent(flyout);
-            AppLogging.Debug("BackgroundWorkNotification_Click flyout content assigned");
+
+            if (flyout.IsOpen)
+            {
+                flyout.Hide();
+            }
+
             flyout.ShowAt(BackgroundWorkNotificationButton);
-            AppLogging.Information("BackgroundWorkNotification_Click flyout shown");
         }
 
         private FrameworkElement BuildBackgroundWorkNotificationContent(Flyout flyout)
@@ -310,12 +299,6 @@ namespace nuone_tools
             var localHistory = GetNotificationHistorySnapshot(NotificationHistoryScope.LocalOnly);
             var syncHistory = GetNotificationHistorySnapshot(NotificationHistoryScope.Sync);
             var entries = BuildNotificationListEntries(records, localHistory, syncHistory);
-            AppLogging.Debug(
-                "BuildBackgroundWorkNotificationContent records Session={SessionCount} Local={LocalCount} Sync={SyncCount} Entries={EntryCount}",
-                records.Count,
-                localHistory.Count,
-                syncHistory.Count,
-                entries.Count);
             var panel = new StackPanel
             {
                 Width = 380,
@@ -350,7 +333,6 @@ namespace nuone_tools
             };
             panel.Children.Add(clearButton);
 
-            AppLogging.Debug("BuildBackgroundWorkNotificationContent completed");
             return panel;
         }
 
@@ -388,7 +370,6 @@ namespace nuone_tools
             Flyout flyout,
             IReadOnlyList<NotificationListEntry> entries)
         {
-            AppLogging.Debug("BuildNotificationSummaryList start EntryCount={EntryCount}", entries.Count);
             var host = new StackPanel
             {
                 Spacing = 8,
@@ -405,13 +386,11 @@ namespace nuone_tools
                 return host;
             }
 
-            var renderedCount = 0;
             foreach (var entry in entries.Take(30))
             {
                 if (entry.IsGroupHeader)
                 {
                     host.Children.Add(BuildNotificationGroupHeader(entry.GroupHeaderText));
-                    renderedCount++;
                     continue;
                 }
 
@@ -419,10 +398,8 @@ namespace nuone_tools
                 {
                     flyout.Content = BuildNotificationDetailContent(flyout, entry);
                 }));
-                renderedCount++;
             }
 
-            AppLogging.Debug("BuildNotificationSummaryList completed RenderedCount={RenderedCount}", renderedCount);
             return host;
         }
 
@@ -472,10 +449,6 @@ namespace nuone_tools
 
         private FrameworkElement BuildNotificationDetailContent(Flyout flyout, NotificationListEntry entry)
         {
-            AppLogging.Debug(
-                "BuildNotificationDetailContent start Scope={ScopeLabel} Timestamp={Timestamp}",
-                entry.ScopeLabel,
-                entry.Timestamp);
             var panel = new StackPanel
             {
                 Width = 380,
@@ -530,7 +503,6 @@ namespace nuone_tools
             actionPanel.Children.Add(copyButton);
             panel.Children.Add(actionPanel);
 
-            AppLogging.Debug("BuildNotificationDetailContent completed");
             return panel;
         }
 
@@ -544,11 +516,6 @@ namespace nuone_tools
             IReadOnlyList<NotificationHistoryRecord> localHistory,
             IReadOnlyList<NotificationHistoryRecord> syncHistory)
         {
-            AppLogging.Debug(
-                "BuildNotificationListEntries start Session={SessionCount} Local={LocalCount} Sync={SyncCount}",
-                sessionRecords.Count,
-                localHistory.Count,
-                syncHistory.Count);
             var entries = new List<NotificationListEntry>();
             foreach (var record in sessionRecords.Where(static record => record.IsAutomation))
             {
@@ -617,7 +584,6 @@ namespace nuone_tools
                 groupedEntries.Add(entry);
             }
 
-            AppLogging.Debug("BuildNotificationListEntries completed EntryCount={EntryCount}", groupedEntries.Count);
             return groupedEntries;
         }
 

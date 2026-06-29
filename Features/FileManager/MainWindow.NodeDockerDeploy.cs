@@ -499,6 +499,12 @@ namespace nuone_tools
             try
             {
                 var launcherPath = CreateNodeDockerDeployLauncher(packagePath, options);
+                AppLogging.Information(
+                    "Node Docker deploy prepared PackagePath={PackagePath} LaunchMode={LaunchMode} Host={Host} RemoteDirectory={RemoteDirectory}",
+                    packagePath,
+                    options.LaunchMode,
+                    options.Host,
+                    options.RemoteDirectory);
                 if (options.LaunchMode == NodeDockerLaunchMode.BuiltInTerminal)
                 {
                     var launcherDirectory = Path.GetDirectoryName(launcherPath);
@@ -511,6 +517,10 @@ namespace nuone_tools
                         options.BuiltInShellKind,
                         launcherDirectory,
                         BuildInternalTerminalExecutionCommand(options.BuiltInShellKind, launcherPath));
+                    AppLogging.Information(
+                        "Node Docker deploy launched in built-in terminal PackagePath={PackagePath} ShellKind={ShellKind}",
+                        packagePath,
+                        options.BuiltInShellKind);
                     return;
                 }
 
@@ -519,6 +529,10 @@ namespace nuone_tools
                     FileName = launcherPath,
                     UseShellExecute = true,
                 });
+                AppLogging.Information(
+                    "Node Docker deploy launched externally PackagePath={PackagePath} LauncherPath={LauncherPath}",
+                    packagePath,
+                    launcherPath);
             }
             catch (Exception ex)
             {

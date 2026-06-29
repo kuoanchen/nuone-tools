@@ -12,6 +12,7 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Text.RegularExpressions;
+using Microsoft.UI.Input;
 using Microsoft.UI;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -253,12 +254,10 @@ namespace nuone_tools
 
         public MainWindow(string? launchArguments = null, string[]? launchCommandLineArgs = null, string? launchWorkingDirectory = null)
         {
-            AppLogging.Information("MainWindow constructor start");
             _launchArguments = launchArguments;
             _launchCommandLineArgs = launchCommandLineArgs ?? Array.Empty<string>();
             _launchWorkingDirectory = launchWorkingDirectory;
             InitializeComponent();
-            AppLogging.Information("MainWindow InitializeComponent completed");
 
             FileManagerPage.Owner = this;
             AutomationPage.Owner = this;
@@ -266,11 +265,13 @@ namespace nuone_tools
             TerminalPage.Owner = this;
 
             _activePane = LeftPane;
-            _leftPaneWatcher = new PaneDirectoryWatcher(LeftPane, DispatcherQueue, RefreshPane, PaneWatcherDebounceInterval);
-            _rightPaneWatcher = new PaneDirectoryWatcher(RightPane, DispatcherQueue, RefreshPane, PaneWatcherDebounceInterval);
+            _leftPaneWatcher = new PaneDirectoryWatcher(LeftPane, DispatcherQueue, RefreshPane, ApplyPaneWatcherChange, PaneWatcherDebounceInterval);
+            _rightPaneWatcher = new PaneDirectoryWatcher(RightPane, DispatcherQueue, RefreshPane, ApplyPaneWatcherChange, PaneWatcherDebounceInterval);
             ExtendsContentIntoTitleBar = true;
             SetTitleBar(TopTitleBar);
             TrySetWindowIcon();
+            BackgroundWorkNotificationButton.Loaded += BackgroundWorkNotificationButton_Loaded;
+            BackgroundWorkNotificationButton.SizeChanged += BackgroundWorkNotificationButton_SizeChanged;
 
             ApplyInitialWindowPlacement();
             ConfigureTitleBarInsets();
@@ -339,13 +340,49 @@ namespace nuone_tools
             RunFireAndForget(InitializeRemoteSyncSettingsAsync(), "startup remote settings sync");
             RunFireAndForget(CheckForUpdatesAsync(isAutomatic: true), "startup app update check");
             AppLogging.Information(
-                "MainWindow constructor completed ActiveSection={ActiveSection} LeftPath={LeftPath} RightPath={RightPath} LaunchArguments={LaunchArguments} LaunchCommandLineArgs={LaunchCommandLineArgs} LaunchWorkingDirectory={LaunchWorkingDirectory}",
-                _activeSection,
+                "MainWindow initialized LeftPath={LeftPath} RightPath={RightPath} LaunchWorkingDirectory={LaunchWorkingDirectory}",
                 LeftPane.CurrentPath,
                 RightPane.CurrentPath,
-                _launchArguments,
-                _launchCommandLineArgs,
                 _launchWorkingDirectory);
+        }
+
+        private void BackgroundWorkNotificationButton_Loaded(object sender, RoutedEventArgs e)
+        {
+            UpdateTitleBarPassthroughRegions();
+        }
+
+        private void BackgroundWorkNotificationButton_SizeChanged(object sender, SizeChangedEventArgs e)
+        {
+            UpdateTitleBarPassthroughRegions();
+        }
+
+        private void UpdateTitleBarPassthroughRegions()
+        {
+            try
+            {
+                if (BackgroundWorkNotificationButton.XamlRoot is null ||
+                    BackgroundWorkNotificationButton.ActualWidth <= 0 ||
+                    BackgroundWorkNotificationButton.ActualHeight <= 0)
+                {
+                    return;
+                }
+
+                var windowId = AppWindow.Id;
+                var pointerSource = InputNonClientPointerSource.GetForWindowId(windowId);
+                var transform = BackgroundWorkNotificationButton.TransformToVisual(null);
+                var origin = transform.TransformPoint(new Windows.Foundation.Point(0, 0));
+                var scale = BackgroundWorkNotificationButton.XamlRoot.RasterizationScale;
+                var rect = new Windows.Graphics.RectInt32(
+                    (int)Math.Round(origin.X * scale),
+                    (int)Math.Round(origin.Y * scale),
+                    Math.Max(1, (int)Math.Round(BackgroundWorkNotificationButton.ActualWidth * scale)),
+                    Math.Max(1, (int)Math.Round(BackgroundWorkNotificationButton.ActualHeight * scale)));
+                pointerSource.SetRegionRects(NonClientRegionKind.Passthrough, new[] { rect });
+            }
+            catch (Exception ex)
+            {
+                AppLogging.Warning("UpdateTitleBarPassthroughRegions failed Error={Error}", ex.Message);
+            }
         }
 
         private void ApplyLaunchArguments()
@@ -354,22 +391,17 @@ namespace nuone_tools
             {
                 var tokens = TokenizeLaunchArguments(_launchArguments, _launchCommandLineArgs);
 
-                AppLogging.Information(
-                    "ApplyLaunchArguments evaluating Tokens={Tokens} RawArguments={RawArguments} WorkingDirectory={WorkingDirectory}",
-                    tokens,
-                    _launchArguments,
-                    _launchWorkingDirectory);
-
                 if (tokens.Any(static token => string.Equals(token, "-w", StringComparison.OrdinalIgnoreCase)))
                 {
                     _pendingLaunchTerminalOpen = true;
                     _pendingLaunchTerminalWorkingDirectory = ResolveLaunchWorkingDirectory();
-                    AppLogging.Information(
-                        "Launch argument matched terminal switch RawArguments={RawArguments} CommandLineArgs={CommandLineArgs} WorkingDirectory={WorkingDirectory}",
-                        _launchArguments,
-                        _launchCommandLineArgs,
-                        _launchWorkingDirectory);
                     OpenTerminalSection(workingDirectoryOverride: _pendingLaunchTerminalWorkingDirectory);
+                }
+
+                if (tokens.Any(static token => string.Equals(token, "-f", StringComparison.OrdinalIgnoreCase)))
+                {
+                    var fileManagerPath = ResolveLaunchWorkingDirectory();
+                    HandleFileManagerLaunchRequest(fileManagerPath);
                 }
             }
             catch (Exception ex)
@@ -391,11 +423,6 @@ namespace nuone_tools
                 () =>
                 {
                     var tokens = TokenizeLaunchArguments(launchArguments, launchCommandLineArgs);
-                    AppLogging.Information(
-                        "HandleExternalLaunchRequest Tokens={Tokens} RawArguments={RawArguments} WorkingDirectory={WorkingDirectory}",
-                        tokens,
-                        launchArguments,
-                        launchWorkingDirectory);
 
                     Activate();
                     SetForegroundWindow(WindowNative.GetWindowHandle(this));
@@ -407,8 +434,28 @@ namespace nuone_tools
                             : null;
                         OpenTerminalSection(workingDirectoryOverride: workingDirectory);
                     }
+
+                    if (tokens.Any(static token => string.Equals(token, "-f", StringComparison.OrdinalIgnoreCase)))
+                    {
+                        var fileManagerPath = !string.IsNullOrWhiteSpace(launchWorkingDirectory) && Directory.Exists(launchWorkingDirectory)
+                            ? launchWorkingDirectory.Trim()
+                            : null;
+                        HandleFileManagerLaunchRequest(fileManagerPath);
+                    }
                 },
                 "external launch request");
+        }
+
+        private void HandleFileManagerLaunchRequest(string? path)
+        {
+            SwitchToAppSection(AppSection.FileManager);
+
+            if (string.IsNullOrWhiteSpace(path) || !Directory.Exists(path))
+            {
+                return;
+            }
+
+            OpenInPane(_activePane, path);
         }
 
         private static string[] TokenizeLaunchArguments(string? rawArguments, IEnumerable<string>? commandLineArgs)
@@ -451,7 +498,6 @@ namespace nuone_tools
 
         private void MainWindow_Closed(object sender, WindowEventArgs args)
         {
-            AppLogging.Information("MainWindow closing");
             SavePanePathsSafe();
             StopAllAutomationTimers();
             StopAllAutomationWatchers();
@@ -473,6 +519,8 @@ namespace nuone_tools
             StopAllTerminalProcesses();
             LeftPane.PropertyChanged -= Pane_PropertyChanged;
             RightPane.PropertyChanged -= Pane_PropertyChanged;
+            BackgroundWorkNotificationButton.Loaded -= BackgroundWorkNotificationButton_Loaded;
+            BackgroundWorkNotificationButton.SizeChanged -= BackgroundWorkNotificationButton_SizeChanged;
             if (_automationOwnershipRetryTimer is not null)
             {
                 _automationOwnershipRetryTimer.Stop();
@@ -485,6 +533,11 @@ namespace nuone_tools
             _leftPaneWatcher.Dispose();
             _rightPaneWatcher.Dispose();
             WindowsNotificationService.Uninitialize();
+            AppLogging.Information(
+                "MainWindow closing completed ActiveSection={ActiveSection} LeftPath={LeftPath} RightPath={RightPath}",
+                _activeSection,
+                LeftPane.CurrentPath,
+                RightPane.CurrentPath);
             AppLogging.Flush();
         }
 
@@ -525,9 +578,6 @@ namespace nuone_tools
             if (_pendingLaunchTerminalOpen)
             {
                 _pendingLaunchTerminalOpen = false;
-                AppLogging.Information(
-                    "Applying pending terminal launch on activation WorkingDirectory={WorkingDirectory}",
-                    _pendingLaunchTerminalWorkingDirectory);
                 OpenTerminalSection(workingDirectoryOverride: _pendingLaunchTerminalWorkingDirectory);
             }
 
@@ -597,7 +647,7 @@ namespace nuone_tools
 
                 _automationOwnerMutex = mutex;
                 _isAutomationExecutionOwner = true;
-                AppLogging.Information("Automation execution ownership acquired.");
+                AppLogging.Information("Automation execution ownership acquired ProcessId={ProcessId}", Environment.ProcessId);
                 return true;
             }
             catch (Exception ex)
@@ -631,6 +681,7 @@ namespace nuone_tools
             {
                 mutex.Dispose();
                 _isAutomationExecutionOwner = false;
+                AppLogging.Information("Automation execution ownership released ProcessId={ProcessId}", Environment.ProcessId);
             }
         }
 
@@ -706,7 +757,6 @@ namespace nuone_tools
         {
             if (!DispatcherQueue.TryEnqueue(() => RunSafely(action, boundary)))
             {
-                AppLogging.Warning("UI dispatcher queue rejected action Boundary={Boundary}", boundary);
             }
         }
 
