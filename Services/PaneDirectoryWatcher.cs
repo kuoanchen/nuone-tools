@@ -37,24 +37,31 @@ namespace nuone_tools
 {
     public sealed class PaneDirectoryWatcher : IDisposable
     {
+        private const string WatcherLogFileName = "file-operation-timing.log";
+        private static readonly TimeSpan TransientFileChangedThrottleInterval = TimeSpan.FromSeconds(2);
         private readonly PaneViewModel _pane;
         private readonly DispatcherQueue _dispatcherQueue;
         private readonly Action<PaneViewModel> _refreshAction;
+        private readonly Action<PaneViewModel, IReadOnlyList<(string Kind, string Path, string? OldPath)>> _applyChangeAction;
         private readonly DispatcherQueueTimer _debounceTimer;
         private FileSystemWatcher? _watcher;
         private string _watchedPath = string.Empty;
         private DateTimeOffset _suppressRefreshUntil = DateTimeOffset.MinValue;
         private bool _isDisposed;
+        private readonly List<(string Kind, string Path, string? OldPath)> _pendingChanges = new();
+        private readonly Dictionary<string, DateTimeOffset> _lastTransientChangedAt = new(StringComparer.OrdinalIgnoreCase);
 
         public PaneDirectoryWatcher(
             PaneViewModel pane,
             DispatcherQueue dispatcherQueue,
             Action<PaneViewModel> refreshAction,
+            Action<PaneViewModel, IReadOnlyList<(string Kind, string Path, string? OldPath)>> applyChangeAction,
             TimeSpan debounceInterval)
         {
             _pane = pane;
             _dispatcherQueue = dispatcherQueue;
             _refreshAction = refreshAction;
+            _applyChangeAction = applyChangeAction;
 
             _debounceTimer = dispatcherQueue.CreateTimer();
             _debounceTimer.Interval = debounceInterval;
@@ -71,6 +78,7 @@ namespace nuone_tools
 
             if (MainWindow.IsWslPath(path) || MainWindow.IsSshPath(path))
             {
+                AppendWatcherLog($"watch-skip pane={_pane.Name} path={path} reason=virtual-or-ssh");
                 StopWatching();
                 _watchedPath = string.Empty;
                 return;
@@ -82,11 +90,13 @@ namespace nuone_tools
                 return;
             }
 
+            AppendWatcherLog($"watch-change pane={_pane.Name} oldPath={_watchedPath} newPath={normalizedPath}");
             StopWatching();
 
             if (string.IsNullOrWhiteSpace(normalizedPath) || !Directory.Exists(normalizedPath))
             {
                 _watchedPath = string.Empty;
+                AppendWatcherLog($"watch-clear pane={_pane.Name} path={normalizedPath} reason=missing-or-empty");
                 return;
             }
 
@@ -97,17 +107,22 @@ namespace nuone_tools
                     IncludeSubdirectories = false,
                     NotifyFilter = NotifyFilters.FileName
                         | NotifyFilters.DirectoryName
-                        | NotifyFilters.CreationTime,
+                        | NotifyFilters.CreationTime
+                        | NotifyFilters.LastWrite
+                        | NotifyFilters.Size,
                     EnableRaisingEvents = true,
                 };
+                _watcher.Changed += Watcher_Changed;
                 _watcher.Created += Watcher_Changed;
                 _watcher.Deleted += Watcher_Changed;
                 _watcher.Renamed += Watcher_Renamed;
                 _watcher.Error += Watcher_Error;
                 _watchedPath = normalizedPath;
+                AppendWatcherLog($"watch-start pane={_pane.Name} path={_watchedPath}");
             }
             catch
             {
+                AppendWatcherLog($"watch-error pane={_pane.Name} path={normalizedPath} action=start");
                 StopWatching();
             }
         }
@@ -138,7 +153,10 @@ namespace nuone_tools
                 _suppressRefreshUntil = until;
             }
 
-            if (!_dispatcherQueue.TryEnqueue(() =>
+            AppendWatcherLog(
+                $"suppress pane={_pane.Name} path={_watchedPath} durationMs={duration.TotalMilliseconds} untilUtc={_suppressRefreshUntil:O}");
+
+            _dispatcherQueue.TryEnqueue(() =>
                 {
                     try
                     {
@@ -148,26 +166,24 @@ namespace nuone_tools
                     {
                         MainWindow.LogBoundaryException(ex, "pane watcher suppress refresh");
                     }
-                }))
-            {
-                AppLogging.Warning("Pane watcher suppress refresh queue rejected Path={Path}", _watchedPath);
-            }
+                });
         }
 
         private void Watcher_Changed(object sender, FileSystemEventArgs e)
         {
-            ScheduleRefresh();
+            ScheduleRefresh(e.ChangeType.ToString(), e.FullPath, null);
         }
 
         private void Watcher_Renamed(object sender, RenamedEventArgs e)
         {
-            ScheduleRefresh();
+            ScheduleRefresh("Renamed", e.FullPath, e.OldFullPath);
         }
 
         private void Watcher_Error(object sender, ErrorEventArgs e)
         {
             var currentPath = _watchedPath;
-            if (!_dispatcherQueue.TryEnqueue(() =>
+            AppendWatcherLog($"watcher-error pane={_pane.Name} path={currentPath} error={e.GetException()}");
+            _dispatcherQueue.TryEnqueue(() =>
                 {
                     try
                     {
@@ -177,15 +193,12 @@ namespace nuone_tools
                     {
                         MainWindow.LogBoundaryException(ex, "pane watcher error restart");
                     }
-                }))
-            {
-                AppLogging.Warning("Pane watcher error restart queue rejected Path={Path}", currentPath);
-            }
+                });
         }
 
-        private void ScheduleRefresh()
+        private void ScheduleRefresh(string triggerKind, string triggerPath, string? oldPath)
         {
-            if (!_dispatcherQueue.TryEnqueue(() =>
+            _dispatcherQueue.TryEnqueue(() =>
                 {
                     try
                     {
@@ -196,20 +209,29 @@ namespace nuone_tools
 
                         if (DateTimeOffset.UtcNow < _suppressRefreshUntil)
                         {
+                            AppendWatcherLog(
+                                $"schedule-skip-suppressed pane={_pane.Name} watchedPath={_watchedPath} trigger={triggerKind} triggerPath={triggerPath} suppressUntilUtc={_suppressRefreshUntil:O}");
                             return;
                         }
 
+                        if (ShouldThrottleChangedEvent(triggerKind, triggerPath, out var throttleRemaining))
+                        {
+                            AppendWatcherLog(
+                                $"schedule-skip-throttled pane={_pane.Name} watchedPath={_watchedPath} trigger={triggerKind} triggerPath={triggerPath} remainingMs={throttleRemaining.TotalMilliseconds}");
+                            return;
+                        }
+
+                        _pendingChanges.Add((triggerKind, triggerPath, oldPath));
                         _debounceTimer.Stop();
                         _debounceTimer.Start();
+                        AppendWatcherLog(
+                            $"schedule-start pane={_pane.Name} watchedPath={_watchedPath} trigger={triggerKind} triggerPath={triggerPath} oldPath={oldPath ?? "<null>"} pendingCount={_pendingChanges.Count} debounceMs={_debounceTimer.Interval.TotalMilliseconds}");
                     }
                     catch (Exception ex)
                     {
                         MainWindow.LogBoundaryException(ex, "pane watcher schedule refresh");
                     }
-                }))
-            {
-                AppLogging.Warning("Pane watcher schedule refresh queue rejected Path={Path}", _watchedPath);
-            }
+                });
         }
 
         private void DebounceTimer_Tick(DispatcherQueueTimer sender, object args)
@@ -217,26 +239,40 @@ namespace nuone_tools
             try
             {
                 sender.Stop();
+                var pendingChanges = _pendingChanges.ToList();
+                _pendingChanges.Clear();
+                AppendWatcherLog(
+                    $"debounce-tick pane={_pane.Name} watchedPath={_watchedPath} currentPath={_pane.CurrentPath} pendingCount={pendingChanges.Count}");
 
                 if (_isDisposed || string.IsNullOrWhiteSpace(_pane.CurrentPath))
                 {
+                    AppendWatcherLog($"debounce-skip pane={_pane.Name} reason=disposed-or-empty-current-path");
                     return;
                 }
 
                 if (!string.Equals(_watchedPath, Path.GetFullPath(_pane.CurrentPath), StringComparison.OrdinalIgnoreCase))
                 {
+                    AppendWatcherLog(
+                        $"debounce-skip pane={_pane.Name} reason=path-changed watchedPath={_watchedPath} currentPath={_pane.CurrentPath}");
                     return;
                 }
 
                 if (DateTimeOffset.UtcNow < _suppressRefreshUntil)
                 {
+                    AppendWatcherLog(
+                        $"debounce-skip pane={_pane.Name} reason=suppressed watchedPath={_watchedPath} suppressUntilUtc={_suppressRefreshUntil:O}");
                     return;
                 }
 
-                _refreshAction(_pane);
+                AppendWatcherLog(
+                    $"debounce-apply-change pane={_pane.Name} currentPath={_pane.CurrentPath} pendingCount={pendingChanges.Count} changes={(pendingChanges.Count == 0 ? "<empty>" : string.Join(" || ", pendingChanges.Select(change => $"{change.Kind}:{change.Path}:{change.OldPath ?? "<null>"}")))}");
+                _applyChangeAction(_pane, pendingChanges);
             }
             catch (Exception ex)
             {
+                AppendWatcherLog(
+                    $"debounce-fallback-refresh pane={_pane.Name} pendingCount={_pendingChanges.Count} error={ex}");
+                _refreshAction(_pane);
                 MainWindow.LogBoundaryException(ex, "pane watcher debounce tick");
             }
         }
@@ -244,19 +280,60 @@ namespace nuone_tools
         private void StopWatching()
         {
             _debounceTimer.Stop();
+            _pendingChanges.Clear();
+            _lastTransientChangedAt.Clear();
 
             if (_watcher is null)
             {
                 return;
             }
 
+            AppendWatcherLog($"watch-stop pane={_pane.Name} path={_watchedPath}");
             _watcher.EnableRaisingEvents = false;
+            _watcher.Changed -= Watcher_Changed;
             _watcher.Created -= Watcher_Changed;
             _watcher.Deleted -= Watcher_Changed;
             _watcher.Renamed -= Watcher_Renamed;
             _watcher.Error -= Watcher_Error;
             _watcher.Dispose();
             _watcher = null;
+        }
+
+        private static void AppendWatcherLog(string message)
+        {
+            MainWindow.AppendDebugLog(WatcherLogFileName, $"watcher {message}");
+        }
+
+        private bool ShouldThrottleChangedEvent(string triggerKind, string triggerPath, out TimeSpan remaining)
+        {
+            remaining = TimeSpan.Zero;
+            if (!string.Equals(triggerKind, "Changed", StringComparison.Ordinal) ||
+                !IsTransientDownloadPath(triggerPath))
+            {
+                return false;
+            }
+
+            var now = DateTimeOffset.UtcNow;
+            if (_lastTransientChangedAt.TryGetValue(triggerPath, out var lastAt))
+            {
+                var elapsed = now - lastAt;
+                if (elapsed < TransientFileChangedThrottleInterval)
+                {
+                    remaining = TransientFileChangedThrottleInterval - elapsed;
+                    return true;
+                }
+            }
+
+            _lastTransientChangedAt[triggerPath] = now;
+            return false;
+        }
+
+        private static bool IsTransientDownloadPath(string path)
+        {
+            var extension = Path.GetExtension(path);
+            return extension.Equals(".crdownload", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".tmp", StringComparison.OrdinalIgnoreCase) ||
+                extension.Equals(".part", StringComparison.OrdinalIgnoreCase);
         }
     }
 }

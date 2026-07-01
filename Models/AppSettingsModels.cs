@@ -104,6 +104,7 @@ namespace nuone_tools
         public const AppThemeMode DefaultThemeMode = AppThemeMode.System;
         public const bool DefaultShowSelectedFileSize = true;
         public const bool DefaultShowSelectedFolderSize = true;
+        public const bool DefaultShowCurrentDirectoryItemSizes = false;
         public const bool DefaultShowHiddenSystemItems = false;
         public const TerminalShellKind DefaultTerminalShellKindValue = TerminalShellKind.PowerShell;
         public const ToolbarWorkingDirectoryMode DefaultTerminalWorkingDirectoryModeValue = ToolbarWorkingDirectoryMode.ActivePane;
@@ -124,6 +125,8 @@ namespace nuone_tools
         public bool ShowSelectedFileSize { get; set; } = DefaultShowSelectedFileSize;
 
         public bool ShowSelectedFolderSize { get; set; } = DefaultShowSelectedFolderSize;
+
+        public bool ShowCurrentDirectoryItemSizes { get; set; } = DefaultShowCurrentDirectoryItemSizes;
 
         public bool ShowHiddenSystemItems { get; set; } = DefaultShowHiddenSystemItems;
 
@@ -156,6 +159,8 @@ namespace nuone_tools
         public bool ShowSelectedFileSize { get; set; } = ShortcutSettings.DefaultShowSelectedFileSize;
 
         public bool ShowSelectedFolderSize { get; set; } = ShortcutSettings.DefaultShowSelectedFolderSize;
+
+        public bool ShowCurrentDirectoryItemSizes { get; set; } = ShortcutSettings.DefaultShowCurrentDirectoryItemSizes;
 
         public bool ShowHiddenSystemItems { get; set; } = ShortcutSettings.DefaultShowHiddenSystemItems;
 

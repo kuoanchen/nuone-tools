@@ -1,8 +1,8 @@
 # {{ProjectName}}
 
-![Version](https://img.shields.io/badge/version-{{Version}}-blue.svg?cacheSeconds=2592000)
-![AssemblyVersion](https://img.shields.io/badge/assembly-{{AssemblyVersion}}-purple.svg?cacheSeconds=2592000)
-![TargetFramework](https://img.shields.io/badge/framework-{{TargetFramework}}-0a7ea4.svg?cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-{{ShieldVersion}}-blue?cacheSeconds=2592000)
+![AssemblyVersion](https://img.shields.io/badge/assembly-{{ShieldAssemblyVersion}}-purple?cacheSeconds=2592000)
+![TargetFramework](https://img.shields.io/badge/framework-{{ShieldTargetFramework}}-0a7ea4?cacheSeconds=2592000)
 
 WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動化、批次重新命名、工具列命令與原生 Windows Shell 操作流程。
 

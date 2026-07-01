@@ -16,6 +16,8 @@ namespace nuone_tools
         private const string DeployNodeDockerCommand = "nuone:deploy-node-docker";
         private const string OpenBuiltInTerminalCommand = "nuone:terminal";
         private const string OpenExternalTerminalCommand = "nuone:terminal-external";
+        private const string ExecuteInBuiltInTerminalCommand = "nuone:terminal-execute";
+        private const string ExecuteInExternalTerminalCommand = "nuone:terminal-execute-external";
         private const string TerminalCommandPrefix = "terminal";
         private const string DefaultNodeDockerUser = "admkuo";
         private const string DefaultNodeDockerHost = "docker05";
@@ -50,6 +52,8 @@ namespace nuone_tools
             return IsDeployNodeDockerCommand(command) ||
                 IsOpenBuiltInTerminalCommand(command) ||
                 IsOpenExternalTerminalCommand(command) ||
+                IsExecuteInBuiltInTerminalCommand(command) ||
+                IsExecuteInExternalTerminalCommand(command) ||
                 string.Equals(command.Trim(), EnhancePdfCommand, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(command.Trim(), FileBunkerUploadCommand, StringComparison.OrdinalIgnoreCase) ||
                 string.Equals(command.Trim(), StorageUploadCommand, StringComparison.OrdinalIgnoreCase);
@@ -71,6 +75,16 @@ namespace nuone_tools
         private static bool IsOpenExternalTerminalCommand(string command)
         {
             return string.Equals(command.Trim(), OpenExternalTerminalCommand, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsExecuteInBuiltInTerminalCommand(string command)
+        {
+            return string.Equals(command.Trim(), ExecuteInBuiltInTerminalCommand, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool IsExecuteInExternalTerminalCommand(string command)
+        {
+            return string.Equals(command.Trim(), ExecuteInExternalTerminalCommand, StringComparison.OrdinalIgnoreCase);
         }
 
         private async Task ExecuteBuiltInToolbarCommandAsync(ToolbarCommandItem item)
@@ -108,6 +122,18 @@ namespace nuone_tools
             if (IsOpenExternalTerminalCommand(item.Command))
             {
                 await OpenExternalTerminalFromToolbarAsync(item);
+                return;
+            }
+
+            if (IsExecuteInBuiltInTerminalCommand(item.Command))
+            {
+                await ExecuteSelectedScriptInTerminalAsync(item, useBuiltInTerminal: true);
+                return;
+            }
+
+            if (IsExecuteInExternalTerminalCommand(item.Command))
+            {
+                await ExecuteSelectedScriptInTerminalAsync(item, useBuiltInTerminal: false);
             }
         }
 
@@ -202,10 +228,10 @@ namespace nuone_tools
             }
         }
 
-        private void LaunchExternalTerminal(TerminalShellKind shellKind, string workingDirectory, string? windowArgument)
+        private void LaunchExternalTerminal(TerminalShellKind shellKind, string workingDirectory, string? windowArgument, string? initialCommand = null)
         {
             var shellPath = ResolveTerminalShellPath(shellKind);
-            var shellArguments = BuildShellArguments(shellKind);
+            var shellArguments = BuildShellArguments(shellKind, initialCommand);
             var wtArguments = new List<string>();
 
             if (!string.IsNullOrWhiteSpace(windowArgument))
@@ -237,6 +263,113 @@ namespace nuone_tools
             }
 
             Process.Start(startInfo);
+        }
+
+        private async Task ExecuteSelectedScriptInTerminalAsync(ToolbarCommandItem item, bool useBuiltInTerminal)
+        {
+            var selectedEntries = GetSelectedEntriesInDisplayOrder(_activePane);
+            if (selectedEntries.Count == 0)
+            {
+                await ShowMessageAsync("終端機執行無效", "請先選取一個 *.ps1、*.bat、*.cmd、*.bash 或 *.sh 檔案。");
+                return;
+            }
+
+            var scriptEntry = selectedEntries.FirstOrDefault(entry => IsTerminalExecutableScript(entry.FullPath));
+            if (scriptEntry is null)
+            {
+                await ShowMessageAsync("終端機執行無效", "目前選取中找不到可執行的腳本。支援 *.ps1、*.bat、*.cmd、*.bash、*.sh。");
+                return;
+            }
+
+            var fullScriptPath = Path.GetFullPath(scriptEntry.FullPath);
+            if (!File.Exists(fullScriptPath))
+            {
+                await ShowMessageAsync("終端機執行無效", $"找不到腳本：{fullScriptPath}");
+                return;
+            }
+
+            if (!TryBuildTerminalScriptExecution(fullScriptPath, out var shellKind, out var command))
+            {
+                await ShowMessageAsync("終端機執行無效", "這個檔案類型目前無法用終端機執行。");
+                return;
+            }
+
+            var workingDirectory = Path.GetDirectoryName(fullScriptPath);
+            if (string.IsNullOrWhiteSpace(workingDirectory) || !Directory.Exists(workingDirectory))
+            {
+                workingDirectory = ResolveTerminalWorkingDirectory(item.TerminalWorkingDirectoryMode, item.TerminalCustomWorkingDirectory);
+            }
+
+            if (string.IsNullOrWhiteSpace(workingDirectory) || !IsNavigableDirectoryPath(workingDirectory))
+            {
+                await ShowMessageAsync("終端機執行無效", "指定的工作目錄不存在，請重新設定工具列按鈕。");
+                return;
+            }
+
+            var terminalTabTitle = Path.GetFileNameWithoutExtension(fullScriptPath);
+
+            if (useBuiltInTerminal)
+            {
+                OpenBuiltInTerminalTabAndRunCommand(shellKind, NormalizePath(workingDirectory), command, terminalTabTitle);
+                return;
+            }
+
+            try
+            {
+                LaunchExternalTerminal(shellKind, NormalizePath(workingDirectory), null, command);
+            }
+            catch (Exception ex)
+            {
+                await ShowMessageAsync("啟動外部終端機失敗", ex.Message);
+            }
+        }
+
+        private static bool IsTerminalExecutableScript(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path) || !File.Exists(path))
+            {
+                return false;
+            }
+
+            var extension = Path.GetExtension(path);
+            return string.Equals(extension, ".ps1", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(extension, ".bat", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(extension, ".cmd", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(extension, ".bash", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(extension, ".sh", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool TryBuildTerminalScriptExecution(string fullScriptPath, out TerminalShellKind shellKind, out string command)
+        {
+            shellKind = TerminalShellKind.PowerShell;
+            command = string.Empty;
+            var extension = Path.GetExtension(fullScriptPath);
+
+            if (string.Equals(extension, ".ps1", StringComparison.OrdinalIgnoreCase))
+            {
+                shellKind = TerminalShellKind.PowerShell;
+                command = $"& '{fullScriptPath.Replace("'", "''", StringComparison.Ordinal)}'";
+                return true;
+            }
+
+            if (string.Equals(extension, ".bat", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(extension, ".cmd", StringComparison.OrdinalIgnoreCase))
+            {
+                shellKind = TerminalShellKind.CommandPrompt;
+                command = $"call \"{fullScriptPath.Replace("\"", "\"\"", StringComparison.Ordinal)}\"";
+                return true;
+            }
+
+            if (string.Equals(extension, ".bash", StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(extension, ".sh", StringComparison.OrdinalIgnoreCase))
+            {
+                shellKind = TerminalShellKind.GitBash;
+                var bashPath = fullScriptPath.Replace("\\", "/", StringComparison.Ordinal).Replace("'", "'\\''", StringComparison.Ordinal);
+                command = $"bash '{bashPath}'";
+                return true;
+            }
+
+            return false;
         }
 
         private TerminalShellKind ResolveToolbarTerminalShellKind(
@@ -499,6 +632,12 @@ namespace nuone_tools
             try
             {
                 var launcherPath = CreateNodeDockerDeployLauncher(packagePath, options);
+                AppLogging.Information(
+                    "Node Docker deploy prepared PackagePath={PackagePath} LaunchMode={LaunchMode} Host={Host} RemoteDirectory={RemoteDirectory}",
+                    packagePath,
+                    options.LaunchMode,
+                    options.Host,
+                    options.RemoteDirectory);
                 if (options.LaunchMode == NodeDockerLaunchMode.BuiltInTerminal)
                 {
                     var launcherDirectory = Path.GetDirectoryName(launcherPath);
@@ -511,6 +650,10 @@ namespace nuone_tools
                         options.BuiltInShellKind,
                         launcherDirectory,
                         BuildInternalTerminalExecutionCommand(options.BuiltInShellKind, launcherPath));
+                    AppLogging.Information(
+                        "Node Docker deploy launched in built-in terminal PackagePath={PackagePath} ShellKind={ShellKind}",
+                        packagePath,
+                        options.BuiltInShellKind);
                     return;
                 }
 
@@ -519,6 +662,10 @@ namespace nuone_tools
                     FileName = launcherPath,
                     UseShellExecute = true,
                 });
+                AppLogging.Information(
+                    "Node Docker deploy launched externally PackagePath={PackagePath} LauncherPath={LauncherPath}",
+                    packagePath,
+                    launcherPath);
             }
             catch (Exception ex)
             {

@@ -1,5 +1,7 @@
 using System;
 using System.IO;
+using System.Runtime.InteropServices.WindowsRuntime;
+using System.Threading.Tasks;
 using Microsoft.Windows.AppNotifications;
 using Microsoft.Windows.AppNotifications.Builder;
 
@@ -8,7 +10,10 @@ namespace nuone_tools
     internal static class WindowsNotificationService
     {
         private static readonly object SyncLock = new();
+        private const string ProgressNotificationGroup = "nuone-tools-progress";
+        private static readonly System.Collections.Generic.HashSet<string> ActiveProgressTags = new(StringComparer.Ordinal);
         private static bool _isInitialized;
+        private static uint _progressSequenceNumber;
 
         internal static void Initialize()
         {
@@ -21,12 +26,8 @@ namespace nuone_tools
 
                 try
                 {
-                    var isSupported = AppNotificationManager.IsSupported();
-                    AppLogging.Information("Windows notification support check IsSupported={IsSupported}", isSupported);
-
                     AppNotificationManager.Default.Register("Nuone Tools", BuildNotificationIconUri());
                     _isInitialized = true;
-                    AppLogging.Information("Windows notification service initialized");
                 }
                 catch (Exception ex)
                 {
@@ -51,7 +52,6 @@ namespace nuone_tools
                 try
                 {
                     AppNotificationManager.Default.Unregister();
-                    AppLogging.Information("Windows notification service unregistered");
                 }
                 catch (Exception ex)
                 {
@@ -59,6 +59,7 @@ namespace nuone_tools
                 }
                 finally
                 {
+                    ActiveProgressTags.Clear();
                     _isInitialized = false;
                 }
             }
@@ -71,14 +72,12 @@ namespace nuone_tools
                 var squareLogoPath = Path.Combine(baseDirectory, "Assets", "Square44x44Logo.scale-200.png");
                 if (File.Exists(squareLogoPath))
                 {
-                    AppLogging.Information("Windows notification icon path resolved Path={IconPath}", squareLogoPath);
                     return new Uri(squareLogoPath, UriKind.Absolute);
                 }
 
                 var appIconPath = Path.Combine(baseDirectory, "Assets", "AppIcon.ico");
                 if (File.Exists(appIconPath))
                 {
-                    AppLogging.Information("Windows notification icon path resolved Path={IconPath}", appIconPath);
                     return new Uri(appIconPath, UriKind.Absolute);
                 }
             }
@@ -114,10 +113,6 @@ namespace nuone_tools
         {
             if (!_isInitialized)
             {
-                AppLogging.Warning(
-                    "Windows notification show skipped because service is not initialized Category={Category} Summary={Summary}",
-                    record.Category,
-                    record.Summary);
                 return;
             }
 
@@ -134,10 +129,6 @@ namespace nuone_tools
                 }
 
                 AppNotificationManager.Default.Show(builder.BuildNotification());
-                AppLogging.Information(
-                    "Windows notification show submitted Category={Category} Summary={Summary}",
-                    record.Category,
-                    record.Summary);
             }
             catch (Exception ex)
             {
@@ -148,6 +139,82 @@ namespace nuone_tools
                     record.Summary,
                     ex.GetType().FullName ?? ex.GetType().Name,
                     ex.HResult);
+            }
+        }
+
+        internal static void ShowOrUpdateProgress(
+            string tag,
+            string title,
+            string summary,
+            string status,
+            double progressPercent,
+            string progressText)
+        {
+            if (!_isInitialized)
+            {
+                return;
+            }
+
+            try
+            {
+                lock (SyncLock)
+                {
+                    if (ActiveProgressTags.Add(tag))
+                    {
+                        var builder = new AppNotificationBuilder()
+                            .SetTag(tag)
+                            .SetGroup(ProgressNotificationGroup)
+                            .AddText(title)
+                            .AddText(summary)
+                            .AddProgressBar(new AppNotificationProgressBar()
+                                .BindTitle()
+                                .BindStatus()
+                                .BindValue()
+                                .BindValueStringOverride());
+
+                        AppNotificationManager.Default.Show(builder.BuildNotification());
+                    }
+                }
+
+                var progressData = new AppNotificationProgressData(GetNextProgressSequenceNumber())
+                {
+                    Title = summary,
+                    Status = status,
+                    Value = Math.Clamp(progressPercent / 100d, 0d, 1d),
+                    ValueStringOverride = progressText,
+                };
+
+                FireAndForgetUpdate(AppNotificationManager.Default.UpdateAsync(progressData, tag, ProgressNotificationGroup).AsTask());
+            }
+            catch (Exception ex)
+            {
+                AppLogging.Error(
+                    ex,
+                    "Windows notification progress update failed Tag={Tag} Summary={Summary} ProgressPercent={ProgressPercent}",
+                    tag,
+                    summary,
+                    progressPercent);
+            }
+        }
+
+        internal static void RemoveProgress(string tag)
+        {
+            if (!_isInitialized)
+            {
+                return;
+            }
+
+            try
+            {
+                lock (SyncLock)
+                {
+                    ActiveProgressTags.Remove(tag);
+                }
+                FireAndForgetUpdate(AppNotificationManager.Default.RemoveByTagAndGroupAsync(tag, ProgressNotificationGroup).AsTask());
+            }
+            catch (Exception ex)
+            {
+                AppLogging.Error(ex, "Windows notification progress remove failed Tag={Tag}", tag);
             }
         }
 
@@ -182,6 +249,32 @@ namespace nuone_tools
             }
 
             return $"{detail[..240]}...";
+        }
+
+        private static async void FireAndForgetUpdate(Task task)
+        {
+            try
+            {
+                await task;
+            }
+            catch (Exception ex)
+            {
+                AppLogging.Error(ex, "Windows notification async operation failed");
+            }
+        }
+
+        private static uint GetNextProgressSequenceNumber()
+        {
+            lock (SyncLock)
+            {
+                _progressSequenceNumber++;
+                if (_progressSequenceNumber == 0)
+                {
+                    _progressSequenceNumber = 1;
+                }
+
+                return _progressSequenceNumber;
+            }
         }
     }
 }

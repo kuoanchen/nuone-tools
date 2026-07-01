@@ -13,6 +13,7 @@ namespace nuone_tools
     public sealed class TerminalTabSession : ObservableObject
     {
         private string _title = string.Empty;
+        private string _customTitle = string.Empty;
         private string _workingDirectory = string.Empty;
         private string _shellPath = string.Empty;
         private string _statusText = "未啟動";
@@ -51,6 +52,12 @@ namespace nuone_tools
             TerminalShellKind.CommandPrompt => "cmd",
             _ => "PowerShell",
         };
+
+        public string CustomTitle
+        {
+            get => _customTitle;
+            set => SetProperty(ref _customTitle, value);
+        }
 
         public string WorkingDirectory
         {

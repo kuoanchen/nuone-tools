@@ -113,6 +113,10 @@ namespace nuone_tools
                     document.RootElement,
                     "showSelectedFolderSize",
                     nameof(ShortcutSettingsConfig.ShowSelectedFolderSize));
+                var showCurrentDirectoryItemSizesProperty = ReadProperty(
+                    document.RootElement,
+                    "showCurrentDirectoryItemSizes",
+                    nameof(ShortcutSettingsConfig.ShowCurrentDirectoryItemSizes));
                 var defaultTerminalShellKindProperty = ReadProperty(
                     document.RootElement,
                     "defaultTerminalShellKind",
@@ -136,6 +140,7 @@ namespace nuone_tools
                     ThemeMode = ReadThemeMode(themeModeProperty, ShortcutSettings.DefaultThemeMode),
                     ShowSelectedFileSize = ReadBooleanSetting(showSelectedFileSizeProperty, ShortcutSettings.DefaultShowSelectedFileSize),
                     ShowSelectedFolderSize = ReadBooleanSetting(showSelectedFolderSizeProperty, ShortcutSettings.DefaultShowSelectedFolderSize),
+                    ShowCurrentDirectoryItemSizes = ReadBooleanSetting(showCurrentDirectoryItemSizesProperty, ShortcutSettings.DefaultShowCurrentDirectoryItemSizes),
                     ShowHiddenSystemItems = ReadBooleanSetting(showHiddenSystemItemsProperty, ShortcutSettings.DefaultShowHiddenSystemItems),
                     DefaultTerminalShellKind = ReadEnumSetting(defaultTerminalShellKindProperty, ShortcutSettings.DefaultTerminalShellKindValue),
                     DefaultTerminalWorkingDirectoryMode = ReadEnumSetting(defaultTerminalWorkingDirectoryModeProperty, ShortcutSettings.DefaultTerminalWorkingDirectoryModeValue),
@@ -328,6 +333,7 @@ namespace nuone_tools
                 config.ThemeMode = _shortcutSettings.ThemeMode;
                 config.ShowSelectedFileSize = _shortcutSettings.ShowSelectedFileSize;
                 config.ShowSelectedFolderSize = _shortcutSettings.ShowSelectedFolderSize;
+                config.ShowCurrentDirectoryItemSizes = _shortcutSettings.ShowCurrentDirectoryItemSizes;
                 config.ShowHiddenSystemItems = _shortcutSettings.ShowHiddenSystemItems;
                 config.DefaultTerminalShellKind = _shortcutSettings.DefaultTerminalShellKind;
                 config.DefaultTerminalWorkingDirectoryMode = _shortcutSettings.DefaultTerminalWorkingDirectoryMode;
@@ -974,7 +980,9 @@ namespace nuone_tools
         {
             try
             {
+                AppLogging.Information("Startup sync initialization started");
                 await DownloadLatestSyncSettingsAsync("startup");
+                AppLogging.Information("Startup sync initialization completed");
             }
             catch (Exception ex)
             {
@@ -992,6 +1000,11 @@ namespace nuone_tools
             }
 
             var url = BuildIdentitySettingsSyncUrl(context.ApiBaseUrl);
+            AppLogging.Information(
+                "Sync settings download started Reason={Reason} ApiBaseUrl={ApiBaseUrl} ServiceAccount={ServiceAccount}",
+                reason,
+                context.ApiBaseUrl,
+                context.ServiceAccountCode);
             AppendDebugLog(
                 "settings-sync-debug.log",
                 $"download-start reason={reason} url={url} serviceAccount={context.ServiceAccountCode} tokenPreview={MaskToken(context.Token)}");
@@ -1020,6 +1033,7 @@ namespace nuone_tools
             if (!document.RootElement.TryGetProperty("document", out var documentProperty) ||
                 documentProperty.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             {
+                AppLogging.Information("Sync settings download found no remote document Reason={Reason}", reason);
                 AppendDebugLog("settings-sync-debug.log", $"download-empty reason={reason} action=upload-local");
                 await UploadCurrentSyncSettingsAsBootstrapAsync(reason);
                 return;
@@ -1028,6 +1042,7 @@ namespace nuone_tools
             if (!documentProperty.TryGetProperty("settings", out var settingsProperty) ||
                 settingsProperty.ValueKind != JsonValueKind.Object)
             {
+                AppLogging.Information("Sync settings download completed without settings payload Reason={Reason}", reason);
                 AppendDebugLog("settings-sync-debug.log", $"download-no-settings reason={reason}");
                 return;
             }
@@ -1040,6 +1055,7 @@ namespace nuone_tools
             }
 
             await ApplyDownloadedSyncSettingsAsync(settings, reason);
+            AppLogging.Information("Sync settings download completed Reason={Reason}", reason);
         }
 
         private async Task UploadCurrentSyncSettingsAsBootstrapAsync(string reason)
@@ -1054,12 +1070,14 @@ namespace nuone_tools
             AppendDebugLog(
                 "settings-sync-debug.log",
                 $"bootstrap-upload-start reason={reason} settingsPreview={TrimForDebugPreview(settingsJson)}");
+            AppLogging.Information("Sync settings bootstrap upload started Reason={Reason}", reason);
 
             try
             {
                 await UploadSyncSettingsJsonAsync(settingsJson);
                 AppendDebugLog("settings-sync-debug.log", $"bootstrap-upload-success reason={reason}");
                 AddSyncOperationNotification(NotificationHistoryScope.Sync, "同步設定已建立", $"{reason}：遠端沒有資料，已上傳本機 settings-sync.json");
+                AppLogging.Information("Sync settings bootstrap upload completed Reason={Reason}", reason);
             }
             catch (Exception ex)
             {
@@ -1078,6 +1096,12 @@ namespace nuone_tools
 
             var deviceName = GetLocalSettingsDeviceName();
             var url = BuildIdentitySettingsLocalUrl(context.ApiBaseUrl, deviceName);
+            AppLogging.Information(
+                "Local settings download started Reason={Reason} ApiBaseUrl={ApiBaseUrl} Device={Device} ServiceAccount={ServiceAccount}",
+                reason,
+                context.ApiBaseUrl,
+                deviceName,
+                context.ServiceAccountCode);
             AppendDebugLog(
                 "settings-local-debug.log",
                 $"download-start reason={reason} url={url} serviceAccount={context.ServiceAccountCode} device={deviceName} tokenPreview={MaskToken(context.Token)}");
@@ -1106,6 +1130,7 @@ namespace nuone_tools
             if (!document.RootElement.TryGetProperty("document", out var documentProperty) ||
                 documentProperty.ValueKind is JsonValueKind.Null or JsonValueKind.Undefined)
             {
+                AppLogging.Information("Local settings download found no remote document Reason={Reason} Device={Device}", reason, deviceName);
                 AppendDebugLog("settings-local-debug.log", $"download-empty reason={reason} action=upload-local device={deviceName}");
                 await UploadCurrentLocalSettingsAsBootstrapAsync(reason);
                 return;
@@ -1114,6 +1139,7 @@ namespace nuone_tools
             if (!documentProperty.TryGetProperty("settings", out var settingsProperty) ||
                 settingsProperty.ValueKind != JsonValueKind.Object)
             {
+                AppLogging.Information("Local settings download completed without settings payload Reason={Reason} Device={Device}", reason, deviceName);
                 AppendDebugLog("settings-local-debug.log", $"download-no-settings reason={reason} device={deviceName}");
                 return;
             }
@@ -1126,6 +1152,7 @@ namespace nuone_tools
             }
 
             await ApplyDownloadedLocalSettingsAsync(settings, reason);
+            AppLogging.Information("Local settings download completed Reason={Reason} Device={Device}", reason, deviceName);
         }
 
         private async Task UploadCurrentLocalSettingsAsBootstrapAsync(string reason)
@@ -1140,12 +1167,14 @@ namespace nuone_tools
             AppendDebugLog(
                 "settings-local-debug.log",
                 $"bootstrap-upload-start reason={reason} settingsPreview={TrimForDebugPreview(settingsJson)}");
+            AppLogging.Information("Local settings bootstrap upload started Reason={Reason}", reason);
 
             try
             {
                 await UploadLocalSettingsJsonAsync(settingsJson);
                 AppendDebugLog("settings-local-debug.log", $"bootstrap-upload-success reason={reason}");
                 AddSyncOperationNotification(NotificationHistoryScope.LocalOnly, "本機設定已建立", $"{reason}：遠端沒有資料，已上傳本機 settings-local.json（{GetLocalSettingsDeviceName()}）");
+                AppLogging.Information("Local settings bootstrap upload completed Reason={Reason}", reason);
             }
             catch (Exception ex)
             {
@@ -1502,6 +1531,10 @@ namespace nuone_tools
             }, JsonOptions);
 
             var url = BuildIdentitySettingsSyncUrl(context.ApiBaseUrl);
+            AppLogging.Information(
+                "Sync settings upload started ApiBaseUrl={ApiBaseUrl} ServiceAccount={ServiceAccount}",
+                context.ApiBaseUrl,
+                context.ServiceAccountCode);
             AppendDebugLog(
                 "settings-sync-debug.log",
                 $"upload-start url={url} serviceAccount={context.ServiceAccountCode} tokenPreview={MaskToken(context.Token)} settingsPreview={TrimForDebugPreview(settingsJson)}");
@@ -1531,6 +1564,7 @@ namespace nuone_tools
 
             AppendDebugLog("settings-sync-debug.log", "upload-success");
             AddSyncOperationNotification(NotificationHistoryScope.Sync, "同步設定已上傳", "settings-sync.json 已同步到後端");
+            AppLogging.Information("Sync settings upload completed ServiceAccount={ServiceAccount}", context.ServiceAccountCode);
         }
 
         private async Task UploadLocalSettingsJsonAsync(string settingsJson, bool recordNotification = true)
@@ -1550,6 +1584,11 @@ namespace nuone_tools
             }, JsonOptions);
 
             var url = $"{NormalizeApiBaseUrl(context.ApiBaseUrl)}/identity/settings/local";
+            AppLogging.Information(
+                "Local settings upload started ApiBaseUrl={ApiBaseUrl} Device={Device} ServiceAccount={ServiceAccount}",
+                context.ApiBaseUrl,
+                deviceName,
+                context.ServiceAccountCode);
             AppendDebugLog(
                 "settings-local-debug.log",
                 $"upload-start url={url} serviceAccount={context.ServiceAccountCode} device={deviceName} tokenPreview={MaskToken(context.Token)} settingsPreview={TrimForDebugPreview(settingsJson)}");
@@ -1582,6 +1621,7 @@ namespace nuone_tools
             {
                 AddSyncOperationNotification(NotificationHistoryScope.LocalOnly, "本機資料已備份", $"settings-local.json 已備份到後端（{deviceName}）");
             }
+            AppLogging.Information("Local settings upload completed Device={Device} ServiceAccount={ServiceAccount}", deviceName, context.ServiceAccountCode);
         }
         private static string ExtractAccountDisplayName(JsonElement root, string fallbackEmail)
         {
@@ -1664,6 +1704,7 @@ namespace nuone_tools
                 ThemeMode = _shortcutSettings.ThemeMode,
                 ShowSelectedFileSize = _shortcutSettings.ShowSelectedFileSize,
                 ShowSelectedFolderSize = _shortcutSettings.ShowSelectedFolderSize,
+                ShowCurrentDirectoryItemSizes = _shortcutSettings.ShowCurrentDirectoryItemSizes,
                 ShowHiddenSystemItems = _shortcutSettings.ShowHiddenSystemItems,
                 DefaultTerminalShellKind = _shortcutSettings.DefaultTerminalShellKind,
                 DefaultTerminalWorkingDirectoryMode = _shortcutSettings.DefaultTerminalWorkingDirectoryMode,
@@ -1695,6 +1736,7 @@ namespace nuone_tools
                 config.ThemeMode = current.ThemeMode;
                 config.ShowSelectedFileSize = current.ShowSelectedFileSize;
                 config.ShowSelectedFolderSize = current.ShowSelectedFolderSize;
+                config.ShowCurrentDirectoryItemSizes = current.ShowCurrentDirectoryItemSizes;
                 config.ShowHiddenSystemItems = current.ShowHiddenSystemItems;
                 config.DefaultTerminalShellKind = current.DefaultTerminalShellKind;
                 config.DefaultTerminalWorkingDirectoryMode = current.DefaultTerminalWorkingDirectoryMode;

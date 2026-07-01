@@ -1,8 +1,8 @@
 ﻿# Nuone Tools
 
-![Version](https://img.shields.io/badge/version-1.202606.4-blue.svg?cacheSeconds=2592000)
-![AssemblyVersion](https://img.shields.io/badge/assembly-1.2026.6.4-purple.svg?cacheSeconds=2592000)
-![TargetFramework](https://img.shields.io/badge/framework-net8.0-windows10.0.19041.0-0a7ea4.svg?cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-1.202607.1-blue?cacheSeconds=2592000)
+![AssemblyVersion](https://img.shields.io/badge/assembly-1.2026.7.1-purple?cacheSeconds=2592000)
+![TargetFramework](https://img.shields.io/badge/framework-net8.0--windows10.0.19041.0-0a7ea4?cacheSeconds=2592000)
 
 WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動化、批次重新命名、工具列命令與原生 Windows Shell 操作流程。
 
@@ -10,10 +10,10 @@ WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動
 
 - 專案名稱：Nuone Tools
 - RootNamespace：`nuone_tools`
-- Version：`1.202606.4`
-- AssemblyVersion：`1.2026.6.4`
-- FileVersion：`1.2026.6.4`
-- InformationalVersion：`1.2026.6.4`
+- Version：`1.202607.1`
+- AssemblyVersion：`1.2026.7.1`
+- FileVersion：`1.2026.7.1`
+- InformationalVersion：`1.2026.7.1`
 - TargetFramework：`net8.0-windows10.0.19041.0`
 - Platforms：`x86;x64;ARM64`
 - RuntimeIdentifiers：`win-x86;win-x64;win-arm64`
@@ -65,6 +65,25 @@ nuone-tools.exe -w -it 2
   - 依序產生 changelog 與 readme
 
 ## Changelog
+
+## 1.202607.1 (2026-07-01)
+
+### 新功能
+
+* 擴充更新進度、腳本終端機執行與目錄容量計算 ([4dd8f6e](https://github.com/kuoanchen/nuone-tools/commit/4dd8f6e4a90e76d545304c337b93fe85319caaa5))
+  - 為線上更新加入下載/安裝進度條、背景工作百分比與 Windows 進度通知，讓更新流程可視化
+  - 新增工具列腳本執行能力，支援把選取的 `.ps1`、`.bat`、`.cmd`、`.bash`、`.sh` 直接送到內建或外部終端機執行
+  - 擴充目前目錄每列容量計算，背景掃描資料夾大小並即時更新 pane 項目尺寸，不阻塞 UI
+  - 改善自動解壓對 multipart RAR 的判斷，支援等待分卷、辨識缺卷狀態與清理整組來源檔
+  - 優化 toolbar icon 設定與 Fluent glyph 處理，支援 glyph 正規化、icon picker 與更清楚的 icon summary
+  - 補強背景工作摘要，顯示進行中項目、進度百分比，並把更新類通知納入追蹤
+* 強化檔案管理增量刷新並整理 logging 策略 ([a5eb08f](https://github.com/kuoanchen/nuone-tools/commit/a5eb08f2ca4e8b6515578724fbe7e2632d1080ff))
+  - 為檔案複製、搬移與刪除加入更細的 timing 診斷與 UI 套用流程，避免每次本機操作後都整個 pane 重新整理
+  - 在 `PaneViewModel` 與 `PaneDirectoryWatcher` 新增本機檔案變更的增量套用能力，支援 created/changed/deleted/renamed 直接更新清單與保留選取狀態
+  - 改善 watcher debounce 與 transient download 檔案節流邏輯，降低高頻 `Changed` 事件造成的多餘刷新
+  - 調整 shell context menu 選取來源與同資料夾判斷，讓右鍵操作更準確對應目前項目集合
+  - 新增 `LOGGING.md`，明確規範 Error/Warning/Information/Debug 的使用原則，並同步清理大量低價值資訊型 log
+  - 補強 `-f` 啟動參數與標題列 passthrough 區域處理，支援將既有視窗切回 File Manager 並改善通知按鈕互動
 
 ## 1.202606.4 (2026-06-25)
 

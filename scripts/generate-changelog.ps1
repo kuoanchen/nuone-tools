@@ -18,8 +18,9 @@ $resolvedOutputPath = if ([string]::IsNullOrWhiteSpace($OutputPath)) {
 }
 
 $currentDate = Get-Date -Format 'yyyy-MM-dd'
-$previousTag = Get-PreviousVersionTag
-$commits = Get-GitCommits -SinceRef $previousTag
+$previousVersion = Get-PreviousReleasedVersion -CurrentVersion $metadata.Version
+$previousBoundaryRef = Resolve-ReleaseBoundaryRef -Version $previousVersion
+$commits = Get-GitCommits -SinceRef $previousBoundaryRef
 
 function Get-ChangelogBody {
     param(

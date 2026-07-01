@@ -83,6 +83,7 @@ namespace nuone_tools
         private ImageSource? _iconImageSource;
         private Task? _iconLoadTask;
         private bool _inlineChildrenLoaded;
+        private string _sizeText = string.Empty;
 
         public string Name { get; set; } = string.Empty;
 
@@ -94,7 +95,11 @@ namespace nuone_tools
 
         public string ModifiedText { get; set; } = string.Empty;
 
-        public string SizeText { get; set; } = string.Empty;
+        public string SizeText
+        {
+            get => _sizeText;
+            set => SetProperty(ref _sizeText, value);
+        }
 
         public string Glyph { get; set; } = "\uE8B7";
 
@@ -581,7 +586,7 @@ namespace nuone_tools
         private string _title = string.Empty;
         private string _command = string.Empty;
         private string _iconPath = string.Empty;
-        private string _iconGlyph = DefaultGlyph;
+        private string _iconGlyph = string.Empty;
         private string _nodeDockerUser = string.Empty;
         private string _nodeDockerHost = string.Empty;
         private string _nodeDockerRemoteDirectory = string.Empty;
@@ -684,7 +689,7 @@ namespace nuone_tools
         }
 
         [JsonIgnore]
-        public string DisplayGlyph => string.IsNullOrWhiteSpace(IconGlyph) ? DefaultGlyph : IconGlyph;
+        public string DisplayGlyph => NormalizeFluentGlyph(IconGlyph);
 
         [JsonIgnore]
         public bool HasImageIcon => CreateIconImageSource(IconPath) is not null || IsExecutableIconSource(IconPath);
@@ -696,12 +701,52 @@ namespace nuone_tools
         public Visibility ImageIconVisibility => HasImageIcon ? Visibility.Visible : Visibility.Collapsed;
 
         [JsonIgnore]
-        public Visibility GlyphIconVisibility => HasImageIcon ? Visibility.Collapsed : Visibility.Visible;
+        public Visibility GlyphIconVisibility => !HasImageIcon && !string.IsNullOrWhiteSpace(DisplayGlyph)
+            ? Visibility.Visible
+            : Visibility.Collapsed;
 
         [JsonIgnore]
         public string IconSummary => HasImageIcon
             ? $"圖示檔案：{IconPath}"
-            : $"Glyph：{DisplayGlyph}";
+            : !string.IsNullOrWhiteSpace(DisplayGlyph)
+                ? $"Segoe Fluent Icons：{IconGlyph}"
+                : "圖示檔案：未設定";
+
+        public static string NormalizeFluentGlyph(string? glyph)
+        {
+            var value = glyph?.Trim() ?? string.Empty;
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return string.Empty;
+            }
+
+            if (value.Length == 1)
+            {
+                return value;
+            }
+
+            if (value.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                value = value[2..];
+            }
+
+            if (value.StartsWith("\\u", StringComparison.OrdinalIgnoreCase))
+            {
+                value = value[2..];
+            }
+
+            if (value.StartsWith("&#x", StringComparison.OrdinalIgnoreCase) && value.EndsWith(";", StringComparison.Ordinal))
+            {
+                value = value[3..^1];
+            }
+
+            if (!int.TryParse(value, System.Globalization.NumberStyles.HexNumber, System.Globalization.CultureInfo.InvariantCulture, out var codePoint))
+            {
+                return string.Empty;
+            }
+
+            return char.ConvertFromUtf32(codePoint);
+        }
 
         public static ImageSource? CreateIconImageSource(string? iconPath)
         {

@@ -44,6 +44,10 @@ namespace nuone_tools
             var backgroundWorkId = BeginBackgroundWork(
                 $"PDF 增強 {selectedPdfFiles.Count.ToString(CultureInfo.InvariantCulture)} 個檔案中");
             var completionRecord = string.Empty;
+            AppLogging.Information(
+                "PDF enhance started Count={Count} ActivePane={ActivePane}",
+                selectedPdfFiles.Count,
+                _activePane.Name);
 
             try
             {
@@ -73,6 +77,11 @@ namespace nuone_tools
                 await EnqueueOnUiAsync(() => RefreshPaneAfterLocalChange(_activePane));
 
                 completionRecord = BuildEnhancePdfCompletionRecord(outputs, failures, skippedEntries);
+                AppLogging.Information(
+                    "PDF enhance completed SuccessCount={SuccessCount} FailureCount={FailureCount} SkippedCount={SkippedCount}",
+                    outputs.Count,
+                    failures.Count,
+                    skippedEntries.Count);
 
                 if (failures.Count == 0 && skippedEntries.Count == 0)
                 {
@@ -215,6 +224,8 @@ namespace nuone_tools
             {
                 throw new InvalidOperationException($"無法啟動 {fileName}。");
             }
+
+            AppLogging.Debug("PDF enhance process started Launcher={Launcher} Input={InputPath}", fileName, inputPath);
 
             var stdoutTask = process.StandardOutput.ReadToEndAsync();
             var stderrTask = process.StandardError.ReadToEndAsync();

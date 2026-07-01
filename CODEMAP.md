@@ -31,6 +31,10 @@
   `Infrastructure/MainWindow.Persistence.cs`
 - 內建 toolbar command 定義與 Node.js Docker 部署：
   `Features/FileManager/MainWindow.NodeDockerDeploy.cs`
+- toolbar 內建終端機動作（`終端機開啟`、`終端機執行`、外部 / 內建切換、腳本副檔名分流）：
+  `Features/Shared/MainWindow.Dialogs.cs`,
+  `Features/FileManager/MainWindow.NodeDockerDeploy.cs`,
+  `Features/Terminal/MainWindow.Terminal.cs`
 - toolbar/view 綁定橋接：
   `Features/Shared/MainWindow.ViewBindings.cs`
 - FileBunker 上傳：
@@ -61,6 +65,9 @@
   `Features/Terminal/MainWindow.Terminal.cs`,
   `Features/Terminal/TerminalConPtyNative.cs`,
   `Models/TerminalModels.cs`
+- `tools` 命令別名 / wrapper / 外部喚起：
+  `App.xaml.cs`,
+  `Features/Terminal/MainWindow.Terminal.cs`
 - Automation：
   `Views/AutomationView.xaml`,
   `Views/AutomationView.xaml.cs`,
@@ -76,6 +83,9 @@
 - 通知中心 / background work 歷史 / toast 條件：
   `Features/Shell/MainWindow.Shell.cs`,
   `Infrastructure/WindowsNotificationService.cs`
+- logging 規則與保留原則：
+  `LOGGING.md`,
+  `Infrastructure/AppLogging.cs`
 - 自動化單一執行權（避免雙開重複跑）：
   `MainWindow.xaml.cs`,
   `Features/Automation/MainWindow.Automation.cs`,
@@ -92,6 +102,8 @@
 - 新增設定通常需要同步改：
   XAML、XAML.cs event、ViewBindings、`MainWindow.Settings.cs`、`Models/AppSettingsModels.cs`、`Infrastructure/MainWindow.Persistence.cs`。
 - 內建 toolbar command 用常數字串，並透過 `IsBuiltInToolbarCommand(...)` / `ExecuteBuiltInToolbarCommandAsync(...)` 分流。
+- `tools` 不是另一支獨立 CLI；它是 app 啟動時在 `App.xaml.cs` 自動建立的 `tools.cmd` 與 Git Bash wrapper，實際上會轉到 `nuone-tools.exe`。
+- `tools` / `nuone-tools.exe -w` 這類外部喚起若牽涉到已開視窗導向、單實例、named pipe 轉送，先查 `App.xaml.cs` 的 alias 安裝與 instance pipe 流程，再查 `Features/Terminal/MainWindow.Terminal.cs`。
 - `ViewModels/PaneViewModel.cs` 內的 `ApplyFilter()` 會決定檔案清單的即時篩選結果，也會產生 `開頭為：...` / `包含：...` 文案；畫面看到的篩選提示先查這裡。
 - notification / toast 目前不是全站共用；`AddNotificationHistoryRecord(...)` 內有分類過濾，是否真的寫入歷史與跳 toast 先看 `Features/Shell/MainWindow.Shell.cs`。
 - 若遇到雙開 `nuone-tools` 互相影響，自動化與自動解壓優先查 `IsAutomationExecutionOwner`、`EnsureAutomationExecutionOwner(...)` 與 automation mutex 相關邏輯。
@@ -113,6 +125,7 @@
 - `resource` 這種關鍵字篩選，現在 prefix match 不只比整個檔名開頭，也會比 `-`、`_`、空白、`.` 切開後的片段開頭；例如 `mb-mui-resource-v3` 也會命中 `resource`。
 - `nuone:deploy-node-docker` 是內建 toolbar command，不是讓使用者手打 shell 的外部 command；實作在 `Features/FileManager/MainWindow.NodeDockerDeploy.cs`。
 - automation 類通知與 toast 現在限定在 `自動化` / `自動解壓` 類別；一般設定同步、terminal 等不會進同一套通知歷史。
+- `README.md` 有 `tools` 的使用說明，但真正的 alias / wrapper 實作在 `App.xaml.cs`；若文件與行為不一致，以程式碼為準並同步回補 README / CODEMAP。
 
 ## 驗證注意
 

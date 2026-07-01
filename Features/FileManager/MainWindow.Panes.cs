@@ -500,6 +500,11 @@ namespace nuone_tools
         {
             try
             {
+                if (!ShouldPersistLegacyDebugMessage(message))
+                {
+                    return;
+                }
+
                 AppLogging.Debug("SSH {Message}", message);
             }
             catch
@@ -511,6 +516,11 @@ namespace nuone_tools
         {
             try
             {
+                if (!ShouldPersistLegacyDebugMessage(message, fileName))
+                {
+                    return;
+                }
+
                 AppLogging.Debug("DebugLog Category={LogCategory} Message={DebugMessage}", NormalizeLegacyLogCategory(fileName), message);
             }
             catch
@@ -526,6 +536,31 @@ namespace nuone_tools
             }
 
             return Path.GetFileNameWithoutExtension(fileName.Trim());
+        }
+
+        private static bool ShouldPersistLegacyDebugMessage(string? message, string? fileName = null)
+        {
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            if (string.Equals(fileName, "crash-debug.log", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            if (string.Equals(fileName, "pane-item-size.log", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
+            var normalized = message.Trim();
+            return normalized.Contains("exception", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("error", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("failed", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("fail", StringComparison.OrdinalIgnoreCase) ||
+                normalized.Contains("cancel", StringComparison.OrdinalIgnoreCase);
         }
 
         private static string BuildLogPreview(string? value)
@@ -968,24 +1003,120 @@ namespace nuone_tools
             }
 
             pane.NavigateTo(path);
+            SchedulePaneItemSizeUpdate(pane, reason: "open-in-pane");
             ActivatePane(pane);
         }
 
         private void RefreshPane(PaneViewModel pane)
         {
+            var stopwatch = Stopwatch.StartNew();
+            var startPath = pane.CurrentPath;
+            AppendDebugLog(
+                "file-operation-timing.log",
+                $"refresh-pane start pane={pane.Name} path={startPath} activePane={_activePane?.Name ?? "<null>"}");
+
             if (IsSshPath(pane.CurrentPath))
             {
+                stopwatch.Stop();
+                AppendDebugLog(
+                    "file-operation-timing.log",
+                    $"refresh-pane ssh-delegated pane={pane.Name} path={pane.CurrentPath} elapsedMs={stopwatch.ElapsedMilliseconds}");
                 RunFireAndForget(OpenSshPathInPaneAsync(pane, pane.CurrentPath, rememberCurrent: false), "refresh ssh path");
                 return;
             }
 
             pane.Refresh();
+            SchedulePaneItemSizeUpdate(pane, reason: "refresh-pane");
             LoadDriveCards();
+            stopwatch.Stop();
+            AppendDebugLog(
+                "file-operation-timing.log",
+                $"refresh-pane complete pane={pane.Name} startPath={startPath} endPath={pane.CurrentPath} elapsedMs={stopwatch.ElapsedMilliseconds}");
         }
 
-        private void RefreshPaneAfterLocalChange(PaneViewModel pane)
+        private void RefreshPaneAfterLocalChange(
+            PaneViewModel pane,
+            IReadOnlyList<(string Kind, string Path, string? OldPath)>? changes = null,
+            string? reason = null)
         {
+            AppendDebugLog(
+                "file-operation-timing.log",
+                $"refresh-pane-after-local-change pane={pane.Name} path={pane.CurrentPath} reason={reason ?? "<none>"} changeCount={changes?.Count ?? 0}");
             GetPaneWatcher(pane).SuppressRefreshFor(PaneWatcherSuppressInterval);
+
+            if (changes is { Count: > 0 })
+            {
+                var allApplied = true;
+                foreach (var change in changes)
+                {
+                    var applied = pane.TryApplyLocalFileSystemChange(change.Kind, change.Path, change.OldPath);
+                    AppendDebugLog(
+                        "file-operation-timing.log",
+                        $"refresh-pane-after-local-change apply pane={pane.Name} path={pane.CurrentPath} reason={reason ?? "<none>"} trigger={change.Kind} triggerPath={change.Path} oldPath={change.OldPath ?? "<null>"} applied={applied}");
+                    if (!applied)
+                    {
+                        allApplied = false;
+                        break;
+                    }
+                }
+
+                if (allApplied)
+                {
+                    SchedulePaneItemSizeUpdate(pane, reason: "local-change-incremental");
+                    if (ShouldRefreshDriveCards(changes))
+                    {
+                        LoadDriveCards();
+                    }
+
+                    AppendDebugLog(
+                        "file-operation-timing.log",
+                        $"refresh-pane-after-local-change incremental-complete pane={pane.Name} path={pane.CurrentPath} reason={reason ?? "<none>"}");
+                    return;
+                }
+            }
+
+            RefreshPane(pane);
+        }
+
+        private void ApplyPaneWatcherChange(PaneViewModel pane, IReadOnlyList<(string Kind, string Path, string? OldPath)> changes)
+        {
+            AppendDebugLog(
+                "file-operation-timing.log",
+                $"watcher-apply-change start pane={pane.Name} currentPath={pane.CurrentPath} changeCount={changes.Count}");
+
+            try
+            {
+                var appliedAny = false;
+                foreach (var change in changes)
+                {
+                    var applied = pane.TryApplyLocalFileSystemChange(change.Kind, change.Path, change.OldPath);
+                    AppendDebugLog(
+                        "file-operation-timing.log",
+                        $"watcher-apply-change result pane={pane.Name} currentPath={pane.CurrentPath} trigger={change.Kind} triggerPath={change.Path} oldPath={change.OldPath ?? "<null>"} applied={applied}");
+                    appliedAny |= applied;
+                }
+
+                if (appliedAny)
+                {
+                    SchedulePaneItemSizeUpdate(pane, reason: "watcher-incremental");
+                    if (ShouldRefreshDriveCards(changes))
+                    {
+                        LoadDriveCards();
+                    }
+
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                AppendDebugLog(
+                    "file-operation-timing.log",
+                    $"watcher-apply-change error pane={pane.Name} currentPath={pane.CurrentPath} changeCount={changes.Count} error={ex}");
+            }
+
+            AppendDebugLog(
+                "file-operation-timing.log",
+                $"watcher-apply-change fallback-refresh pane={pane.Name} currentPath={pane.CurrentPath} changeCount={changes.Count}");
             RefreshPane(pane);
         }
 
@@ -994,6 +1125,16 @@ namespace nuone_tools
             return ReferenceEquals(pane, LeftPane)
                 ? _leftPaneWatcher
                 : _rightPaneWatcher;
+        }
+
+        private static bool ShouldRefreshDriveCards(IReadOnlyList<(string Kind, string Path, string? OldPath)> changes)
+        {
+            if (changes.Count == 0)
+            {
+                return false;
+            }
+
+            return changes.Any(change => !string.Equals(change.Kind, "Changed", StringComparison.Ordinal));
         }
 
         private void NavigateUp(PaneViewModel pane)
@@ -1006,11 +1147,13 @@ namespace nuone_tools
             }
 
             pane.NavigateUp();
+            SchedulePaneItemSizeUpdate(pane, reason: "navigate-up");
         }
 
         private void NavigateBack(PaneViewModel pane)
         {
             pane.GoBack();
+            SchedulePaneItemSizeUpdate(pane, reason: "navigate-back");
         }
 
         private string ResolveNewPaneTabPath(PaneViewModel pane)
@@ -1082,6 +1225,7 @@ namespace nuone_tools
             }
 
             pane.LoadTabPath(path);
+            SchedulePaneItemSizeUpdate(pane, reason: "load-pane-tab-path");
             LoadDriveCards();
         }
 

@@ -37,6 +37,22 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
+        private const string FileOperationDebugLogFileName = "file-operation-timing.log";
+        private const string PaneItemSizeDebugLogFileName = "pane-item-size.log";
+        private static readonly TimeSpan PaneItemSizeEntryTimeout = TimeSpan.FromSeconds(3);
+        private static long _transferDiagnosticSequence;
+        private static long _deleteDiagnosticSequence;
+
+        private static void AppendFileOperationDebugLog(string message)
+        {
+            AppendDebugLog(FileOperationDebugLogFileName, message);
+        }
+
+        private static void AppendPaneItemSizeDebugLog(string message)
+        {
+            AppendDebugLog(PaneItemSizeDebugLogFileName, message);
+        }
+
         internal void LeftPaneList_DoubleTapped(object sender, DoubleTappedRoutedEventArgs e)
         {
             ActivatePane(LeftPane);
@@ -123,12 +139,14 @@ namespace nuone_tools
         {
             ActivatePane(LeftPane);
             await ToggleInlineFolderAsync((sender as FrameworkElement)?.DataContext as FileEntry);
+            SchedulePaneItemSizeUpdate(LeftPane);
         }
 
         internal async void RightPaneInlineExpand_Click(object sender, RoutedEventArgs e)
         {
             ActivatePane(RightPane);
             await ToggleInlineFolderAsync((sender as FrameworkElement)?.DataContext as FileEntry);
+            SchedulePaneItemSizeUpdate(RightPane);
         }
 
         private void SyncPaneSelectionFromListView(PaneViewModel pane, ListView listView)
@@ -348,6 +366,295 @@ namespace nuone_tools
             return totalSize;
         }
 
+        private void RefreshPaneItemSizeDisplays()
+        {
+            SchedulePaneItemSizeUpdate(LeftPane, immediate: true, reason: "settings-toggle");
+            SchedulePaneItemSizeUpdate(RightPane, immediate: true, reason: "settings-toggle");
+        }
+
+        private void SchedulePaneItemSizeUpdate(PaneViewModel pane, bool immediate = false, string reason = "unspecified")
+        {
+            var timer = ReferenceEquals(pane, LeftPane) ? _leftPaneItemSizeTimer : _rightPaneItemSizeTimer;
+            var previousReason = ReferenceEquals(pane, LeftPane)
+                ? _leftPaneItemSizeScheduleReason
+                : _rightPaneItemSizeScheduleReason;
+
+            if (ReferenceEquals(pane, LeftPane))
+            {
+                _leftPaneItemSizeScheduleReason = reason;
+            }
+            else
+            {
+                _rightPaneItemSizeScheduleReason = reason;
+            }
+
+            var cancellationTokenSource = ReferenceEquals(pane, LeftPane)
+                ? Interlocked.Exchange(ref _leftPaneItemSizeCts, null)
+                : Interlocked.Exchange(ref _rightPaneItemSizeCts, null);
+
+            if (cancellationTokenSource is not null)
+            {
+                AppendPaneItemSizeDebugLog(
+                    $"SchedulePaneItemSizeUpdate cancelling-previous pane={pane.Name} path={pane.CurrentPath} previousReason={previousReason} newReason={reason}");
+            }
+
+            cancellationTokenSource?.Cancel();
+            cancellationTokenSource?.Dispose();
+            timer?.Stop();
+
+            if (!_shortcutSettings.ShowCurrentDirectoryItemSizes || !ShouldCalculatePaneItemSizes(pane))
+            {
+                ResetPaneItemSizeDisplay(pane);
+                AppendPaneItemSizeDebugLog(
+                    $"SchedulePaneItemSizeUpdate skip pane={pane.Name} path={pane.CurrentPath} enabled={_shortcutSettings.ShowCurrentDirectoryItemSizes} reason={reason}");
+                return;
+            }
+
+            var requestedPath = pane.CurrentPath;
+            void MarkCalculatingIfStillCurrent()
+            {
+                if (PathEquals(pane.CurrentPath, requestedPath))
+                {
+                    MarkPaneItemSizesAsCalculating(pane);
+                }
+            }
+
+            if (DispatcherQueue.HasThreadAccess)
+            {
+                MarkCalculatingIfStillCurrent();
+                AppendPaneItemSizeDebugLog(
+                    $"SchedulePaneItemSizeUpdate mark-calculating pane={pane.Name} path={pane.CurrentPath} immediate={immediate} reason={reason} mode=direct");
+            }
+            else
+            {
+                var queued = DispatcherQueue.TryEnqueue(() =>
+                {
+                    MarkCalculatingIfStillCurrent();
+                });
+
+                AppendPaneItemSizeDebugLog(
+                    $"SchedulePaneItemSizeUpdate mark-calculating pane={pane.Name} path={pane.CurrentPath} immediate={immediate} reason={reason} mode=queued queued={queued}");
+            }
+
+            AppendPaneItemSizeDebugLog(
+                $"SchedulePaneItemSizeUpdate queued pane={pane.Name} path={pane.CurrentPath} immediate={immediate} reason={reason}");
+
+            if (immediate)
+            {
+                RunFireAndForget(UpdatePaneItemSizesAsync(pane, reason), "update pane item sizes immediate");
+                return;
+            }
+
+            if (timer is null)
+            {
+                AppendPaneItemSizeDebugLog(
+                    $"SchedulePaneItemSizeUpdate timer-not-ready pane={pane.Name} path={pane.CurrentPath} immediate={immediate} reason={reason}");
+                return;
+            }
+
+            timer.Start();
+        }
+
+        private bool ShouldCalculatePaneItemSizes(PaneViewModel pane)
+        {
+            if (pane is null ||
+                string.IsNullOrWhiteSpace(pane.CurrentPath) ||
+                IsSshPath(pane.CurrentPath) ||
+                IsWslVirtualRootPath(pane.CurrentPath))
+            {
+                return false;
+            }
+
+            return Directory.Exists(pane.CurrentPath);
+        }
+
+        private static void ResetPaneItemSizeDisplay(PaneViewModel pane)
+        {
+            foreach (var entry in pane.EnumerateLoadedEntries())
+            {
+                if (entry.IsDirectory)
+                {
+                    entry.SizeText = "--";
+                }
+            }
+        }
+
+        private static void MarkPaneItemSizesAsCalculating(PaneViewModel pane)
+        {
+            foreach (var entry in pane.EnumerateLoadedEntries())
+            {
+                if (entry.IsDirectory)
+                {
+                    entry.SizeText = "計算中...";
+                }
+            }
+        }
+
+        private async Task UpdatePaneItemSizesAsync(PaneViewModel pane, string reason = "unspecified")
+        {
+            if (!_shortcutSettings.ShowCurrentDirectoryItemSizes || !ShouldCalculatePaneItemSizes(pane))
+            {
+                ResetPaneItemSizeDisplay(pane);
+                return;
+            }
+
+            var requestPath = pane.CurrentPath;
+            var entries = pane.EnumerateLoadedEntries()
+                .Where(static entry => entry.IsDirectory && !string.IsNullOrWhiteSpace(entry.FullPath))
+                .ToArray();
+
+            if (entries.Length == 0)
+            {
+                return;
+            }
+
+            await EnqueueOnUiAsync(() =>
+            {
+                if (PathEquals(pane.CurrentPath, requestPath))
+                {
+                    MarkPaneItemSizesAsCalculating(pane);
+                }
+            });
+
+            var cancellationTokenSource = new CancellationTokenSource();
+            var previous = ReferenceEquals(pane, LeftPane)
+                ? Interlocked.Exchange(ref _leftPaneItemSizeCts, cancellationTokenSource)
+                : Interlocked.Exchange(ref _rightPaneItemSizeCts, cancellationTokenSource);
+            previous?.Cancel();
+            previous?.Dispose();
+
+            var token = cancellationTokenSource.Token;
+            var previewEntries = string.Join(" | ", entries.Take(10).Select(static entry => entry.Name));
+            AppendPaneItemSizeDebugLog(
+                $"UpdatePaneItemSizesAsync start pane={pane.Name} path={requestPath} reason={reason} entryCount={entries.Length} previewEntries={(string.IsNullOrWhiteSpace(previewEntries) ? "<empty>" : previewEntries)}");
+
+            try
+            {
+                await Task.Run(async () =>
+                {
+                    foreach (var entry in entries)
+                    {
+                        token.ThrowIfCancellationRequested();
+
+                        if (!PathEquals(pane.CurrentPath, requestPath))
+                        {
+                            AppendPaneItemSizeDebugLog(
+                                $"UpdatePaneItemSizesAsync path-changed pane={pane.Name} requestPath={requestPath} currentPath={pane.CurrentPath} reason={reason}");
+                            return;
+                        }
+
+                        long? sizeBytes = null;
+                        var entryStopwatch = Stopwatch.StartNew();
+                        var timedOut = false;
+
+                        AppendPaneItemSizeDebugLog(
+                            $"UpdatePaneItemSizesAsync item-start pane={pane.Name} path={requestPath} reason={reason} entry={entry.FullPath}");
+
+                        try
+                        {
+                            if (Directory.Exists(entry.FullPath))
+                            {
+                                using var entryCts = CancellationTokenSource.CreateLinkedTokenSource(token);
+                                entryCts.CancelAfter(PaneItemSizeEntryTimeout);
+                                try
+                                {
+                                    sizeBytes = CalculateDirectorySize(entry.FullPath, entryCts.Token);
+                                }
+                                catch (OperationCanceledException) when (!token.IsCancellationRequested && entryCts.IsCancellationRequested)
+                                {
+                                    timedOut = true;
+                                }
+                            }
+                        }
+                        catch (OperationCanceledException)
+                        {
+                            throw;
+                        }
+                        catch (Exception ex)
+                        {
+                            AppendPaneItemSizeDebugLog(
+                                $"UpdatePaneItemSizesAsync item-error pane={pane.Name} path={requestPath} reason={reason} entry={entry.FullPath} error={ex.Message}");
+                        }
+
+                        entryStopwatch.Stop();
+
+                        if (timedOut)
+                        {
+                            AppendPaneItemSizeDebugLog(
+                                $"UpdatePaneItemSizesAsync item-timeout pane={pane.Name} path={requestPath} reason={reason} entry={entry.FullPath} elapsedMs={entryStopwatch.ElapsedMilliseconds}");
+                        }
+                        else
+                        {
+                            AppendPaneItemSizeDebugLog(
+                                $"UpdatePaneItemSizesAsync item-completed pane={pane.Name} path={requestPath} reason={reason} entry={entry.FullPath} elapsedMs={entryStopwatch.ElapsedMilliseconds} sizeBytes={(sizeBytes.HasValue ? sizeBytes.Value.ToString(CultureInfo.InvariantCulture) : "<null>")}");
+                        }
+
+                        var nextSizeText = timedOut
+                            ? "很大..."
+                            : sizeBytes.HasValue
+                            ? FormatSize(sizeBytes.Value)
+                            : "--";
+
+                        await EnqueueOnUiAsync(() =>
+                        {
+                            if (token.IsCancellationRequested ||
+                                !PathEquals(pane.CurrentPath, requestPath))
+                            {
+                                return;
+                            }
+
+                            entry.SizeText = nextSizeText;
+                        });
+
+                        await Task.Yield();
+                    }
+                }, token);
+
+                AppendPaneItemSizeDebugLog(
+                    $"UpdatePaneItemSizesAsync completed pane={pane.Name} path={requestPath} reason={reason} entryCount={entries.Length}");
+            }
+            catch (OperationCanceledException)
+            {
+                AppendPaneItemSizeDebugLog(
+                    $"UpdatePaneItemSizesAsync cancelled pane={pane.Name} path={requestPath} reason={reason} latestReason={(ReferenceEquals(pane, LeftPane) ? _leftPaneItemSizeScheduleReason : _rightPaneItemSizeScheduleReason)}");
+            }
+            catch (Exception ex)
+            {
+                AppendPaneItemSizeDebugLog(
+                    $"UpdatePaneItemSizesAsync exception pane={pane.Name} path={requestPath} reason={reason} error={ex}");
+            }
+            finally
+            {
+                if (ReferenceEquals(pane, LeftPane))
+                {
+                    if (ReferenceEquals(_leftPaneItemSizeCts, cancellationTokenSource))
+                    {
+                        _leftPaneItemSizeCts = null;
+                    }
+                }
+                else if (ReferenceEquals(_rightPaneItemSizeCts, cancellationTokenSource))
+                {
+                    _rightPaneItemSizeCts = null;
+                }
+
+                cancellationTokenSource.Dispose();
+                AppendPaneItemSizeDebugLog(
+                    $"UpdatePaneItemSizesAsync end pane={pane.Name} path={requestPath} reason={reason}");
+            }
+        }
+
+        private void LeftPaneItemSizeTimer_Tick(DispatcherQueueTimer sender, object args)
+        {
+            sender.Stop();
+            RunFireAndForget(UpdatePaneItemSizesAsync(LeftPane, _leftPaneItemSizeScheduleReason), "left pane item size timer");
+        }
+
+        private void RightPaneItemSizeTimer_Tick(DispatcherQueueTimer sender, object args)
+        {
+            sender.Stop();
+            RunFireAndForget(UpdatePaneItemSizesAsync(RightPane, _rightPaneItemSizeScheduleReason), "right pane item size timer");
+        }
+
         private void HandleItemDoubleTapped(PaneViewModel pane, FileEntry? entry)
         {
             if (entry is null)
@@ -533,22 +840,39 @@ namespace nuone_tools
 
             try
             {
+                var primaryPath = entry.FullPath;
+                var parentFolderPath = Path.GetDirectoryName(
+                    primaryPath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                if (string.IsNullOrWhiteSpace(parentFolderPath))
+                {
+                    parentFolderPath = pane.CurrentPath;
+                }
+
                 var selectedPaths = GetSelectedEntriesInDisplayOrder(pane)
                     .Select(item => item.FullPath)
+                    .Where(path =>
+                    {
+                        var candidateParent = Path.GetDirectoryName(
+                            path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
+                        return PathEquals(candidateParent ?? string.Empty, parentFolderPath ?? string.Empty);
+                    })
                     .ToArray();
                 if (selectedPaths.Length == 0)
                 {
-                    return;
+                    selectedPaths = new[] { primaryPath };
                 }
 
+                AppendDebugLog(
+                    "shell-context-menu-debug.log",
+                    $"show context-menu pane={pane.Name} paneCurrentPath={pane.CurrentPath} parentFolderPath={parentFolderPath} primaryPath={primaryPath} selectedPaths={(selectedPaths.Length == 0 ? "<empty>" : string.Join(" | ", selectedPaths))}");
+
                 var position = e.GetPosition(RootLayout);
-                var primaryPath = entry.FullPath;
                 ShellContextMenuHost.ShowForPaths(
                     WindowNative.GetWindowHandle(this),
                     RootLayout.XamlRoot.RasterizationScale,
                     position.X,
                     position.Y,
-                    pane.CurrentPath,
+                    parentFolderPath ?? pane.CurrentPath,
                     selectedPaths,
                     BuildInjectedShellMenuItems(pane),
                     commandId => HandleInjectedShellMenuCommand(commandId, pane, selectedPaths, primaryPath));
@@ -689,23 +1013,48 @@ namespace nuone_tools
                 return;
             }
 
+            var deleteId = Interlocked.Increment(ref _deleteDiagnosticSequence);
+            var stopwatch = Stopwatch.StartNew();
             var backgroundWorkId = BeginBackgroundWork($"刪除 {name} 中");
+            var initialPanePath = pane.CurrentPath;
+            AppendFileOperationDebugLog(
+                $"delete[{deleteId}] start pane={pane.Name} path={path} paneCurrentPath={pane.CurrentPath} backgroundWorkId={backgroundWorkId}");
             try
             {
                 var deleted = await DeletePathCoreAsync(path);
+                AppendFileOperationDebugLog(
+                    $"delete[{deleteId}] core-complete pane={pane.Name} path={path} deleted={deleted} elapsedMs={stopwatch.ElapsedMilliseconds} paneCurrentPath={pane.CurrentPath}");
                 if (!deleted)
                 {
                     return;
                 }
 
-                await EnqueueOnUiAsync(() => RefreshPaneAfterLocalChange(pane));
+                AppendFileOperationDebugLog(
+                    $"delete[{deleteId}] queue-ui-refresh pane={pane.Name} paneCurrentPath={pane.CurrentPath}");
+                await EnqueueOnUiAsync(() =>
+                {
+                    AppendFileOperationDebugLog(
+                        $"delete[{deleteId}] ui-refresh-begin pane={pane.Name} paneCurrentPath={pane.CurrentPath}");
+                    ApplyPaneChangesAfterLocalOperation(
+                        pane,
+                        initialPanePath,
+                        new[] { ("Deleted", path, (string?)null) },
+                        $"delete[{deleteId}]");
+                    AppendFileOperationDebugLog(
+                        $"delete[{deleteId}] ui-refresh-end pane={pane.Name} paneCurrentPath={pane.CurrentPath}");
+                });
             }
             catch (Exception ex)
             {
+                AppendFileOperationDebugLog(
+                    $"delete[{deleteId}] error pane={pane.Name} path={path} elapsedMs={stopwatch.ElapsedMilliseconds} error={ex}");
                 await ShowMessageAsync("刪除失敗", ex.Message);
             }
             finally
             {
+                stopwatch.Stop();
+                AppendFileOperationDebugLog(
+                    $"delete[{deleteId}] complete pane={pane.Name} path={path} elapsedMs={stopwatch.ElapsedMilliseconds} paneCurrentPath={pane.CurrentPath}");
                 CompleteBackgroundWork(backgroundWorkId);
             }
         }
@@ -939,36 +1288,112 @@ namespace nuone_tools
             var backgroundDetails = BuildTransferBackgroundDetails(sourcePaths, targetDirectory, actionLabel);
             var completionLabel = $"完成：{BuildTransferBackgroundLabel(sourcePaths, actionLabel, includeInProgressSuffix: false)}";
             var backgroundWorkId = BeginBackgroundWork(backgroundLabel, backgroundDetails);
+            var transferId = Interlocked.Increment(ref _transferDiagnosticSequence);
+            var stopwatch = Stopwatch.StartNew();
+            var initialSourcePanePath = sourcePane.CurrentPath;
+            var initialTargetPanePath = targetPane.CurrentPath;
+            AppendFileOperationDebugLog(
+                $"transfer[{transferId}] start action={actionLabel} sourcePane={sourcePane.Name} targetPane={targetPane.Name} " +
+                $"sourcePanePath={initialSourcePanePath} targetPanePath={initialTargetPanePath} targetDirectory={targetDirectory} " +
+                $"count={sourcePaths.Count} backgroundWorkId={backgroundWorkId} paths={string.Join(" | ", sourcePaths)}");
 
             try
             {
                 await ExecuteNativeTransferAsync(sourcePaths, targetDirectory, move);
+                AppendFileOperationDebugLog(
+                    $"transfer[{transferId}] native-transfer-complete action={actionLabel} elapsedMs={stopwatch.ElapsedMilliseconds} " +
+                    $"sourcePaneCurrent={sourcePane.CurrentPath} targetPaneCurrent={targetPane.CurrentPath}");
 
+                AppendFileOperationDebugLog(
+                    $"transfer[{transferId}] queue-ui-refresh sourcePane={sourcePane.Name} sourceCurrent={sourcePane.CurrentPath} " +
+                    $"targetPane={targetPane.Name} targetCurrent={targetPane.CurrentPath}");
                 await EnqueueOnUiAsync(() =>
                 {
-                    RefreshPaneAfterLocalChange(sourcePane);
-                    RefreshPaneAfterLocalChange(targetPane);
+                    var targetPaths = sourcePaths
+                        .Select(sourcePath => Path.Combine(
+                            targetDirectory,
+                            Path.GetFileName(sourcePath.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar))))
+                        .ToList();
+
+                    AppendFileOperationDebugLog(
+                        $"transfer[{transferId}] ui-refresh-begin sourcePane={sourcePane.Name} sourceCurrent={sourcePane.CurrentPath} " +
+                        $"targetPane={targetPane.Name} targetCurrent={targetPane.CurrentPath}");
+
+                    if (move)
+                    {
+                        ApplyPaneChangesAfterLocalOperation(
+                            sourcePane,
+                            initialSourcePanePath,
+                            sourcePaths.Select(path => ("Deleted", path, (string?)null)).ToList(),
+                            $"transfer[{transferId}]-source");
+                    }
+                    else
+                    {
+                        AppendFileOperationDebugLog(
+                            $"transfer[{transferId}] skip-source-refresh action={actionLabel} sourcePane={sourcePane.Name} sourceCurrent={sourcePane.CurrentPath}");
+                    }
+
+                    ApplyPaneChangesAfterLocalOperation(
+                        targetPane,
+                        initialTargetPanePath,
+                        targetPaths.Select(path => ("Changed", path, (string?)null)).ToList(),
+                        $"transfer[{transferId}]-target");
 
                     if (sourcePaths.Count == 1)
                     {
-                        var destinationPath = Path.Combine(
-                            targetDirectory,
-                            Path.GetFileName(sourcePaths[0].TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)));
+                        var destinationPath = targetPaths[0];
                         targetPane.SelectedItem = targetPane.Items.FirstOrDefault(item => PathEquals(item.FullPath, destinationPath));
                     }
+
+                    AppendFileOperationDebugLog(
+                        $"transfer[{transferId}] ui-refresh-end sourcePane={sourcePane.Name} sourceCurrent={sourcePane.CurrentPath} " +
+                        $"targetPane={targetPane.Name} targetCurrent={targetPane.CurrentPath}");
                 });
             }
             catch (OperationCanceledException)
             {
+                AppendFileOperationDebugLog(
+                    $"transfer[{transferId}] cancelled action={actionLabel} elapsedMs={stopwatch.ElapsedMilliseconds}");
             }
             catch (Exception ex)
             {
+                AppendFileOperationDebugLog(
+                    $"transfer[{transferId}] error action={actionLabel} elapsedMs={stopwatch.ElapsedMilliseconds} error={ex}");
                 await ShowMessageAsync(move ? "搬移失敗" : "複製失敗", ex.Message);
             }
             finally
             {
+                stopwatch.Stop();
+                AppendFileOperationDebugLog(
+                    $"transfer[{transferId}] complete action={actionLabel} elapsedMs={stopwatch.ElapsedMilliseconds} " +
+                    $"sourcePaneCurrent={sourcePane.CurrentPath} targetPaneCurrent={targetPane.CurrentPath}");
                 CompleteBackgroundWork(backgroundWorkId, completionLabel, backgroundDetails);
             }
+        }
+
+        private void ApplyPaneChangesAfterLocalOperation(
+            PaneViewModel pane,
+            string? expectedPanePath,
+            IReadOnlyList<(string Kind, string Path, string? OldPath)> changes,
+            string reason)
+        {
+            if (changes.Count == 0)
+            {
+                AppendFileOperationDebugLog(
+                    $"{reason} skip-refresh pane={pane.Name} currentPath={pane.CurrentPath} expectedPath={expectedPanePath ?? "<null>"} reason=no-changes");
+                return;
+            }
+
+            if (string.IsNullOrWhiteSpace(expectedPanePath) ||
+                string.IsNullOrWhiteSpace(pane.CurrentPath) ||
+                !PathEquals(pane.CurrentPath, expectedPanePath))
+            {
+                AppendFileOperationDebugLog(
+                    $"{reason} skip-refresh pane={pane.Name} currentPath={pane.CurrentPath} expectedPath={expectedPanePath ?? "<null>"} reason=current-path-changed");
+                return;
+            }
+
+            RefreshPaneAfterLocalChange(pane, changes, reason);
         }
 
         private static string BuildTransferBackgroundLabel(
@@ -2373,16 +2798,29 @@ namespace nuone_tools
 
         private static Task ExecuteNativeTransferAsync(IReadOnlyList<string> sourcePaths, string targetDirectory, bool move)
         {
+            var nativeTransferId = Interlocked.Increment(ref _transferDiagnosticSequence);
             var completion = new TaskCompletionSource<object?>(TaskCreationOptions.RunContinuationsAsynchronously);
             var thread = new Thread(() =>
             {
+                var stopwatch = Stopwatch.StartNew();
                 try
                 {
+                    AppendFileOperationDebugLog(
+                        $"native-transfer[{nativeTransferId}] start action={(move ? "move" : "copy")} target={targetDirectory} " +
+                        $"count={sourcePaths.Count} threadId={Environment.CurrentManagedThreadId}");
                     ExecuteNativeTransfer(sourcePaths, targetDirectory, move);
+                    stopwatch.Stop();
+                    AppendFileOperationDebugLog(
+                        $"native-transfer[{nativeTransferId}] success action={(move ? "move" : "copy")} target={targetDirectory} " +
+                        $"count={sourcePaths.Count} elapsedMs={stopwatch.ElapsedMilliseconds} threadId={Environment.CurrentManagedThreadId}");
                     completion.SetResult(null);
                 }
                 catch (Exception ex)
                 {
+                    stopwatch.Stop();
+                    AppendFileOperationDebugLog(
+                        $"native-transfer[{nativeTransferId}] error action={(move ? "move" : "copy")} target={targetDirectory} " +
+                        $"count={sourcePaths.Count} elapsedMs={stopwatch.ElapsedMilliseconds} threadId={Environment.CurrentManagedThreadId} error={ex}");
                     completion.SetException(ex);
                 }
             });

@@ -266,9 +266,6 @@ namespace nuone_tools
                 _ => $"{selectedItems.Count} 個已選取",
             };
 
-            MainWindow.AppendDebugLog(
-                "pane-selection-debug.log",
-                $"Pane.UpdateSelection pane={Name} currentPath={CurrentPath} selectedCount={selectedItems.Count} primary={primary?.FullPath ?? "<null>"}");
         }
 
         public IReadOnlyList<FileEntry> GetTrackedSelectedEntries()
@@ -279,6 +276,17 @@ namespace nuone_tools
         public IEnumerable<FileEntry> EnumerateDisplayEntries()
         {
             foreach (var item in Items)
+            {
+                foreach (var nested in item.EnumerateTreeEntries())
+                {
+                    yield return nested;
+                }
+            }
+        }
+
+        public IEnumerable<FileEntry> EnumerateLoadedEntries()
+        {
+            foreach (var item in _allItems)
             {
                 foreach (var nested in item.EnumerateTreeEntries())
                 {
@@ -554,6 +562,41 @@ namespace nuone_tools
                 $"Pane.EndOverlay applied pane={Name} overlayVersion={overlayVersion}");
         }
 
+        public bool TryApplyLocalFileSystemChange(string triggerKind, string triggerPath, string? oldPath)
+        {
+            if (string.IsNullOrWhiteSpace(CurrentPath) ||
+                MainWindow.IsSshPath(CurrentPath) ||
+                MainWindow.IsWslPath(CurrentPath) ||
+                MainWindow.IsWslVirtualRootPath(CurrentPath))
+            {
+                return false;
+            }
+
+            var selectedPaths = GetTrackedSelectedEntries()
+                .Select(item => MainWindow.NormalizePath(item.FullPath))
+                .ToList();
+            var primarySelectionPath = SelectedItem is null
+                ? null
+                : MainWindow.NormalizePath(SelectedItem.FullPath);
+
+            var applied = triggerKind switch
+            {
+                "Created" => TryUpsertLocalEntry(triggerPath),
+                "Changed" => TryUpsertLocalEntry(triggerPath),
+                "Deleted" => TryRemoveLocalEntry(triggerPath),
+                "Renamed" => TryRenameLocalEntry(oldPath, triggerPath),
+                _ => false,
+            };
+
+            if (!applied)
+            {
+                return false;
+            }
+
+            RebuildFilteredItemsPreservingSelection(selectedPaths, primarySelectionPath);
+            return true;
+        }
+
         private void Load(string path, bool rememberCurrent = true)
         {
             _loadRequestVersion++;
@@ -686,40 +729,11 @@ namespace nuone_tools
         private void ApplyFilter()
         {
             var query = FilterQuery.Trim();
-            IEnumerable<FileEntry> source = _allItems;
-            IEnumerable<FileEntry> filtered = source;
-
-            if (!string.IsNullOrWhiteSpace(query))
-            {
-                var startsWithMatches = source
-                    .Where(item => MatchesPrefixFilter(item.Name, query))
-                    .ToList();
-
-                if (startsWithMatches.Count > 0)
-                {
-                    filtered = startsWithMatches;
-                    FilterModeText = $"開頭為：{query}";
-                }
-                else
-                {
-                    filtered = source
-                        .Where(item => item.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
-                        .ToList();
-                    FilterModeText = $"包含：{query}";
-                }
-            }
-            else
-            {
-                FilterModeText = string.Empty;
-            }
-
+            var filtered = GetFilteredEntries();
             ReplaceVisibleItems(filtered);
             OnPropertyChanged(nameof(FilterVisibility));
 
             var defaultSelection = Items.FirstOrDefault();
-            MainWindow.AppendDebugLog(
-                "pane-selection-debug.log",
-                $"Pane.ApplyFilter pane={Name} currentPath={CurrentPath} visibleItems={Items.Count} allItems={_allItems.Count} filter={query} defaultSelection={defaultSelection?.FullPath ?? "<null>"}");
             UpdateSelection(defaultSelection is null ? Array.Empty<FileEntry>() : new[] { defaultSelection });
             UpdateSummaryTexts();
         }
@@ -740,12 +754,232 @@ namespace nuone_tools
             return segments.Any(segment => segment.StartsWith(query, StringComparison.OrdinalIgnoreCase));
         }
 
+        private bool TryUpsertLocalEntry(string path)
+        {
+            if (!TryCreateLocalEntry(path, out var entry))
+            {
+                return false;
+            }
+
+            var normalizedPath = MainWindow.NormalizePath(entry.FullPath);
+            var existingIndex = _allItems.FindIndex(item => MainWindow.PathEquals(item.FullPath, normalizedPath));
+            if (existingIndex >= 0)
+            {
+                _allItems.RemoveAt(existingIndex);
+            }
+
+            var insertIndex = GetSortedInsertIndex(entry);
+            _allItems.Insert(insertIndex, entry);
+            return true;
+        }
+
+        private bool TryRemoveLocalEntry(string path)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var existingIndex = _allItems.FindIndex(item => MainWindow.PathEquals(item.FullPath, path));
+            if (existingIndex < 0)
+            {
+                return false;
+            }
+
+            _allItems.RemoveAt(existingIndex);
+            return true;
+        }
+
+        private bool TryRenameLocalEntry(string? oldPath, string newPath)
+        {
+            var removed = !string.IsNullOrWhiteSpace(oldPath) && TryRemoveLocalEntry(oldPath);
+            var added = TryUpsertLocalEntry(newPath);
+            return removed || added;
+        }
+
+        private bool TryCreateLocalEntry(string path, out FileEntry entry)
+        {
+            entry = null!;
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return false;
+            }
+
+            var normalizedCurrentPath = Path.GetFullPath(CurrentPath);
+            var normalizedPath = Path.GetFullPath(path);
+            var parentPath = Path.GetDirectoryName(normalizedPath);
+            if (string.IsNullOrWhiteSpace(parentPath) ||
+                !string.Equals(parentPath, normalizedCurrentPath, StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            try
+            {
+                if (Directory.Exists(normalizedPath))
+                {
+                    var directory = new DirectoryInfo(normalizedPath);
+                    if (!ShowHiddenSystemItems && ShouldHideFileSystemInfo(directory))
+                    {
+                        return false;
+                    }
+
+                    entry = FileEntry.FromDirectory(directory);
+                    return true;
+                }
+
+                if (File.Exists(normalizedPath))
+                {
+                    var file = new FileInfo(normalizedPath);
+                    if (!ShowHiddenSystemItems && ShouldHideFileSystemInfo(file))
+                    {
+                        return false;
+                    }
+
+                    entry = FileEntry.FromFile(file);
+                    return true;
+                }
+            }
+            catch
+            {
+            }
+
+            return false;
+        }
+
+        private int GetSortedInsertIndex(FileEntry candidate)
+        {
+            for (var index = 0; index < _allItems.Count; index++)
+            {
+                var current = _allItems[index];
+                if (CompareEntries(candidate, current) < 0)
+                {
+                    return index;
+                }
+            }
+
+            return _allItems.Count;
+        }
+
+        private static int CompareEntries(FileEntry left, FileEntry right)
+        {
+            if (left.IsDirectory != right.IsDirectory)
+            {
+                return left.IsDirectory ? -1 : 1;
+            }
+
+            return string.Compare(left.Name, right.Name, StringComparison.OrdinalIgnoreCase);
+        }
+
+        private void RebuildFilteredItemsPreservingSelection(IReadOnlyList<string> selectedPaths, string? primarySelectionPath)
+        {
+            var filtered = GetFilteredEntries().ToList();
+            ReplaceVisibleItems(filtered);
+            OnPropertyChanged(nameof(FilterVisibility));
+
+            var selectedPathSet = new HashSet<string>(selectedPaths, StringComparer.OrdinalIgnoreCase);
+            var matchingSelection = filtered
+                .Where(item => selectedPathSet.Contains(MainWindow.NormalizePath(item.FullPath)))
+                .ToList();
+
+            if (matchingSelection.Count == 0 && !string.IsNullOrWhiteSpace(primarySelectionPath))
+            {
+                var primary = filtered.FirstOrDefault(item => MainWindow.PathEquals(item.FullPath, primarySelectionPath));
+                if (primary is not null)
+                {
+                    matchingSelection.Add(primary);
+                }
+            }
+
+            if (matchingSelection.Count == 0)
+            {
+                UpdateSelection(Array.Empty<FileEntry>());
+            }
+            else
+            {
+                UpdateSelection(matchingSelection);
+            }
+
+            UpdateSummaryTexts();
+        }
+
+        private IEnumerable<FileEntry> GetFilteredEntries()
+        {
+            var query = FilterQuery.Trim();
+            IEnumerable<FileEntry> source = _allItems;
+
+            if (string.IsNullOrWhiteSpace(query))
+            {
+                FilterModeText = string.Empty;
+                return source;
+            }
+
+            var startsWithMatches = source
+                .Where(item => MatchesPrefixFilter(item.Name, query))
+                .ToList();
+
+            if (startsWithMatches.Count > 0)
+            {
+                FilterModeText = $"開頭為：{query}";
+                return startsWithMatches;
+            }
+
+            FilterModeText = $"包含：{query}";
+            return source
+                .Where(item => item.Name.Contains(query, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+        }
+
         private void ReplaceVisibleItems(IEnumerable<FileEntry> entries)
         {
-            Items.Clear();
-            foreach (var entry in entries)
+            var targetItems = entries.ToList();
+
+            for (var index = 0; index < targetItems.Count; index++)
             {
-                Items.Add(entry);
+                var targetEntry = targetItems[index];
+
+                if (index >= Items.Count)
+                {
+                    Items.Add(targetEntry);
+                    continue;
+                }
+
+                if (MainWindow.PathEquals(Items[index].FullPath, targetEntry.FullPath))
+                {
+                    if (!ReferenceEquals(Items[index], targetEntry))
+                    {
+                        Items[index] = targetEntry;
+                    }
+
+                    continue;
+                }
+
+                var existingIndex = -1;
+                for (var searchIndex = index + 1; searchIndex < Items.Count; searchIndex++)
+                {
+                    if (MainWindow.PathEquals(Items[searchIndex].FullPath, targetEntry.FullPath))
+                    {
+                        existingIndex = searchIndex;
+                        break;
+                    }
+                }
+
+                if (existingIndex >= 0)
+                {
+                    Items.Move(existingIndex, index);
+                    if (!ReferenceEquals(Items[index], targetEntry))
+                    {
+                        Items[index] = targetEntry;
+                    }
+                    continue;
+                }
+
+                Items.Insert(index, targetEntry);
+            }
+
+            while (Items.Count > targetItems.Count)
+            {
+                Items.RemoveAt(Items.Count - 1);
             }
         }
 

@@ -62,6 +62,8 @@ namespace nuone_tools.Views
         internal Button CopyUpdateDownloadUrlButtonElement => CopyUpdateDownloadUrlButton;
         internal TextBox LogDirectoryPathTextBoxElement => LogDirectoryPathTextBox;
         internal TextBlock AppUpdateManifestUrlTextBlockElement => UpdateManifestUrlTextBlock;
+        internal ProgressBar AppUpdateProgressBarElement => AppUpdateProgressBar;
+        internal TextBlock AppUpdateProgressTextBlockElement => AppUpdateProgressTextBlock;
         internal TextBlock AppUpdateReleaseNotesTextBlockElement => AppUpdateReleaseNotesTextBlock;
         internal TextBlock AppUpdateStatusTextBlockElement => AppUpdateStatusTextBlock;
         internal TextBlock LatestAppVersionTextBlockElement => LatestAppVersionTextBlock;
@@ -81,6 +83,7 @@ namespace nuone_tools.Views
         internal ToggleSwitch ShowHiddenSystemItemsToggleElement => ShowHiddenSystemItemsToggle;
         internal ToggleSwitch ShowSelectedFileSizeToggleElement => ShowSelectedFileSizeToggle;
         internal ToggleSwitch ShowSelectedFolderSizeToggleElement => ShowSelectedFolderSizeToggle;
+        internal ToggleSwitch ShowCurrentDirectoryItemSizesToggleElement => ShowCurrentDirectoryItemSizesToggle;
         internal ComboBox ThemeModeComboBoxElement => ThemeModeComboBox;
         internal Border ToolbarSettingsContentElement => ToolbarSettingsContent;
         internal Border ToolbarSettingsNavBorderElement => ToolbarSettingsNavBorder;
@@ -249,6 +252,11 @@ namespace nuone_tools.Views
         private void ShowSelectedFolderSizeToggle_Toggled(object sender, RoutedEventArgs e)
         {
             Owner?.ShowSelectedFolderSizeToggle_Toggled(sender, e);
+        }
+
+        private void ShowCurrentDirectoryItemSizesToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            Owner?.ShowCurrentDirectoryItemSizesToggle_Toggled(sender, e);
         }
 
         private void ShowShortcutSettings_Click(object sender, RoutedEventArgs e)
