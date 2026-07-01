@@ -213,16 +213,41 @@ namespace nuone_tools
             var workId = Guid.NewGuid();
             lock (_backgroundWorkLock)
             {
-                _backgroundWorks[workId] = new BackgroundWorkState(
-                    label,
-                    string.IsNullOrWhiteSpace(details) ? label : details.Trim(),
-                    DateTimeOffset.UtcNow,
-                    isAutomation);
+                _backgroundWorks[workId] = new BackgroundWorkState
+                {
+                    Label = label,
+                    Details = string.IsNullOrWhiteSpace(details) ? label : details.Trim(),
+                    StartedAtUtc = DateTimeOffset.UtcNow,
+                    IsAutomation = isAutomation,
+                };
                 AddBackgroundWorkRecordLocked($"開始：{label}", details, isAutomation);
             }
 
             EnqueueSharedStatusBarRefresh();
             return workId;
+        }
+
+        private void UpdateBackgroundWork(Guid workId, string? details = null, double? progressPercent = null)
+        {
+            lock (_backgroundWorkLock)
+            {
+                if (!_backgroundWorks.TryGetValue(workId, out var work))
+                {
+                    return;
+                }
+
+                if (!string.IsNullOrWhiteSpace(details))
+                {
+                    work.Details = details.Trim();
+                }
+
+                if (progressPercent.HasValue)
+                {
+                    work.ProgressPercent = Math.Clamp(progressPercent.Value, 0, 100);
+                }
+            }
+
+            EnqueueSharedStatusBarRefresh();
         }
 
         private void CompleteBackgroundWork(
@@ -517,6 +542,35 @@ namespace nuone_tools
             IReadOnlyList<NotificationHistoryRecord> syncHistory)
         {
             var entries = new List<NotificationListEntry>();
+            foreach (var work in GetRunningBackgroundWorksSnapshot().Where(static work => work.IsAutomation))
+            {
+                var timestampText = work.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
+                var progressText = work.ProgressPercent.HasValue
+                    ? $" · {work.ProgressPercent.Value:0}%"
+                    : string.Empty;
+                var summary = $"{timestampText}　進行中：{work.Label}{progressText}";
+                var detailBuilder = new StringBuilder();
+                detailBuilder.Append("時間：");
+                detailBuilder.AppendLine(timestampText);
+                detailBuilder.AppendLine();
+                detailBuilder.Append("進行中：");
+                detailBuilder.AppendLine(work.Label);
+
+                if (!string.IsNullOrWhiteSpace(work.Details))
+                {
+                    detailBuilder.AppendLine();
+                    detailBuilder.AppendLine(work.Details);
+                }
+
+                entries.Add(new NotificationListEntry
+                {
+                    ScopeLabel = "進行中",
+                    Timestamp = work.Timestamp,
+                    CardText = summary,
+                    DialogText = detailBuilder.ToString().TrimEnd(),
+                });
+            }
+
             foreach (var record in sessionRecords.Where(static record => record.IsAutomation))
             {
                 var timestampText = record.Timestamp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss", CultureInfo.InvariantCulture);
@@ -542,7 +596,7 @@ namespace nuone_tools
                 });
             }
 
-            foreach (var record in localHistory.Where(static record => IsAutomationNotificationCategory(record.Category)))
+            foreach (var record in localHistory.Where(static record => IsTrackedNotificationCategory(record.Category)))
             {
                 var dialogText = BuildNotificationHistoryDialogText(record);
                 entries.Add(new NotificationListEntry
@@ -554,7 +608,7 @@ namespace nuone_tools
                 });
             }
 
-            foreach (var record in syncHistory.Where(static record => IsAutomationNotificationCategory(record.Category)))
+            foreach (var record in syncHistory.Where(static record => IsTrackedNotificationCategory(record.Category)))
             {
                 var dialogText = BuildNotificationHistoryDialogText(record);
                 entries.Add(new NotificationListEntry
@@ -661,7 +715,7 @@ namespace nuone_tools
             bool showWindowsToast = true,
             bool persistRecord = true)
         {
-            if (!IsAutomationNotificationCategory(category))
+            if (!IsTrackedNotificationCategory(category))
             {
                 return;
             }
@@ -772,13 +826,25 @@ namespace nuone_tools
             }
         }
 
-        private static bool IsAutomationNotificationCategory(string? category)
+        private static bool IsTrackedNotificationCategory(string? category)
         {
             return string.Equals(category?.Trim(), "自動化", StringComparison.Ordinal) ||
-                   string.Equals(category?.Trim(), "自動解壓", StringComparison.Ordinal);
+                   string.Equals(category?.Trim(), "自動解壓", StringComparison.Ordinal) ||
+                   string.Equals(category?.Trim(), "更新", StringComparison.Ordinal);
         }
 
-        private sealed record BackgroundWorkState(string Label, string Details, DateTimeOffset StartedAtUtc, bool IsAutomation);
+        private sealed class BackgroundWorkState
+        {
+            public string Label { get; set; } = string.Empty;
+
+            public string Details { get; set; } = string.Empty;
+
+            public DateTimeOffset StartedAtUtc { get; set; }
+
+            public bool IsAutomation { get; set; }
+
+            public double? ProgressPercent { get; set; }
+        }
 
         private sealed class BackgroundWorkRecord
         {
@@ -789,6 +855,19 @@ namespace nuone_tools
             public string Details { get; init; } = string.Empty;
 
             public bool IsAutomation { get; init; }
+        }
+
+        private sealed class RunningBackgroundWorkSnapshot
+        {
+            public DateTimeOffset Timestamp { get; init; }
+
+            public string Label { get; init; } = string.Empty;
+
+            public string Details { get; init; } = string.Empty;
+
+            public bool IsAutomation { get; init; }
+
+            public double? ProgressPercent { get; init; }
         }
 
         private void EnqueueSharedStatusBarRefresh()
@@ -843,25 +922,38 @@ namespace nuone_tools
 
         private string? BuildBackgroundWorkSummary()
         {
-            List<string> labels;
+            List<RunningBackgroundWorkSnapshot> works;
             lock (_backgroundWorkLock)
             {
-                labels = _backgroundWorks.Values
-                    .Select(static work => work.Label)
+                works = _backgroundWorks.Values
+                    .Select(static work => new RunningBackgroundWorkSnapshot
+                    {
+                        Timestamp = work.StartedAtUtc,
+                        Label = work.Label,
+                        Details = work.Details,
+                        IsAutomation = work.IsAutomation,
+                        ProgressPercent = work.ProgressPercent,
+                    })
                     .ToList();
             }
 
-            if (labels.Count == 0)
+            if (works.Count == 0)
             {
                 return null;
             }
 
-            if (labels.Count == 1)
+            if (works.Count == 1)
             {
-                return labels[0];
+                var work = works[0];
+                var progressText = work.ProgressPercent.HasValue
+                    ? $" · {work.ProgressPercent.Value:0}%"
+                    : string.Empty;
+                return string.IsNullOrWhiteSpace(work.Details) || string.Equals(work.Details, work.Label, StringComparison.Ordinal)
+                    ? $"{work.Label}{progressText}"
+                    : $"{work.Label}{progressText} · {work.Details}";
             }
 
-            return $"{labels[0]} 等 {labels.Count} 個背景工作";
+            return $"{works[0].Label} 等 {works.Count} 個背景工作";
         }
 
         private bool HasRunningBackgroundWork()
@@ -910,6 +1002,25 @@ namespace nuone_tools
             {
                 return _backgroundWorkRecords
                     .Where(static record => record.IsAutomation)
+                    .ToList();
+            }
+        }
+
+        private List<RunningBackgroundWorkSnapshot> GetRunningBackgroundWorksSnapshot()
+        {
+            lock (_backgroundWorkLock)
+            {
+                return _backgroundWorks.Values
+                    .Select(static work => new RunningBackgroundWorkSnapshot
+                    {
+                        Timestamp = work.StartedAtUtc,
+                        Label = work.Label,
+                        Details = work.Details,
+                        IsAutomation = work.IsAutomation,
+                        ProgressPercent = work.ProgressPercent,
+                    })
+                    .Where(static work => work.IsAutomation)
+                    .OrderByDescending(static work => work.Timestamp)
                     .ToList();
             }
         }

@@ -550,6 +550,11 @@ namespace nuone_tools
                 return true;
             }
 
+            if (string.Equals(fileName, "pane-item-size.log", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+
             var normalized = message.Trim();
             return normalized.Contains("exception", StringComparison.OrdinalIgnoreCase) ||
                 normalized.Contains("error", StringComparison.OrdinalIgnoreCase) ||
@@ -998,6 +1003,7 @@ namespace nuone_tools
             }
 
             pane.NavigateTo(path);
+            SchedulePaneItemSizeUpdate(pane, reason: "open-in-pane");
             ActivatePane(pane);
         }
 
@@ -1020,6 +1026,7 @@ namespace nuone_tools
             }
 
             pane.Refresh();
+            SchedulePaneItemSizeUpdate(pane, reason: "refresh-pane");
             LoadDriveCards();
             stopwatch.Stop();
             AppendDebugLog(
@@ -1055,6 +1062,7 @@ namespace nuone_tools
 
                 if (allApplied)
                 {
+                    SchedulePaneItemSizeUpdate(pane, reason: "local-change-incremental");
                     if (ShouldRefreshDriveCards(changes))
                     {
                         LoadDriveCards();
@@ -1090,6 +1098,7 @@ namespace nuone_tools
 
                 if (appliedAny)
                 {
+                    SchedulePaneItemSizeUpdate(pane, reason: "watcher-incremental");
                     if (ShouldRefreshDriveCards(changes))
                     {
                         LoadDriveCards();
@@ -1138,11 +1147,13 @@ namespace nuone_tools
             }
 
             pane.NavigateUp();
+            SchedulePaneItemSizeUpdate(pane, reason: "navigate-up");
         }
 
         private void NavigateBack(PaneViewModel pane)
         {
             pane.GoBack();
+            SchedulePaneItemSizeUpdate(pane, reason: "navigate-back");
         }
 
         private string ResolveNewPaneTabPath(PaneViewModel pane)
@@ -1214,6 +1225,7 @@ namespace nuone_tools
             }
 
             pane.LoadTabPath(path);
+            SchedulePaneItemSizeUpdate(pane, reason: "load-pane-tab-path");
             LoadDriveCards();
         }
 

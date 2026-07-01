@@ -31,6 +31,10 @@
   `Infrastructure/MainWindow.Persistence.cs`
 - 內建 toolbar command 定義與 Node.js Docker 部署：
   `Features/FileManager/MainWindow.NodeDockerDeploy.cs`
+- toolbar 內建終端機動作（`終端機開啟`、`終端機執行`、外部 / 內建切換、腳本副檔名分流）：
+  `Features/Shared/MainWindow.Dialogs.cs`,
+  `Features/FileManager/MainWindow.NodeDockerDeploy.cs`,
+  `Features/Terminal/MainWindow.Terminal.cs`
 - toolbar/view 綁定橋接：
   `Features/Shared/MainWindow.ViewBindings.cs`
 - FileBunker 上傳：

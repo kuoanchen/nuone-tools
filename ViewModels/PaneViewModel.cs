@@ -284,6 +284,17 @@ namespace nuone_tools
             }
         }
 
+        public IEnumerable<FileEntry> EnumerateLoadedEntries()
+        {
+            foreach (var item in _allItems)
+            {
+                foreach (var nested in item.EnumerateTreeEntries())
+                {
+                    yield return nested;
+                }
+            }
+        }
+
         public void NavigateTo(string path)
         {
             if (string.IsNullOrWhiteSpace(path))

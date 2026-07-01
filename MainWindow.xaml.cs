@@ -84,6 +84,7 @@ namespace nuone_tools
         private static readonly TimeSpan PaneWatcherDebounceInterval = TimeSpan.FromMilliseconds(450);
         private static readonly TimeSpan PaneWatcherSuppressInterval = TimeSpan.FromMilliseconds(1200);
         private static readonly TimeSpan SelectionSizeDebounceInterval = TimeSpan.FromMilliseconds(180);
+        private static readonly TimeSpan PaneItemSizeDebounceInterval = TimeSpan.FromMilliseconds(220);
         private static readonly TimeSpan AutomationWatcherDebounceInterval = TimeSpan.FromMilliseconds(900);
         private static readonly HashSet<string> SupportedArchiveExtensions = new(StringComparer.OrdinalIgnoreCase)
         {
@@ -95,6 +96,8 @@ namespace nuone_tools
         private readonly DispatcherQueueTimer _selectionFlyoutTimer;
         private readonly DispatcherQueueTimer _leftSelectionSizeTimer;
         private readonly DispatcherQueueTimer _rightSelectionSizeTimer;
+        private readonly DispatcherQueueTimer _leftPaneItemSizeTimer;
+        private readonly DispatcherQueueTimer _rightPaneItemSizeTimer;
         private readonly PaneDirectoryWatcher _leftPaneWatcher;
         private readonly PaneDirectoryWatcher _rightPaneWatcher;
         private FrameworkElement? _pendingFlyoutTarget;
@@ -120,6 +123,10 @@ namespace nuone_tools
         private bool _isAccountReloginFieldsVisible;
         private CancellationTokenSource? _leftSelectionSizeCts;
         private CancellationTokenSource? _rightSelectionSizeCts;
+        private CancellationTokenSource? _leftPaneItemSizeCts;
+        private CancellationTokenSource? _rightPaneItemSizeCts;
+        private string _leftPaneItemSizeScheduleReason = "startup";
+        private string _rightPaneItemSizeScheduleReason = "startup";
         private readonly Dictionary<Guid, System.Timers.Timer> _automationTimers = new();
         private readonly Dictionary<Guid, BackupAutomationSourceWatcher> _automationWatchers = new();
         private readonly Dictionary<Guid, CancellationTokenSource> _automationCancellationTokens = new();
@@ -333,6 +340,16 @@ namespace nuone_tools
             _rightSelectionSizeTimer.Interval = SelectionSizeDebounceInterval;
             _rightSelectionSizeTimer.IsRepeating = false;
             _rightSelectionSizeTimer.Tick += RightSelectionSizeTimer_Tick;
+
+            _leftPaneItemSizeTimer = DispatcherQueue.CreateTimer();
+            _leftPaneItemSizeTimer.Interval = PaneItemSizeDebounceInterval;
+            _leftPaneItemSizeTimer.IsRepeating = false;
+            _leftPaneItemSizeTimer.Tick += LeftPaneItemSizeTimer_Tick;
+
+            _rightPaneItemSizeTimer = DispatcherQueue.CreateTimer();
+            _rightPaneItemSizeTimer.Interval = PaneItemSizeDebounceInterval;
+            _rightPaneItemSizeTimer.IsRepeating = false;
+            _rightPaneItemSizeTimer.Tick += RightPaneItemSizeTimer_Tick;
 
             _terminalCursorTimer = DispatcherQueue.CreateTimer();
             InitializeTerminalCursorTimer();

@@ -37,6 +37,126 @@ namespace nuone_tools
 {
     public sealed partial class MainWindow
     {
+        private sealed record FluentIconOption(string Name, string Code);
+
+        private sealed record FluentIconCategory(string Title, FluentIconOption[] Options);
+
+        private sealed record FluentIconRange(string Title, int StartCodePoint, int EndCodePoint);
+
+        private static readonly FluentIconRange[] ToolbarFluentIconAdvancedRanges =
+        {
+            new("E700-E7FF", 0xE700, 0xE7FF),
+            new("E800-E8FF", 0xE800, 0xE8FF),
+            new("E900-E9FF", 0xE900, 0xE9FF),
+            new("EA00-EBFF", 0xEA00, 0xEBFF),
+            new("EC00-EDFF", 0xEC00, 0xEDFF),
+            new("EE00-EFFF", 0xEE00, 0xEFFF),
+            new("F000-F1FF", 0xF000, 0xF1FF),
+            new("F200-F3FF", 0xF200, 0xF3FF),
+        };
+
+        private static readonly FluentIconCategory[] ToolbarFluentIconCategories =
+        {
+            new("終端 / 執行", new[]
+            {
+                new FluentIconOption("Terminal", "E756"),
+                new FluentIconOption("Run", "E768"),
+                new FluentIconOption("Code", "EA80"),
+                new FluentIconOption("Deploy", "E7B8"),
+                new FluentIconOption("Sync", "E895"),
+                new FluentIconOption("Refresh", "E72C"),
+                new FluentIconOption("Settings", "E713"),
+                new FluentIconOption("Link", "E71B"),
+                new FluentIconOption("Play", "E768"),
+                new FluentIconOption("Stop", "E71A"),
+                new FluentIconOption("Command", "EB51"),
+                new FluentIconOption("Bug", "EBE8"),
+                new FluentIconOption("Developer Tools", "EBE5"),
+                new FluentIconOption("Branch", "E944"),
+                new FluentIconOption("Globe", "E774"),
+                new FluentIconOption("Server", "F201"),
+            }),
+            new("檔案 / 資料夾", new[]
+            {
+                new FluentIconOption("Folder", "E8B7"),
+                new FluentIconOption("Add Folder", "E710"),
+                new FluentIconOption("Open Folder", "E838"),
+                new FluentIconOption("Document", "E8A5"),
+                new FluentIconOption("Library", "E8F1"),
+                new FluentIconOption("Home", "E80F"),
+                new FluentIconOption("Desktop", "E7F4"),
+                new FluentIconOption("Preview", "E8A1"),
+                new FluentIconOption("Page", "E7C3"),
+                new FluentIconOption("Photo", "EB9F"),
+                new FluentIconOption("Video", "E714"),
+                new FluentIconOption("Music", "E189"),
+                new FluentIconOption("Print", "E749"),
+                new FluentIconOption("Clipboard", "E77F"),
+                new FluentIconOption("Move To Folder", "E8DE"),
+                new FluentIconOption("Open File", "E8E5"),
+            }),
+            new("上傳 / 雲端", new[]
+            {
+                new FluentIconOption("Upload", "E898"),
+                new FluentIconOption("Download", "E896"),
+                new FluentIconOption("Cloud", "E753"),
+                new FluentIconOption("Storage", "E7F1"),
+                new FluentIconOption("Database", "EFC7"),
+                new FluentIconOption("Server", "F201"),
+                new FluentIconOption("Network", "E968"),
+                new FluentIconOption("Share", "E72D"),
+                new FluentIconOption("Export", "EDE1"),
+                new FluentIconOption("Import", "E8B5"),
+                new FluentIconOption("Package", "E7B8"),
+                new FluentIconOption("Archive", "F012"),
+                new FluentIconOption("Globe", "E774"),
+                new FluentIconOption("Hard Drive", "EDA2"),
+                new FluentIconOption("Web", "E774"),
+                new FluentIconOption("Send", "E724"),
+            }),
+            new("編輯 / 動作", new[]
+            {
+                new FluentIconOption("Add", "E710"),
+                new FluentIconOption("Edit", "E70F"),
+                new FluentIconOption("Delete", "E74D"),
+                new FluentIconOption("Save", "E74E"),
+                new FluentIconOption("Copy", "E8C8"),
+                new FluentIconOption("Cut", "E8C6"),
+                new FluentIconOption("Paste", "E77F"),
+                new FluentIconOption("Rename", "E8AC"),
+                new FluentIconOption("More", "E712"),
+                new FluentIconOption("Back", "E72B"),
+                new FluentIconOption("Forward", "E72A"),
+                new FluentIconOption("Up", "E74A"),
+                new FluentIconOption("Search", "E721"),
+                new FluentIconOption("Filter", "E71C"),
+                new FluentIconOption("Clear", "E894"),
+                new FluentIconOption("Pin", "E718"),
+                new FluentIconOption("Unpin", "E77A"),
+            }),
+            new("狀態 / 其他", new[]
+            {
+                new FluentIconOption("Info", "E946"),
+                new FluentIconOption("Warning", "E7BA"),
+                new FluentIconOption("Completed", "E73E"),
+                new FluentIconOption("Clock", "E823"),
+                new FluentIconOption("History", "E81C"),
+                new FluentIconOption("Favorite", "E734"),
+                new FluentIconOption("Magic", "EA90"),
+                new FluentIconOption("Bug", "EBE8"),
+                new FluentIconOption("Image", "EB9F"),
+                new FluentIconOption("Print", "E749"),
+                new FluentIconOption("Lock", "E72E"),
+                new FluentIconOption("Unlock", "E785"),
+                new FluentIconOption("Eye", "E890"),
+                new FluentIconOption("Hide", "E8F4"),
+                new FluentIconOption("Star", "E734"),
+                new FluentIconOption("Light", "E793"),
+                new FluentIconOption("Calendar", "E787"),
+                new FluentIconOption("Check", "E73E"),
+            }),
+        };
+
         private async Task<string?> PromptForTextAsync(string title, string prompt, string defaultValue)
         {
             var textBox = new TextBox
@@ -108,7 +228,11 @@ namespace nuone_tools
                 string.Equals(existingItem.Command, EnhancePdfCommand, StringComparison.OrdinalIgnoreCase);
             var isBuiltInTerminal = existingItem is not null && IsOpenBuiltInTerminalCommand(existingItem.Command);
             var isExternalTerminal = existingItem is not null && IsOpenExternalTerminalCommand(existingItem.Command);
-            var isTerminal = isBuiltInTerminal || isExternalTerminal;
+            var isBuiltInTerminalExecute = existingItem is not null && IsExecuteInBuiltInTerminalCommand(existingItem.Command);
+            var isExternalTerminalExecute = existingItem is not null && IsExecuteInExternalTerminalCommand(existingItem.Command);
+            var isTerminalOpen = isBuiltInTerminal || isExternalTerminal;
+            var isTerminalExecute = isBuiltInTerminalExecute || isExternalTerminalExecute;
+            var isTerminal = isTerminalOpen || isTerminalExecute;
             var builtInActionComboBox = new ComboBox
             {
                 HorizontalAlignment = HorizontalAlignment.Stretch,
@@ -116,7 +240,8 @@ namespace nuone_tools
                 {
                     new ComboBoxItem { Content = "一般 Command", Tag = "command" },
                     new ComboBoxItem { Content = "Node.js Docker 部署", Tag = "node-docker" },
-                    new ComboBoxItem { Content = "終端機", Tag = "terminal" },
+                    new ComboBoxItem { Content = "終端機開啟", Tag = "terminal-open" },
+                    new ComboBoxItem { Content = "終端機執行", Tag = "terminal-execute" },
                     new ComboBoxItem { Content = "FileBunker 上傳", Tag = "filebunker-upload" },
                     new ComboBoxItem { Content = "Storage 上傳", Tag = "storage-upload" },
                     new ComboBoxItem { Content = "PDF 增強", Tag = "enhance-pdf" },
@@ -164,25 +289,54 @@ namespace nuone_tools
                 },
             };
 
-            var iconGlyphTextBox = new TextBox
-            {
-                Text = existingItem?.IconGlyph ?? ToolbarCommandItem.DefaultGlyph,
-                PlaceholderText = "輸入 glyph，例如 ⚙ 或從字元對應表貼上",
-            };
-
             var iconPathTextBox = new TextBox
             {
                 Text = existingItem?.IconPath ?? string.Empty,
                 PlaceholderText = "本機 icon 路徑，例如 C:\\Soft\\icons\\vscode.png",
             };
+            var iconGlyphTextBox = new TextBox
+            {
+                Text = existingItem?.IconGlyph ?? string.Empty,
+                PlaceholderText = "例如：E768",
+            };
+            var iconGlyphPickerButton = new Button
+            {
+                Content = "從清單挑選",
+                HorizontalAlignment = HorizontalAlignment.Left,
+            };
+            var iconSourceComboBox = new ComboBox
+            {
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                Items =
+                {
+                    new ComboBoxItem { Content = "Icon 路徑", Tag = "path" },
+                    new ComboBoxItem { Content = "Segoe Fluent Icons", Tag = "fluent" },
+                },
+            };
+            var iconSourceMode = !string.IsNullOrWhiteSpace(existingItem?.IconPath)
+                ? "path"
+                : !string.IsNullOrWhiteSpace(ToolbarCommandItem.NormalizeFluentGlyph(existingItem?.IconGlyph))
+                    ? "fluent"
+                    : "path";
+            SelectComboBoxItemByTag(iconSourceComboBox, iconSourceMode);
+            var iconPathLabel = new TextBlock { Text = "Icon 路徑" };
+            var iconGlyphLabel = new TextBlock { Text = "Segoe Fluent Icons" };
+            var iconGlyphListLabel = new TextBlock { Text = "圖示清單" };
+            var iconGlyphHint = new TextBlock
+            {
+                Text = "輸入 Fluent glyph，例如 E768、E756。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+            };
 
             var previewGlyph = new FontIcon
             {
-                Glyph = string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ? ToolbarCommandItem.DefaultGlyph : iconGlyphTextBox.Text,
+                Glyph = string.Empty,
                 FontSize = 24,
                 Foreground = new SolidColorBrush(GetBrushColor("TextPrimaryBrush", "#F6F2FF")),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
+                Visibility = Visibility.Collapsed,
             };
 
             var previewImage = new Image
@@ -197,17 +351,30 @@ namespace nuone_tools
 
             async void RefreshPreview()
             {
+                var iconSource = iconSourceComboBox.SelectedItem is ComboBoxItem { Tag: string sourceTag }
+                    ? sourceTag
+                    : "path";
                 await UpdateToolbarIconVisualAsync(
                     previewImage,
                     previewGlyph,
-                    iconPathTextBox.Text.Trim(),
-                    string.IsNullOrWhiteSpace(iconGlyphTextBox.Text)
-                        ? ToolbarCommandItem.DefaultGlyph
-                        : iconGlyphTextBox.Text.Trim());
+                    string.Equals(iconSource, "path", StringComparison.Ordinal) ? iconPathTextBox.Text.Trim() : string.Empty,
+                    string.Equals(iconSource, "fluent", StringComparison.Ordinal) ? iconGlyphTextBox.Text.Trim() : string.Empty);
             }
 
-            iconGlyphTextBox.TextChanged += (_, _) => RefreshPreview();
             iconPathTextBox.TextChanged += (_, _) => RefreshPreview();
+            iconGlyphTextBox.TextChanged += (_, _) =>
+            {
+                RefreshPreview();
+            };
+            iconSourceComboBox.SelectionChanged += (_, _) => RefreshPreview();
+            iconGlyphPickerButton.Click += async (_, _) =>
+            {
+                var selectedCode = await ShowFluentIconPickerDialogAsync(iconGlyphTextBox.Text.Trim());
+                if (!string.IsNullOrWhiteSpace(selectedCode))
+                {
+                    iconGlyphTextBox.Text = selectedCode;
+                }
+            };
 
             var iconPreviewBorder = new Border
             {
@@ -310,18 +477,29 @@ namespace nuone_tools
                     new ComboBoxItem { Content = "內建終端機", Tag = OpenBuiltInTerminalCommand },
                 },
             };
+            var terminalTargetLabel = new TextBlock { Text = "終端機入口" };
+            var terminalShellLabel = new TextBlock { Text = "預設 shell" };
+            var terminalWorkingDirectoryLabel = new TextBlock { Text = "工作目錄" };
+            var terminalCustomWorkingDirectoryLabel = new TextBlock { Text = "自訂工作目錄" };
+            var terminalLaunchArgumentsLabel = new TextBlock { Text = "啟動參數" };
 
             SelectComboBoxItemByTag(nodeDockerLaunchModeComboBox, existingItem?.NodeDockerLaunchMode ?? NodeDockerLaunchMode.ExternalWindow);
             SelectComboBoxItemByTag(nodeDockerBuiltInShellComboBox, existingItem?.TerminalShellKind ?? _shortcutSettings.DefaultTerminalShellKind);
             SelectComboBoxItemByTag(terminalShellComboBox, existingItem?.TerminalShellKind ?? _shortcutSettings.DefaultTerminalShellKind);
             SelectComboBoxItemByTag(terminalWorkingDirectoryModeComboBox, existingItem?.TerminalWorkingDirectoryMode ?? _shortcutSettings.DefaultTerminalWorkingDirectoryMode);
-            SelectComboBoxItemByTag(terminalTargetComboBox, isBuiltInTerminal ? OpenBuiltInTerminalCommand : OpenExternalTerminalCommand);
+            SelectComboBoxItemByTag(
+                terminalTargetComboBox,
+                isBuiltInTerminal || isBuiltInTerminalExecute
+                    ? OpenBuiltInTerminalCommand
+                    : OpenExternalTerminalCommand);
             SelectComboBoxItemByTag(
                 builtInActionComboBox,
                 isNodeDockerDeploy
                     ? "node-docker"
-                    : isTerminal
-                        ? "terminal"
+                    : isTerminalOpen
+                        ? "terminal-open"
+                    : isTerminalExecute
+                        ? "terminal-execute"
                     : isFileBunkerUpload
                         ? "filebunker-upload"
                     : isStorageUpload
@@ -340,15 +518,15 @@ namespace nuone_tools
                 Text = "終端機設定",
                 FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
             });
-            terminalSettingsPanel.Children.Add(new TextBlock { Text = "終端機入口" });
+            terminalSettingsPanel.Children.Add(terminalTargetLabel);
             terminalSettingsPanel.Children.Add(terminalTargetComboBox);
-            terminalSettingsPanel.Children.Add(new TextBlock { Text = "預設 shell" });
+            terminalSettingsPanel.Children.Add(terminalShellLabel);
             terminalSettingsPanel.Children.Add(terminalShellComboBox);
-            terminalSettingsPanel.Children.Add(new TextBlock { Text = "工作目錄" });
+            terminalSettingsPanel.Children.Add(terminalWorkingDirectoryLabel);
             terminalSettingsPanel.Children.Add(terminalWorkingDirectoryModeComboBox);
-            terminalSettingsPanel.Children.Add(new TextBlock { Text = "自訂工作目錄" });
+            terminalSettingsPanel.Children.Add(terminalCustomWorkingDirectoryLabel);
             terminalSettingsPanel.Children.Add(terminalCustomWorkingDirectoryTextBox);
-            terminalSettingsPanel.Children.Add(new TextBlock { Text = "啟動參數" });
+            terminalSettingsPanel.Children.Add(terminalLaunchArgumentsLabel);
             terminalSettingsPanel.Children.Add(terminalLaunchArgumentsTextBox);
             terminalSettingsPanel.Children.Add(new TextBlock
             {
@@ -367,10 +545,18 @@ namespace nuone_tools
 
             var builtInTerminalHint = new TextBlock
             {
-                Text = "這個模式會使用終端機內建流程，不需要另外填 command。可切換成外部 Windows Terminal 或 Nuone Tools 內建終端機。",
+                Text = "這個模式會直接開啟終端機，不需要另外填 command。可切換成外部 Windows Terminal 或 Nuone Tools 內建終端機。",
                 TextWrapping = TextWrapping.Wrap,
                 Opacity = 0.78,
-                Visibility = isTerminal ? Visibility.Visible : Visibility.Collapsed,
+                Visibility = isTerminalOpen ? Visibility.Visible : Visibility.Collapsed,
+            };
+
+            var terminalExecuteHint = new TextBlock
+            {
+                Text = "這個模式會在 Nuone Tools 內部終端機執行目前 pane 選取的腳本，不需要另外填 command。支援 *.ps1、*.bat、*.cmd、*.bash、*.sh，並會固定使用選取檔案所在目錄，依副檔名自動選擇 PowerShell、cmd 或 Git Bash。",
+                TextWrapping = TextWrapping.Wrap,
+                Opacity = 0.78,
+                Visibility = isTerminalExecute ? Visibility.Visible : Visibility.Collapsed,
             };
 
             var fileBunkerUploadHint = new TextBlock
@@ -395,13 +581,46 @@ namespace nuone_tools
                 Visibility = isEnhancePdf ? Visibility.Visible : Visibility.Collapsed,
             };
 
+            void RefreshIconSourceMode()
+            {
+                var iconSource = iconSourceComboBox.SelectedItem is ComboBoxItem { Tag: string sourceTag }
+                    ? sourceTag
+                    : "path";
+                iconPathLabel.Visibility = string.Equals(iconSource, "path", StringComparison.Ordinal)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                iconPathRow.Visibility = string.Equals(iconSource, "path", StringComparison.Ordinal)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                iconGlyphLabel.Visibility = string.Equals(iconSource, "fluent", StringComparison.Ordinal)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                iconGlyphListLabel.Visibility = string.Equals(iconSource, "fluent", StringComparison.Ordinal)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                iconGlyphPickerButton.Visibility = string.Equals(iconSource, "fluent", StringComparison.Ordinal)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                iconGlyphTextBox.Visibility = string.Equals(iconSource, "fluent", StringComparison.Ordinal)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                iconGlyphHint.Visibility = string.Equals(iconSource, "fluent", StringComparison.Ordinal)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+            }
+
             void RefreshCommandMode()
             {
+                RefreshIconSourceMode();
+
                 var selectedMode = builtInActionComboBox.SelectedItem is ComboBoxItem { Tag: string modeTag }
                     ? modeTag
                     : "command";
                 var deployMode = string.Equals(selectedMode, "node-docker", StringComparison.Ordinal);
-                var terminalMode = string.Equals(selectedMode, "terminal", StringComparison.Ordinal);
+                var terminalOpenMode = string.Equals(selectedMode, "terminal-open", StringComparison.Ordinal);
+                var terminalExecuteMode = string.Equals(selectedMode, "terminal-execute", StringComparison.Ordinal);
+                var terminalMode = terminalOpenMode || terminalExecuteMode;
+                var showTerminalWorkingDirectory = terminalOpenMode;
                 var fileBunkerUploadMode = string.Equals(selectedMode, "filebunker-upload", StringComparison.Ordinal);
                 var storageUploadMode = string.Equals(selectedMode, "storage-upload", StringComparison.Ordinal);
                 var enhancePdfMode = string.Equals(selectedMode, "enhance-pdf", StringComparison.Ordinal);
@@ -410,13 +629,22 @@ namespace nuone_tools
                 terminalSettingsPanel.Visibility = terminalMode ? Visibility.Visible : Visibility.Collapsed;
                 commandPanel.Visibility = deployMode || terminalMode || fileBunkerUploadMode || storageUploadMode || enhancePdfMode ? Visibility.Collapsed : Visibility.Visible;
                 builtInCommandHint.Visibility = deployMode ? Visibility.Visible : Visibility.Collapsed;
-                builtInTerminalHint.Visibility = terminalMode ? Visibility.Visible : Visibility.Collapsed;
+                builtInTerminalHint.Visibility = terminalOpenMode ? Visibility.Visible : Visibility.Collapsed;
+                terminalExecuteHint.Visibility = terminalExecuteMode ? Visibility.Visible : Visibility.Collapsed;
                 fileBunkerUploadHint.Visibility = fileBunkerUploadMode ? Visibility.Visible : Visibility.Collapsed;
                 storageUploadHint.Visibility = storageUploadMode ? Visibility.Visible : Visibility.Collapsed;
                 enhancePdfHint.Visibility = enhancePdfMode ? Visibility.Visible : Visibility.Collapsed;
                 commandTextBox.IsReadOnly = deployMode || terminalMode || fileBunkerUploadMode || storageUploadMode || enhancePdfMode;
+                terminalTargetLabel.Visibility = terminalOpenMode ? Visibility.Visible : Visibility.Collapsed;
+                terminalTargetComboBox.Visibility = terminalOpenMode ? Visibility.Visible : Visibility.Collapsed;
+                terminalWorkingDirectoryLabel.Visibility = showTerminalWorkingDirectory ? Visibility.Visible : Visibility.Collapsed;
+                terminalWorkingDirectoryModeComboBox.Visibility = showTerminalWorkingDirectory ? Visibility.Visible : Visibility.Collapsed;
+                var showCustomWorkingDirectory =
+                    showTerminalWorkingDirectory &&
+                    terminalWorkingDirectoryModeComboBox.SelectedItem is ComboBoxItem { Tag: ToolbarWorkingDirectoryMode.CustomPath };
+                terminalCustomWorkingDirectoryLabel.Visibility = showCustomWorkingDirectory ? Visibility.Visible : Visibility.Collapsed;
                 terminalCustomWorkingDirectoryTextBox.Visibility =
-                    terminalWorkingDirectoryModeComboBox.SelectedItem is ComboBoxItem { Tag: ToolbarWorkingDirectoryMode.CustomPath }
+                    showCustomWorkingDirectory
                         ? Visibility.Visible
                         : Visibility.Collapsed;
                 var deployRunsInBuiltInTerminal =
@@ -436,29 +664,28 @@ namespace nuone_tools
                         titleTextBox.Text = "deploy";
                     }
 
-                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
-                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
-                    {
-                        iconGlyphTextBox.Text = "\uE7B8";
-                    }
-
                     return;
                 }
 
-                if (terminalMode)
+                if (terminalOpenMode)
                 {
                     commandTextBox.Text = terminalTargetComboBox.SelectedItem is ComboBoxItem { Tag: string terminalCommand }
                         ? terminalCommand
                         : OpenExternalTerminalCommand;
                     if (string.IsNullOrWhiteSpace(titleTextBox.Text))
                     {
-                        titleTextBox.Text = "terminal";
+                        titleTextBox.Text = "terminal open";
                     }
 
-                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
-                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
+                    return;
+                }
+
+                if (terminalExecuteMode)
+                {
+                    commandTextBox.Text = ExecuteInBuiltInTerminalCommand;
+                    if (string.IsNullOrWhiteSpace(titleTextBox.Text))
                     {
-                        iconGlyphTextBox.Text = "\uE756";
+                        titleTextBox.Text = "terminal run";
                     }
 
                     return;
@@ -472,12 +699,6 @@ namespace nuone_tools
                         titleTextBox.Text = "upload";
                     }
 
-                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
-                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
-                    {
-                        iconGlyphTextBox.Text = "\uE898";
-                    }
-
                     return;
                 }
 
@@ -487,12 +708,6 @@ namespace nuone_tools
                     if (string.IsNullOrWhiteSpace(titleTextBox.Text))
                     {
                         titleTextBox.Text = "storage";
-                    }
-
-                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
-                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
-                    {
-                        iconGlyphTextBox.Text = "\uE898";
                     }
 
                     return;
@@ -505,12 +720,6 @@ namespace nuone_tools
                     {
                         titleTextBox.Text = "pdf enhance";
                     }
-
-                    if (string.IsNullOrWhiteSpace(iconGlyphTextBox.Text) ||
-                        string.Equals(iconGlyphTextBox.Text, ToolbarCommandItem.DefaultGlyph, StringComparison.Ordinal))
-                    {
-                        iconGlyphTextBox.Text = "\uEA90";
-                    }
                 }
             }
 
@@ -518,12 +727,13 @@ namespace nuone_tools
             nodeDockerLaunchModeComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
             terminalTargetComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
             terminalWorkingDirectoryModeComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
+            iconSourceComboBox.SelectionChanged += (_, _) => RefreshCommandMode();
             RefreshCommandMode();
 
             var panel = new StackPanel { Spacing = 14 };
             panel.Children.Add(new TextBlock
             {
-                Text = "設定工具列按鈕的名稱、圖示與 command。一般 command 會在目前作用中的 pane 路徑執行；終端機、部署與 FileBunker 上傳模式可直接走內建流程。",
+                Text = "設定工具列按鈕的名稱、圖示與 command。一般 command 會在目前作用中的 pane 路徑執行；終端機、部署與其他內建動作模式可直接走內建流程。",
                 TextWrapping = TextWrapping.Wrap,
             });
             panel.Children.Add(new TextBlock { Text = "名稱" });
@@ -535,16 +745,22 @@ namespace nuone_tools
             panel.Children.Add(commandPanel);
             panel.Children.Add(builtInCommandHint);
             panel.Children.Add(builtInTerminalHint);
+            panel.Children.Add(terminalExecuteHint);
             panel.Children.Add(fileBunkerUploadHint);
             panel.Children.Add(storageUploadHint);
             panel.Children.Add(enhancePdfHint);
-            panel.Children.Add(new TextBlock { Text = "Icon 路徑" });
+            panel.Children.Add(new TextBlock { Text = "圖示來源" });
+            panel.Children.Add(iconSourceComboBox);
+            panel.Children.Add(iconPathLabel);
             panel.Children.Add(iconPathRow);
-            panel.Children.Add(new TextBlock { Text = "Glyph 後備圖示" });
+            panel.Children.Add(iconGlyphLabel);
+            panel.Children.Add(iconGlyphListLabel);
+            panel.Children.Add(iconGlyphPickerButton);
             panel.Children.Add(iconGlyphTextBox);
+            panel.Children.Add(iconGlyphHint);
             panel.Children.Add(new TextBlock
             {
-                Text = "優先使用本機 png / ico / svg，或直接指定 exe / dll / lnk 路徑來抓它的程式 icon。若未填寫或路徑無法讀取，才會改用 glyph。glyph 可貼單一字元，例如 Segoe Fluent Icons、Segoe MDL2 或 emoji。",
+                Text = "可選本機 icon 路徑，或改用 Segoe Fluent Icons glyph。若未填寫或內容無效，就不顯示圖示。",
                 TextWrapping = TextWrapping.Wrap,
                 Opacity = 0.78,
             });
@@ -575,12 +791,15 @@ namespace nuone_tools
             var selectedMode = builtInActionComboBox.SelectedItem is ComboBoxItem { Tag: string modeTag }
                 ? modeTag
                 : "command";
+            var selectedTerminalTargetCommand = terminalTargetComboBox.SelectedItem is ComboBoxItem { Tag: string terminalTargetCommand }
+                ? terminalTargetCommand
+                : OpenExternalTerminalCommand;
             var command = string.Equals(selectedMode, "node-docker", StringComparison.Ordinal)
                 ? DeployNodeDockerCommand
-                : string.Equals(selectedMode, "terminal", StringComparison.Ordinal)
-                    ? terminalTargetComboBox.SelectedItem is ComboBoxItem { Tag: string terminalCommand }
-                        ? terminalCommand
-                        : OpenExternalTerminalCommand
+                : string.Equals(selectedMode, "terminal-open", StringComparison.Ordinal)
+                    ? selectedTerminalTargetCommand
+                : string.Equals(selectedMode, "terminal-execute", StringComparison.Ordinal)
+                    ? ExecuteInBuiltInTerminalCommand
                 : string.Equals(selectedMode, "filebunker-upload", StringComparison.Ordinal)
                     ? FileBunkerUploadCommand
                 : string.Equals(selectedMode, "storage-upload", StringComparison.Ordinal)
@@ -588,8 +807,15 @@ namespace nuone_tools
                 : string.Equals(selectedMode, "enhance-pdf", StringComparison.Ordinal)
                     ? EnhancePdfCommand
                     : commandTextBox.Text.Trim();
-            var iconPath = iconPathTextBox.Text.Trim();
-            var iconGlyph = iconGlyphTextBox.Text.Trim();
+            var selectedIconSource = iconSourceComboBox.SelectedItem is ComboBoxItem { Tag: string iconSourceTag }
+                ? iconSourceTag
+                : "path";
+            var iconPath = string.Equals(selectedIconSource, "path", StringComparison.Ordinal)
+                ? iconPathTextBox.Text.Trim()
+                : string.Empty;
+            var iconGlyph = string.Equals(selectedIconSource, "fluent", StringComparison.Ordinal)
+                ? iconGlyphTextBox.Text.Trim().ToUpperInvariant()
+                : string.Empty;
             var nodeDockerUser = nodeDockerUserTextBox.Text.Trim();
             var nodeDockerHost = nodeDockerHostTextBox.Text.Trim();
             var nodeDockerRemoteDirectory = nodeDockerRemoteDirectoryTextBox.Text.Trim();
@@ -663,6 +889,424 @@ namespace nuone_tools
             }
 
             comboBox.SelectedIndex = 0;
+        }
+
+        private async Task<string?> ShowFluentIconPickerDialogAsync(string selectedGlyphCode)
+        {
+            var rawSelectedCode = (selectedGlyphCode ?? string.Empty).Trim();
+            var normalizedSelectedCode = System.Text.RegularExpressions.Regex.IsMatch(rawSelectedCode, "^[0-9A-Fa-f]{4,6}$")
+                ? rawSelectedCode.ToUpperInvariant()
+                : string.Empty;
+            var searchTextBox = new TextBox
+            {
+                PlaceholderText = "搜尋名稱或 glyph code，例如 Folder / E8B7",
+            };
+            var selectedTextBlock = new TextBlock
+            {
+                Text = string.IsNullOrWhiteSpace(normalizedSelectedCode)
+                    ? "尚未選擇"
+                    : $"已選擇：{normalizedSelectedCode}",
+                Opacity = 0.8,
+                Margin = new Thickness(0, 0, 0, 8),
+            };
+            var tabView = new TabView
+            {
+                IsAddTabButtonVisible = false,
+                MinHeight = 540,
+            };
+            string? pickedCode = string.IsNullOrWhiteSpace(normalizedSelectedCode)
+                ? null
+                : normalizedSelectedCode;
+
+            void UpdateSelectedText(string? code)
+            {
+                selectedTextBlock.Text = string.IsNullOrWhiteSpace(code)
+                    ? "尚未選擇"
+                    : $"已選擇：{code}";
+            }
+
+            var allOptions = ToolbarFluentIconCategories
+                .SelectMany(category => category.Options)
+                .GroupBy(option => option.Code, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(option => option.Name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+            static GridView BuildFluentGridView()
+            {
+                return new GridView
+                {
+                    SelectionMode = ListViewSelectionMode.Single,
+                    IsItemClickEnabled = true,
+                    HorizontalAlignment = HorizontalAlignment.Stretch,
+                    ItemContainerStyle = null,
+                    ItemsPanel = (ItemsPanelTemplate)XamlReader.Load(
+                        @"<ItemsPanelTemplate xmlns=""http://schemas.microsoft.com/winfx/2006/xaml/presentation"">
+                            <ItemsWrapGrid Orientation=""Horizontal"" MaximumRowsOrColumns=""6"" />
+                        </ItemsPanelTemplate>"),
+                };
+            }
+
+            GridViewItem BuildFluentGridItem(string code, string? name)
+            {
+                var glyph = ToolbarCommandItem.NormalizeFluentGlyph(code);
+                var stack = new StackPanel
+                {
+                    Spacing = string.IsNullOrWhiteSpace(name) ? 0 : 8,
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Children =
+                    {
+                        new FontIcon
+                        {
+                            Glyph = glyph,
+                            FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"],
+                            FontSize = 24,
+                            HorizontalAlignment = HorizontalAlignment.Center,
+                        },
+                    },
+                };
+
+                if (!string.IsNullOrWhiteSpace(name))
+                {
+                    stack.Children.Add(new TextBlock
+                    {
+                        Text = name,
+                        TextAlignment = TextAlignment.Center,
+                        HorizontalAlignment = HorizontalAlignment.Center,
+                        TextWrapping = TextWrapping.WrapWholeWords,
+                    });
+                }
+
+                var card = new Border
+                {
+                    Width = 130,
+                    Height = string.IsNullOrWhiteSpace(name) ? 64 : 88,
+                    Padding = new Thickness(10),
+                    Margin = new Thickness(4),
+                    CornerRadius = new CornerRadius(10),
+                    Background = new SolidColorBrush(GetBrushColor("InputBrush", "#1B1621")),
+                    BorderBrush = new SolidColorBrush(GetBrushColor("PanelStrokeBrush", "#3A3146")),
+                    BorderThickness = new Thickness(1),
+                    Child = stack,
+                };
+
+                return new GridViewItem
+                {
+                    Tag = code,
+                    Content = card,
+                };
+            }
+
+            void WireGridView(GridView gridView)
+            {
+                gridView.ItemClick += (_, args) =>
+                {
+                    if (args.ClickedItem is GridViewItem { Tag: string code })
+                    {
+                        pickedCode = code;
+                        UpdateSelectedText(code);
+                        gridView.SelectedItem = args.ClickedItem;
+                    }
+                };
+
+                gridView.SelectionChanged += (_, _) =>
+                {
+                    if (gridView.SelectedItem is GridViewItem { Tag: string code })
+                    {
+                        pickedCode = code;
+                        UpdateSelectedText(code);
+                    }
+                };
+            }
+
+            static ScrollViewer WrapGrid(GridView gridView)
+            {
+                return new ScrollViewer
+                {
+                    Content = gridView,
+                    VerticalScrollBarVisibility = ScrollBarVisibility.Auto,
+                };
+            }
+
+            GridView BuildSafeGridView(IEnumerable<FluentIconOption> options)
+            {
+                var gridView = BuildFluentGridView();
+                foreach (var option in options)
+                {
+                    var item = BuildFluentGridItem(option.Code, option.Name);
+                    gridView.Items.Add(item);
+                    if (string.Equals(option.Code, normalizedSelectedCode, StringComparison.OrdinalIgnoreCase))
+                    {
+                        gridView.SelectedItem = item;
+                    }
+                }
+                WireGridView(gridView);
+                return gridView;
+            }
+
+            GridView BuildAdvancedGridView(FluentIconRange range)
+            {
+                var gridView = BuildFluentGridView();
+                for (var codePoint = range.StartCodePoint; codePoint <= range.EndCodePoint; codePoint++)
+                {
+                    var code = codePoint.ToString("X4", CultureInfo.InvariantCulture);
+                    var item = BuildFluentGridItem(code, null);
+                    gridView.Items.Add(item);
+                    if (string.Equals(code, normalizedSelectedCode, StringComparison.OrdinalIgnoreCase))
+                    {
+                        gridView.SelectedItem = item;
+                    }
+                }
+                WireGridView(gridView);
+                return gridView;
+            }
+
+            TabView BuildSafeModeTabView()
+            {
+                var safeTabView = new TabView
+                {
+                    IsAddTabButtonVisible = false,
+                };
+
+                safeTabView.TabItems.Add(new TabViewItem
+                {
+                    Header = "全部",
+                    Content = WrapGrid(BuildSafeGridView(allOptions)),
+                });
+
+                foreach (var category in ToolbarFluentIconCategories)
+                {
+                    safeTabView.TabItems.Add(new TabViewItem
+                    {
+                        Header = category.Title,
+                        Content = WrapGrid(BuildSafeGridView(category.Options)),
+                    });
+                }
+
+                if (safeTabView.TabItems.Count > 0)
+                {
+                    safeTabView.SelectedIndex = 0;
+                }
+
+                return safeTabView;
+            }
+
+            TabView BuildAdvancedModeTabView()
+            {
+                var advancedTabView = new TabView
+                {
+                    IsAddTabButtonVisible = false,
+                };
+
+                foreach (var range in ToolbarFluentIconAdvancedRanges)
+                {
+                    advancedTabView.TabItems.Add(new TabViewItem
+                    {
+                        Header = range.Title,
+                        Content = WrapGrid(BuildAdvancedGridView(range)),
+                    });
+                }
+
+                if (advancedTabView.TabItems.Count > 0)
+                {
+                    advancedTabView.SelectedIndex = 0;
+                }
+
+                return advancedTabView;
+            }
+
+            tabView.TabItems.Add(new TabViewItem
+            {
+                Header = "安全清單",
+                Content = BuildSafeModeTabView(),
+            });
+            tabView.TabItems.Add(new TabViewItem
+            {
+                Header = "進階(大量 glyph)",
+                Content = BuildAdvancedModeTabView(),
+            });
+
+            static IEnumerable<(GridView GridView, TabViewItem? ParentTab, TabViewItem? ChildTab)> EnumerateGridTargets(
+                object? content,
+                TabViewItem? parentTab = null)
+            {
+                if (content is ScrollViewer { Content: GridView singleGridView })
+                {
+                    yield return (singleGridView, parentTab, null);
+                    yield break;
+                }
+
+                if (content is not TabView nestedTabView)
+                {
+                    yield break;
+                }
+
+                foreach (var nestedTab in nestedTabView.TabItems.OfType<TabViewItem>())
+                {
+                    if (nestedTab.Content is ScrollViewer { Content: GridView nestedGridView })
+                    {
+                        yield return (nestedGridView, parentTab, nestedTab);
+                        continue;
+                    }
+
+                    foreach (var target in EnumerateGridTargets(nestedTab.Content, nestedTab))
+                    {
+                        yield return (target.GridView, parentTab ?? target.ParentTab, nestedTab);
+                    }
+                }
+            }
+
+            if (tabView.TabItems.Count > 0)
+            {
+                tabView.SelectedIndex = 0;
+            }
+
+            void ApplySearchSelection(string? rawValue)
+            {
+                var value = (rawValue ?? string.Empty).Trim().ToUpperInvariant();
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    return;
+                }
+
+                foreach (var tab in tabView.TabItems.OfType<TabViewItem>())
+                {
+                    foreach (var target in EnumerateGridTargets(tab.Content, tab))
+                    {
+                        var targetItem = target.GridView.Items
+                            .OfType<GridViewItem>()
+                            .FirstOrDefault(item =>
+                            {
+                                var code = item.Tag as string;
+                                var name = ((item.Content as Border)?.Child as StackPanel)?.Children
+                                    .OfType<TextBlock>()
+                                    .FirstOrDefault()?.Text ?? string.Empty;
+                                return string.Equals(code, value, StringComparison.OrdinalIgnoreCase) ||
+                                    name.Contains(value, StringComparison.OrdinalIgnoreCase);
+                            });
+                        if (targetItem is null)
+                        {
+                            continue;
+                        }
+
+                        tabView.SelectedItem = tab;
+                        if (tab.Content is TabView nestedTabView && target.ChildTab is not null)
+                        {
+                            nestedTabView.SelectedItem = target.ChildTab;
+                        }
+                        target.GridView.SelectedItem = targetItem;
+                        target.GridView.ScrollIntoView(targetItem);
+                        var matchedCode = targetItem.Tag as string ?? value;
+                        pickedCode = matchedCode;
+                        UpdateSelectedText(matchedCode);
+                        return;
+                    }
+                }
+            }
+
+            searchTextBox.TextChanged += (_, _) => ApplySearchSelection(searchTextBox.Text);
+
+            var confirmButton = new Button
+            {
+                Content = "確定",
+                MinWidth = 120,
+            };
+            var cancelButton = new Button
+            {
+                Content = "取消",
+                MinWidth = 120,
+            };
+
+            var buttonRow = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Right,
+                Spacing = 10,
+                Children =
+                {
+                    cancelButton,
+                    confirmButton,
+                },
+            };
+
+            var root = new Grid
+            {
+                Background = new SolidColorBrush(GetBrushColor("SurfaceBrush", "#221C2B")),
+                RequestedTheme = RootLayout.RequestedTheme,
+                Padding = new Thickness(16),
+                RowDefinitions =
+                {
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = GridLength.Auto },
+                    new RowDefinition { Height = new GridLength(1, GridUnitType.Star) },
+                    new RowDefinition { Height = GridLength.Auto },
+                },
+            };
+            root.Children.Add(new TextBlock
+            {
+                Text = "選擇 Segoe Fluent Icon",
+                FontSize = 20,
+                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                Margin = new Thickness(0, 0, 0, 12),
+            });
+
+            var pickerHeaderPanel = new StackPanel
+            {
+                Spacing = 8,
+                Margin = new Thickness(0, 0, 0, 12),
+                Children =
+                {
+                    selectedTextBlock,
+                    searchTextBox,
+                },
+            };
+            Grid.SetRow(pickerHeaderPanel, 1);
+            root.Children.Add(pickerHeaderPanel);
+
+            Grid.SetRow(tabView, 2);
+            root.Children.Add(tabView);
+            Grid.SetRow(buttonRow, 3);
+            buttonRow.Margin = new Thickness(0, 12, 0, 0);
+            root.Children.Add(buttonRow);
+
+            ApplySearchSelection(searchTextBox.Text);
+
+            var pickerWindow = new Window
+            {
+                Content = root,
+            };
+            pickerWindow.AppWindow.Resize(new Windows.Graphics.SizeInt32(980, 760));
+
+            var completion = new TaskCompletionSource<string?>();
+            var completed = false;
+
+            void Complete(string? result)
+            {
+                if (completed)
+                {
+                    return;
+                }
+
+                completed = true;
+                completion.TrySetResult(result);
+            }
+
+            confirmButton.Click += (_, _) =>
+            {
+                Complete(pickedCode);
+                pickerWindow.Close();
+            };
+            cancelButton.Click += (_, _) =>
+            {
+                Complete(null);
+                pickerWindow.Close();
+            };
+
+            pickerWindow.Closed += (_, _) => Complete(null);
+            pickerWindow.Activate();
+
+            return await completion.Task;
         }
 
         private async Task ShowMessageAsync(string title, string message)

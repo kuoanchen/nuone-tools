@@ -47,6 +47,7 @@ namespace nuone_tools
             ShowHiddenSystemItemsToggle.IsOn = _editingShortcutSettings.ShowHiddenSystemItems;
             ShowSelectedFileSizeToggle.IsOn = _editingShortcutSettings.ShowSelectedFileSize;
             ShowSelectedFolderSizeToggle.IsOn = _editingShortcutSettings.ShowSelectedFolderSize;
+            ShowCurrentDirectoryItemSizesToggle.IsOn = _editingShortcutSettings.ShowCurrentDirectoryItemSizes;
             SyncThemeModeSelection();
             SyncDefaultTerminalShellSelection();
             SyncDefaultTerminalWorkingDirectoryModeSelection();
@@ -113,6 +114,8 @@ namespace nuone_tools
         {
             if (CurrentAppVersionTextBlock is null ||
                 AppUpdateManifestUrlTextBlock is null ||
+                AppUpdateProgressBar is null ||
+                AppUpdateProgressTextBlock is null ||
                 AppUpdateStatusTextBlock is null ||
                 LatestAppVersionTextBlock is null ||
                 LastAppUpdateCheckTextBlock is null ||
@@ -133,6 +136,17 @@ namespace nuone_tools
             CurrentAppVersionTextBlock.Text = _appUpdateState.CurrentVersionText;
             AppUpdateManifestUrlTextBlock.Text = _appUpdateState.ManifestUrl;
             AppUpdateStatusTextBlock.Text = _appUpdateState.StatusText;
+            AppUpdateProgressBar.Visibility = _appUpdateState.HasProgress
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+            AppUpdateProgressBar.IsIndeterminate = _appUpdateState.HasProgress && _appUpdateState.IsProgressIndeterminate;
+            AppUpdateProgressBar.Value = _appUpdateState.IsProgressIndeterminate
+                ? 0
+                : Math.Clamp(_appUpdateState.ProgressValue, 0, 100);
+            AppUpdateProgressTextBlock.Text = _appUpdateState.ProgressText;
+            AppUpdateProgressTextBlock.Visibility = _appUpdateState.HasProgress && !string.IsNullOrWhiteSpace(_appUpdateState.ProgressText)
+                ? Visibility.Visible
+                : Visibility.Collapsed;
             LatestAppVersionTextBlock.Text = $"最新版本：{_appUpdateState.LatestVersionText}";
             LastAppUpdateCheckTextBlock.Text = $"上次檢查：{_appUpdateState.LastCheckedText}";
             AppUpdateReleaseNotesTextBlock.Text = _appUpdateState.ReleaseNotes;
@@ -153,6 +167,39 @@ namespace nuone_tools
                 : Visibility.Collapsed;
             OpenUpdateDownloadButton.IsEnabled = hasDownloadAction;
             CopyUpdateDownloadUrlButton.IsEnabled = hasDownloadAction;
+        }
+
+        private void SetAppUpdateProgressState(
+            string statusText,
+            double progressValue,
+            string progressText,
+            bool isIndeterminate = false)
+        {
+            _appUpdateState.StatusText = statusText;
+            _appUpdateState.HasProgress = true;
+            _appUpdateState.IsProgressIndeterminate = isIndeterminate;
+            _appUpdateState.ProgressValue = Math.Clamp(progressValue, 0, 100);
+            _appUpdateState.ProgressText = progressText?.Trim() ?? string.Empty;
+            UpdateAppUpdateUi();
+        }
+
+        private void ClearAppUpdateProgressState()
+        {
+            _appUpdateState.HasProgress = false;
+            _appUpdateState.IsProgressIndeterminate = false;
+            _appUpdateState.ProgressValue = 0;
+            _appUpdateState.ProgressText = string.Empty;
+            UpdateAppUpdateUi();
+        }
+
+        private void AddAppUpdateNotification(string summary, string details, bool showWindowsToast = true)
+        {
+            AddNotificationHistoryRecord(
+                NotificationHistoryScope.LocalOnly,
+                "更新",
+                summary,
+                details,
+                showWindowsToast: showWindowsToast);
         }
 
         internal async void CheckForUpdatesButton_Click(object sender, RoutedEventArgs e)
@@ -251,6 +298,11 @@ namespace nuone_tools
                         ? $"發現新版本：{latestVersion}，等待你確認下載與重啟。"
                         : $"發現新版本：{latestVersion}，請確認是否下載與安裝。"
                     : "目前已是最新版本";
+                if (!isUpdateAvailable)
+                {
+                    ClearAppUpdateProgressState();
+                    _appUpdateState.StatusText = "目前已是最新版本";
+                }
                 UpdateAppUpdateUi();
                 AppLogging.Information(
                     "App update check completed Automatic={IsAutomatic} CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} UpdateAvailable={IsUpdateAvailable}",
@@ -267,6 +319,10 @@ namespace nuone_tools
                     if (!shouldDownload)
                     {
                         _appUpdateState.StatusText = $"發現新版本：{latestVersion}，你已取消本次更新。";
+                        AddAppUpdateNotification(
+                            $"已取消更新 {latestVersion}",
+                            $"目前版本 {currentVersion} 保持不變。",
+                            showWindowsToast: false);
                         UpdateAppUpdateUi();
                         return;
                     }
@@ -313,6 +369,8 @@ namespace nuone_tools
             string currentVersion,
             bool skipDownloadConfirmation = false)
         {
+            const string appUpdateProgressTag = "app-update";
+
             if (string.IsNullOrWhiteSpace(resolvedDownloadUrl))
             {
                 return false;
@@ -352,6 +410,27 @@ namespace nuone_tools
             var downloadFileName = GetDownloadFileName(manifest, resolvedDownloadUrl);
             var downloadPath = Path.Combine(updateRoot, downloadFileName);
             var extractDirectory = Path.Combine(updateRoot, "extract");
+            Guid? backgroundWorkId = null;
+
+            void UpdateInstallProgress(string statusText, double progressValue, string progressText, string detailText, bool isIndeterminate = false)
+            {
+                SetAppUpdateProgressState(statusText, progressValue, progressText, isIndeterminate);
+                if (backgroundWorkId.HasValue)
+                {
+                    UpdateBackgroundWork(backgroundWorkId.Value, detailText, progressValue);
+                }
+
+                if (!isIndeterminate)
+                {
+                    WindowsNotificationService.ShowOrUpdateProgress(
+                        appUpdateProgressTag,
+                        "Nuone Tools 更新",
+                        $"更新到 {latestVersion}",
+                        statusText,
+                        progressValue,
+                        progressText);
+                }
+            }
 
             try
             {
@@ -361,16 +440,23 @@ namespace nuone_tools
                         $"目前版本是 {currentVersion}，發現新版 {latestVersion}。要現在下載更新包嗎？"))
                 {
                     _appUpdateState.StatusText = $"已取消下載 {latestVersion}。";
+                    AddAppUpdateNotification(
+                        $"已取消下載 {latestVersion}",
+                        $"目前版本 {currentVersion} 保持不變。",
+                        showWindowsToast: false);
                     UpdateAppUpdateUi();
                     return false;
                 }
 
                 Directory.CreateDirectory(updateRoot);
                 Directory.CreateDirectory(extractDirectory);
+                backgroundWorkId = BeginBackgroundWork(
+                    $"更新 Nuone Tools 到 {latestVersion} 中",
+                    $"準備下載 {latestVersion}",
+                    isAutomation: true);
 
                 _appUpdateState.IsInstalling = true;
-                _appUpdateState.StatusText = "下載新版中...";
-                UpdateAppUpdateUi();
+                UpdateInstallProgress("下載新版中...", 0, "0%", $"下載 {latestVersion} 中");
                 AppLogging.Information(
                     "App update install started CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} DownloadUrl={DownloadUrl}",
                     currentVersion,
@@ -380,36 +466,111 @@ namespace nuone_tools
                 using (var response = await SharedHttpClient.GetAsync(resolvedDownloadUrl, HttpCompletionOption.ResponseHeadersRead))
                 {
                     response.EnsureSuccessStatusCode();
+                    var totalBytes = response.Content.Headers.ContentLength;
+                    var downloadedBytes = 0L;
+                    var buffer = new byte[1024 * 80];
+                    var progressStopwatch = Stopwatch.StartNew();
                     await using var responseStream = await response.Content.ReadAsStreamAsync();
                     await using var fileStream = new FileStream(downloadPath, FileMode.Create, FileAccess.Write, FileShare.None);
-                    await responseStream.CopyToAsync(fileStream);
+                    while (true)
+                    {
+                        var bytesRead = await responseStream.ReadAsync(buffer.AsMemory(0, buffer.Length));
+                        if (bytesRead <= 0)
+                        {
+                            break;
+                        }
+
+                        await fileStream.WriteAsync(buffer.AsMemory(0, bytesRead));
+                        downloadedBytes += bytesRead;
+
+                        if (totalBytes.GetValueOrDefault() <= 0)
+                        {
+                            if (progressStopwatch.ElapsedMilliseconds >= 200)
+                            {
+                                UpdateInstallProgress(
+                                    "下載新版中...",
+                                    0,
+                                    $"{FormatByteSize(downloadedBytes)} / 未知大小",
+                                    $"下載 {latestVersion} 中（{FormatByteSize(downloadedBytes)}）",
+                                    isIndeterminate: true);
+                                progressStopwatch.Restart();
+                            }
+
+                            continue;
+                        }
+
+                        var totalBytesValue = totalBytes.GetValueOrDefault();
+
+                        if (progressStopwatch.ElapsedMilliseconds < 120 &&
+                            downloadedBytes < totalBytesValue)
+                        {
+                            continue;
+                        }
+
+                        var downloadPercent = downloadedBytes * 100d / totalBytesValue;
+                        UpdateInstallProgress(
+                            "下載新版中...",
+                            downloadPercent,
+                            $"{downloadPercent:0}% · {FormatByteSize(downloadedBytes)} / {FormatByteSize(totalBytesValue)}",
+                            $"下載 {latestVersion} 中（{downloadPercent:0}%）");
+                        progressStopwatch.Restart();
+                    }
                 }
 
+                UpdateInstallProgress("驗證更新檔中...", 100, "100% · 下載完成", $"驗證 {latestVersion} 更新包中");
                 ValidateDownloadedUpdateHash(manifest.Package?.Sha256, downloadPath);
 
-                _appUpdateState.StatusText = "解壓更新中...";
-                UpdateAppUpdateUi();
+                UpdateInstallProgress("解壓更新中...", 100, "100% · 已下載完成", $"解壓 {latestVersion} 更新包中");
 
                 ZipFile.ExtractToDirectory(downloadPath, extractDirectory, overwriteFiles: true);
                 var payloadDirectory = ResolveAppUpdatePayloadDirectory(extractDirectory, Path.GetFileName(currentExecutablePath));
+                var updateWorkId = backgroundWorkId;
 
                 _appUpdateState.IsInstalling = false;
-                _appUpdateState.StatusText = $"新版 {latestVersion} 已下載完成，等待安裝確認。";
+                SetAppUpdateProgressState(
+                    $"新版 {latestVersion} 已下載完成，等待安裝確認。",
+                    100,
+                    "100% · 已下載完成");
+                if (updateWorkId.HasValue)
+                {
+                    UpdateBackgroundWork(
+                        updateWorkId.Value,
+                        $"新版 {latestVersion} 已下載完成，等待安裝確認。",
+                        100);
+                }
+                WindowsNotificationService.ShowOrUpdateProgress(
+                    appUpdateProgressTag,
+                    "Nuone Tools 更新",
+                    $"更新到 {latestVersion}",
+                    "等待確認安裝",
+                    100,
+                    "已下載完成");
                 UpdateAppUpdateUi();
 
                 if (!await ConfirmAsync(
                         "安裝並重新啟動",
                         $"新版 {latestVersion} 已下載完成。要現在關閉 Nuone Tools、套用更新並重新啟動嗎？"))
                 {
+                    WindowsNotificationService.RemoveProgress(appUpdateProgressTag);
+                    if (updateWorkId.HasValue)
+                    {
+                        CompleteBackgroundWork(
+                            updateWorkId.Value,
+                            $"完成：新版 {latestVersion} 已下載",
+                            $"新版 {latestVersion} 已下載完成，尚未安裝。",
+                            persistToLocalHistory: false);
+                    }
                     _appUpdateState.StatusText = $"新版 {latestVersion} 已下載完成，尚未安裝。";
                     CaptureHintTextBlock.Text = $"新版 {latestVersion} 已下載完成，等待你確認安裝。";
+                    AddAppUpdateNotification(
+                        $"新版 {latestVersion} 已下載完成",
+                        $"目前版本 {currentVersion} 尚未重新啟動安裝 {latestVersion}。");
                     UpdateAppUpdateUi();
                     return false;
                 }
 
                 _appUpdateState.IsInstalling = true;
-                _appUpdateState.StatusText = "套用更新中...";
-                UpdateAppUpdateUi();
+                UpdateInstallProgress("套用更新中...", 100, "100% · 準備重新啟動", $"套用 {latestVersion} 並準備重新啟動");
 
                 var installerScriptPath = Path.Combine(updateRoot, "apply-update.ps1");
                 File.WriteAllText(installerScriptPath, BuildAppUpdateInstallerScript(), new UTF8Encoding(encoderShouldEmitUTF8Identifier: false));
@@ -442,6 +603,18 @@ namespace nuone_tools
                     latestVersion,
                     installDirectory,
                     payloadDirectory);
+                WindowsNotificationService.RemoveProgress(appUpdateProgressTag);
+                if (updateWorkId.HasValue)
+                {
+                    CompleteBackgroundWork(
+                        updateWorkId.Value,
+                        $"完成：開始安裝 {latestVersion}",
+                        $"更新包已下載並開始安裝，Nuone Tools 將重新啟動。",
+                        persistToLocalHistory: false);
+                }
+                AddAppUpdateNotification(
+                    $"開始安裝 {latestVersion}",
+                    $"更新包已下載完成，Nuone Tools 將關閉並重新啟動套用新版。");
                 _appUpdateState.StatusText = $"已確認安裝 {latestVersion}，完成後會重新啟動。";
                 CaptureHintTextBlock.Text = $"已開始安裝 {latestVersion}，接著會重新啟動。";
                 UpdateAppUpdateUi();
@@ -451,8 +624,23 @@ namespace nuone_tools
             }
             catch (Exception ex)
             {
+                WindowsNotificationService.RemoveProgress(appUpdateProgressTag);
+                if (backgroundWorkId.HasValue)
+                {
+                    CompleteBackgroundWork(
+                        backgroundWorkId.Value,
+                        $"失敗：更新 {latestVersion}",
+                        ex.Message,
+                        persistToLocalHistory: false);
+                }
+
                 _appUpdateState.IsInstalling = false;
                 _appUpdateState.StatusText = $"自動更新失敗：{ex.Message}";
+                _appUpdateState.HasProgress = false;
+                _appUpdateState.ProgressText = string.Empty;
+                AddAppUpdateNotification(
+                    $"更新 {latestVersion} 失敗",
+                    ex.Message);
                 AppLogging.Error(ex, "App update install failed CurrentVersion={CurrentVersion} LatestVersion={LatestVersion} DownloadUrl={DownloadUrl}", currentVersion, latestVersion, resolvedDownloadUrl);
                 UpdateAppUpdateUi();
                 return false;
@@ -564,6 +752,20 @@ namespace nuone_tools
             }
 
             return "nuone-tools-update.zip";
+        }
+
+        private static string FormatByteSize(long bytes)
+        {
+            var units = new[] { "B", "KB", "MB", "GB", "TB" };
+            double size = Math.Max(bytes, 0);
+            var unitIndex = 0;
+            while (size >= 1024 && unitIndex < units.Length - 1)
+            {
+                size /= 1024;
+                unitIndex++;
+            }
+
+            return $"{size:0.#} {units[unitIndex]}";
         }
 
         private static void ValidateDownloadedUpdateHash(string? expectedHash, string downloadPath)
@@ -1001,12 +1203,14 @@ catch {
                 return;
             }
 
-            textBlock.Text = string.IsNullOrWhiteSpace(item.IconPath)
-                ? $"Glyph：{item.DisplayGlyph}"
-                : $"圖示檔案：{item.IconPath}";
+            textBlock.Text = !string.IsNullOrWhiteSpace(item.IconPath)
+                ? $"圖示檔案：{item.IconPath}"
+                : !string.IsNullOrWhiteSpace(ToolbarCommandItem.NormalizeFluentGlyph(item.IconGlyph))
+                    ? $"Segoe Fluent Icons：{item.IconGlyph}"
+                    : "圖示檔案：未設定";
         }
 
-        private static async Task UpdateToolbarIconVisualAsync(Image image, FontIcon fontIcon, string? iconPath, string glyph)
+        private static async Task UpdateToolbarIconVisualAsync(Image image, FontIcon fontIcon, string? iconPath)
         {
             var imageSource = ToolbarCommandItem.CreateIconImageSource(iconPath);
             if (imageSource is null && ToolbarCommandItem.IsExecutableIconSource(iconPath))
@@ -1024,8 +1228,29 @@ catch {
 
             image.Source = null;
             image.Visibility = Visibility.Collapsed;
-            fontIcon.Visibility = Visibility.Visible;
+            fontIcon.Visibility = Visibility.Collapsed;
+            fontIcon.Glyph = string.Empty;
+        }
+
+        private static async Task UpdateToolbarIconVisualAsync(Image image, FontIcon fontIcon, string? iconPath, string? iconGlyph)
+        {
+            await UpdateToolbarIconVisualAsync(image, fontIcon, iconPath);
+            if (image.Visibility == Visibility.Visible)
+            {
+                return;
+            }
+
+            var glyph = ToolbarCommandItem.NormalizeFluentGlyph(iconGlyph);
+            if (string.IsNullOrWhiteSpace(glyph))
+            {
+                fontIcon.Visibility = Visibility.Collapsed;
+                fontIcon.Glyph = string.Empty;
+                return;
+            }
+
             fontIcon.Glyph = glyph;
+            fontIcon.FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"];
+            fontIcon.Visibility = Visibility.Visible;
         }
 
         private static async Task RefreshToolbarIconPresenterAsync(Grid presenter)
@@ -1042,8 +1267,8 @@ catch {
 
             image.Source = null;
             image.Visibility = Visibility.Collapsed;
-            fontIcon.Visibility = Visibility.Visible;
-            fontIcon.Glyph = expectedItem.DisplayGlyph;
+            fontIcon.Visibility = Visibility.Collapsed;
+            fontIcon.Glyph = string.Empty;
 
             var imageSource = ToolbarCommandItem.CreateIconImageSource(expectedItem.IconPath);
             if (imageSource is null && ToolbarCommandItem.IsExecutableIconSource(expectedItem.IconPath))
@@ -1066,8 +1291,12 @@ catch {
 
             image.Source = null;
             image.Visibility = Visibility.Collapsed;
-            fontIcon.Visibility = Visibility.Visible;
-            fontIcon.Glyph = expectedItem.DisplayGlyph;
+            var glyph = ToolbarCommandItem.NormalizeFluentGlyph(expectedItem.IconGlyph);
+            fontIcon.Glyph = glyph;
+            fontIcon.FontFamily = (FontFamily)Application.Current.Resources["SymbolThemeFontFamily"];
+            fontIcon.Visibility = string.IsNullOrWhiteSpace(glyph)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
         }
 
         private void SyncToolbarCommandsOrder(ListViewBase sender)
@@ -1410,6 +1639,23 @@ catch {
                 $"顯示已選資料夾大小：{(ShowSelectedFolderSizeToggle.IsOn ? "開啟" : "關閉")}");
             RefreshSelectionSizeDisplays();
             CaptureHintTextBlock.Text = "已立即儲存資料夾大小顯示設定。";
+        }
+
+        internal void ShowCurrentDirectoryItemSizesToggle_Toggled(object sender, RoutedEventArgs e)
+        {
+            if (_isUpdatingSettingsUi || ShowCurrentDirectoryItemSizesToggle is null)
+            {
+                return;
+            }
+
+            _editingShortcutSettings.ShowCurrentDirectoryItemSizes = ShowCurrentDirectoryItemSizesToggle.IsOn;
+            _shortcutSettings.ShowCurrentDirectoryItemSizes = ShowCurrentDirectoryItemSizesToggle.IsOn;
+            SaveShortcutSettingsSafe();
+            AddSyncSettingsNotification(
+                "一般設定已更新",
+                $"計算目前目錄每列容量：{(ShowCurrentDirectoryItemSizesToggle.IsOn ? "開啟" : "關閉")}");
+            RefreshPaneItemSizeDisplays();
+            CaptureHintTextBlock.Text = "已立即儲存目前目錄容量顯示設定。";
         }
 
         internal void DefaultTerminalShellComboBox_SelectionChanged(object sender, SelectionChangedEventArgs e)
@@ -1846,6 +2092,7 @@ catch {
                 ThemeMode = source.ThemeMode,
                 ShowSelectedFileSize = source.ShowSelectedFileSize,
                 ShowSelectedFolderSize = source.ShowSelectedFolderSize,
+                ShowCurrentDirectoryItemSizes = source.ShowCurrentDirectoryItemSizes,
                 ShowHiddenSystemItems = source.ShowHiddenSystemItems,
                 DefaultTerminalShellKind = source.DefaultTerminalShellKind,
                 DefaultTerminalWorkingDirectoryMode = source.DefaultTerminalWorkingDirectoryMode,

@@ -225,6 +225,31 @@
                                                   OnContent="開"
                                                   Toggled="ShowSelectedFolderSizeToggle_Toggled" />
                                 </Grid>
+
+                                <Grid ColumnSpacing="16">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+
+                                    <StackPanel Spacing="6">
+                                        <TextBlock Text="計算目前目錄每列容量"
+                                                   Foreground="{StaticResource TextPrimaryBrush}"
+                                                   FontSize="18"
+                                                   FontWeight="SemiBold" />
+                                        <TextBlock Text="在背景掃描目前目錄所有檔案與資料夾容量，直接更新右側大小欄，不會卡住 UI。資料夾會遞迴計算。"
+                                                   Foreground="{StaticResource TextSecondaryBrush}"
+                                                   FontSize="15"
+                                                   TextWrapping="Wrap" />
+                                    </StackPanel>
+
+                                    <ToggleSwitch x:Name="ShowCurrentDirectoryItemSizesToggle"
+                                                  Grid.Column="1"
+                                                  VerticalAlignment="Center"
+                                                  OffContent="關"
+                                                  OnContent="開"
+                                                  Toggled="ShowCurrentDirectoryItemSizesToggle_Toggled" />
+                                </Grid>
                             </StackPanel>
                         </Border>
 
@@ -394,6 +419,19 @@
                                            Foreground="{StaticResource TextSecondaryBrush}"
                                            FontSize="15"
                                            TextWrapping="Wrap" />
+
+                                <ProgressBar x:Name="AppUpdateProgressBar"
+                                             Minimum="0"
+                                             Maximum="100"
+                                             Height="8"
+                                             Visibility="Collapsed" />
+
+                                <TextBlock x:Name="AppUpdateProgressTextBlock"
+                                           Text=""
+                                           Foreground="{StaticResource TextSecondaryBrush}"
+                                           FontSize="13"
+                                           TextWrapping="Wrap"
+                                           Visibility="Collapsed" />
 
                                 <TextBlock x:Name="LatestAppVersionTextBlock"
                                            Text="最新版本：尚未檢查"

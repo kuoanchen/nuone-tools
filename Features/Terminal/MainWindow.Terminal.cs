@@ -178,17 +178,17 @@ namespace nuone_tools
             RestartTerminalProcess(_selectedTerminalTab);
         }
 
-        internal void OpenBuiltInTerminalTab(TerminalShellKind shellKind, string workingDirectory)
+        internal void OpenBuiltInTerminalTab(TerminalShellKind shellKind, string workingDirectory, string? customTitle = null)
         {
             EnsureTerminalTabExists();
-            AddTerminalTab(shellKind, true, workingDirectory);
+            AddTerminalTab(shellKind, true, workingDirectory, customTitle);
             SwitchToAppSection(AppSection.Terminal);
             FocusTerminalHost();
         }
 
-        internal void OpenBuiltInTerminalTabAndRunCommand(TerminalShellKind shellKind, string workingDirectory, string command)
+        internal void OpenBuiltInTerminalTabAndRunCommand(TerminalShellKind shellKind, string workingDirectory, string command, string? customTitle = null)
         {
-            OpenBuiltInTerminalTab(shellKind, workingDirectory);
+            OpenBuiltInTerminalTab(shellKind, workingDirectory, customTitle);
 
             var session = _selectedTerminalTab;
             if (session is null)
@@ -402,10 +402,12 @@ namespace nuone_tools
             }
 
             session.StatusText = $"工作目錄已切換到 {session.WorkingDirectory}";
+            session.Title = BuildTerminalTabTitle(session);
+            UpdateTerminalTabHeader(session);
             UpdateTerminalUi();
         }
 
-        private void AddTerminalTab(TerminalShellKind shellKind, bool shouldSelect, string? workingDirectoryOverride = null)
+        private void AddTerminalTab(TerminalShellKind shellKind, bool shouldSelect, string? workingDirectoryOverride = null, string? customTitle = null)
         {
             var workingDirectory = string.IsNullOrWhiteSpace(workingDirectoryOverride)
                 ? GetPreferredTerminalWorkingDirectory()
@@ -413,6 +415,7 @@ namespace nuone_tools
             var session = new TerminalTabSession
             {
                 TabNumber = _nextTerminalTabNumber++,
+                CustomTitle = customTitle?.Trim() ?? string.Empty,
                 ShellKind = shellKind,
                 WorkingDirectory = workingDirectory,
                 StatusText = "未啟動",
@@ -531,6 +534,8 @@ namespace nuone_tools
             }
 
             session.StatusText = $"工作目錄已同步到 {session.WorkingDirectory}";
+            session.Title = BuildTerminalTabTitle(session);
+            UpdateTerminalTabHeader(session);
             UpdateTerminalUi();
         }
 
@@ -890,8 +895,18 @@ namespace nuone_tools
             };
         }
 
-        private static string BuildShellArguments(TerminalShellKind shellKind)
+        private static string BuildShellArguments(TerminalShellKind shellKind, string? initialCommand = null)
         {
+            if (!string.IsNullOrWhiteSpace(initialCommand))
+            {
+                return shellKind switch
+                {
+                    TerminalShellKind.GitBash => $"--login -i -c \"{initialCommand.Replace("\\", "\\\\", StringComparison.Ordinal).Replace("\"", "\\\"", StringComparison.Ordinal)}; exec bash -i\"",
+                    TerminalShellKind.CommandPrompt => $"/K {initialCommand}",
+                    _ => $"-NoLogo -NoExit -ExecutionPolicy Bypass -Command \"{initialCommand.Replace("\"", "\\\"", StringComparison.Ordinal)}\"",
+                };
+            }
+
             return shellKind switch
             {
                 TerminalShellKind.GitBash => "--login -i",
@@ -944,7 +959,37 @@ namespace nuone_tools
 
         private string BuildTerminalTabTitle(TerminalTabSession session)
         {
-            return $"{session.ShellDisplayName} {session.TabNumber}";
+            if (!string.IsNullOrWhiteSpace(session.CustomTitle))
+            {
+                return session.CustomTitle;
+            }
+
+            var directoryName = GetTerminalDirectoryTitle(session.WorkingDirectory);
+            return string.IsNullOrWhiteSpace(directoryName)
+                ? $"{session.ShellDisplayName} {session.TabNumber}"
+                : directoryName;
+        }
+
+        private static string GetTerminalDirectoryTitle(string? workingDirectory)
+        {
+            if (string.IsNullOrWhiteSpace(workingDirectory))
+            {
+                return string.Empty;
+            }
+
+            var trimmed = workingDirectory.Trim().TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
+                return string.Empty;
+            }
+
+            var name = Path.GetFileName(trimmed);
+            if (!string.IsNullOrWhiteSpace(name))
+            {
+                return name;
+            }
+
+            return trimmed;
         }
 
         private TabViewItem BuildTerminalTabViewItem(TerminalTabSession session)

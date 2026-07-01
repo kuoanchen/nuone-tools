@@ -2882,11 +2882,19 @@ namespace nuone_tools
             var extractedCount = 0;
             var skippedCount = 0;
             var failedNames = new List<string>();
+            var pendingMultipartArchives = new List<string>();
             var passwordMismatchArchives = new List<string>();
 
             foreach (var archivePath in archives)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+
+                if (TryGetPendingMultiPartReason(archivePath, out _))
+                {
+                    skippedCount++;
+                    pendingMultipartArchives.Add(Path.GetFileName(archivePath));
+                    continue;
+                }
 
                 if (!TryPrepareArchiveExtraction(archivePath, out var destinationDirectory, out var skipReason))
                 {
@@ -2911,11 +2919,17 @@ namespace nuone_tools
                     passwords,
                     cancellationToken,
                     out var allPasswordsRejected,
+                    out var waitingForMoreVolumes,
                     out var failureReason);
 
                 if (extracted)
                 {
                     extractedCount++;
+                }
+                else if (waitingForMoreVolumes)
+                {
+                    skippedCount++;
+                    pendingMultipartArchives.Add(Path.GetFileName(archivePath));
                 }
                 else
                 {
@@ -2929,17 +2943,36 @@ namespace nuone_tools
 
             if (extractedCount == 0 && failedNames.Count == 0)
             {
+                if (pendingMultipartArchives.Count > 0)
+                {
+                    return AutoExtractExecutionResult.Create(BuildPendingMultipartStatusText(pendingMultipartArchives));
+                }
+
                 return AutoExtractExecutionResult.Create(skippedCount > 0 ? "沒有新的壓縮檔需要解壓" : "沒有可處理的壓縮檔");
             }
 
-            if (failedNames.Count == 0)
+            if (failedNames.Count == 0 && pendingMultipartArchives.Count == 0)
             {
                 return AutoExtractExecutionResult.Create($"完成：成功解壓 {extractedCount} 個壓縮檔");
             }
 
-            var statusText = extractedCount > 0
-                ? $"部分完成：成功 {extractedCount}，失敗 {failedNames.Count}"
-                : $"全部失敗：{string.Join("、", failedNames.Take(3))}";
+            string statusText;
+            if (failedNames.Count == 0)
+            {
+                statusText = $"部分完成：成功 {extractedCount}，等待分卷 {pendingMultipartArchives.Count}";
+            }
+            else if (pendingMultipartArchives.Count == 0)
+            {
+                statusText = extractedCount > 0
+                    ? $"部分完成：成功 {extractedCount}，失敗 {failedNames.Count}"
+                    : $"全部失敗：{string.Join("、", failedNames.Take(3))}";
+            }
+            else
+            {
+                statusText = extractedCount > 0
+                    ? $"部分完成：成功 {extractedCount}，失敗 {failedNames.Count}，等待分卷 {pendingMultipartArchives.Count}"
+                    : $"部分完成：失敗 {failedNames.Count}，等待分卷 {pendingMultipartArchives.Count}";
+            }
 
             if (passwordMismatchArchives.Count == 0)
             {
@@ -2961,6 +2994,11 @@ namespace nuone_tools
         internal static bool IsAutoExtractPathAllowed(AutoExtractProfile profile, string path)
         {
             if (!IsSupportedArchivePath(path))
+            {
+                return false;
+            }
+
+            if (TryParseMultiPartRar(path, out _, out var partIndex) && partIndex > 1)
             {
                 return false;
             }
@@ -3086,7 +3124,8 @@ namespace nuone_tools
                 return false;
             }
 
-            destinationDirectory = Path.Combine(directory, Path.GetFileNameWithoutExtension(archivePath));
+            var destinationName = GetAutoExtractDestinationName(archivePath);
+            destinationDirectory = Path.Combine(directory, destinationName);
             if (!Directory.Exists(destinationDirectory))
             {
                 return true;
@@ -3103,6 +3142,28 @@ namespace nuone_tools
         }
 
         private static bool WaitForArchiveReady(string archivePath, CancellationToken cancellationToken)
+        {
+            if (TryParseMultiPartRar(archivePath, out var baseName, out var partIndex) && partIndex == 1)
+            {
+                var relatedParts = GetMultiPartRarGroupFiles(archivePath, baseName);
+                if (relatedParts.Count > 1)
+                {
+                    foreach (var partPath in relatedParts)
+                    {
+                        if (!WaitForSingleArchiveReady(partPath, cancellationToken))
+                        {
+                            return false;
+                        }
+                    }
+
+                    return true;
+                }
+            }
+
+            return WaitForSingleArchiveReady(archivePath, cancellationToken);
+        }
+
+        private static bool WaitForSingleArchiveReady(string archivePath, CancellationToken cancellationToken)
         {
             const int maxAttempts = 8;
             long? previousLength = null;
@@ -3144,9 +3205,11 @@ namespace nuone_tools
             IReadOnlyList<string> passwords,
             CancellationToken cancellationToken,
             out bool allPasswordsRejected,
+            out bool waitingForMoreVolumes,
             out string failureReason)
         {
             allPasswordsRejected = false;
+            waitingForMoreVolumes = false;
             failureReason = "密碼不正確或解壓失敗";
             var tempDirectory = destinationDirectory + ".nuone_extracting";
             var sawPasswordFailure = false;
@@ -3176,7 +3239,7 @@ namespace nuone_tools
                     Directory.Move(tempDirectory, destinationDirectory);
                     try
                     {
-                        File.Delete(archivePath);
+                        DeleteAutoExtractSourceArchives(archivePath);
                     }
                     catch
                     {
@@ -3193,6 +3256,10 @@ namespace nuone_tools
                 if (LooksLikePasswordRejected(extractorExecutable, exitCode, failureReason))
                 {
                     sawPasswordFailure = true;
+                }
+                else if (LooksLikeMissingVolume(extractorExecutable, exitCode, failureReason))
+                {
+                    waitingForMoreVolumes = true;
                 }
             }
 
@@ -3225,6 +3292,31 @@ namespace nuone_tools
                 || message.Contains("headers error", StringComparison.OrdinalIgnoreCase)
                 || message.Contains("密碼", StringComparison.OrdinalIgnoreCase)
                 || message.Contains("wrong pass", StringComparison.OrdinalIgnoreCase);
+        }
+
+        private static bool LooksLikeMissingVolume(string extractorExecutable, int exitCode, string message)
+        {
+            var fileName = Path.GetFileName(extractorExecutable);
+            if (fileName.StartsWith("winrar", StringComparison.OrdinalIgnoreCase) && exitCode == 10)
+            {
+                return true;
+            }
+
+            if (string.IsNullOrWhiteSpace(message))
+            {
+                return false;
+            }
+
+            return message.Contains("next volume is required", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("you need to start extraction from a previous volume", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("cannot find volume", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("missing volume", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("not enough volumes", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("unexpected end of archive", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("請插入下一個磁碟", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("需要下一個分卷", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("找不到下一個分卷", StringComparison.OrdinalIgnoreCase)
+                || message.Contains("缺少分卷", StringComparison.OrdinalIgnoreCase);
         }
 
         private static bool ExecuteArchiveExtractionAttempt(
@@ -3269,6 +3361,179 @@ namespace nuone_tools
             }
 
             return process.ExitCode == 0;
+        }
+
+        private static string GetAutoExtractDestinationName(string archivePath)
+        {
+            if (TryParseMultiPartRar(archivePath, out var baseName, out _))
+            {
+                return baseName;
+            }
+
+            return Path.GetFileNameWithoutExtension(archivePath);
+        }
+
+        private static void DeleteAutoExtractSourceArchives(string archivePath)
+        {
+            if (TryParseMultiPartRar(archivePath, out var baseName, out _))
+            {
+                var directory = Path.GetDirectoryName(archivePath);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    foreach (var partPath in Directory.EnumerateFiles(directory, "*.rar", SearchOption.TopDirectoryOnly)
+                        .Where(path => TryParseMultiPartRar(path, out var candidateBaseName, out _)
+                            && string.Equals(candidateBaseName, baseName, StringComparison.OrdinalIgnoreCase)))
+                    {
+                        File.Delete(partPath);
+                    }
+
+                    return;
+                }
+            }
+
+            File.Delete(archivePath);
+        }
+
+        private static bool TryGetPendingMultiPartReason(string archivePath, out string reason)
+        {
+            reason = string.Empty;
+
+            if (!TryParseMultiPartRar(archivePath, out var baseName, out var partIndex) || partIndex != 1)
+            {
+                return false;
+            }
+
+            var relatedParts = GetMultiPartRarGroupFiles(archivePath, baseName);
+            if (relatedParts.Count < 2)
+            {
+                reason = "等待更多分卷";
+                return true;
+            }
+
+            var expectedIndex = 1;
+            foreach (var partPath in relatedParts)
+            {
+                if (!TryParseMultiPartRar(partPath, out _, out var currentPartIndex) || currentPartIndex != expectedIndex)
+                {
+                    reason = "分卷編號不連續";
+                    return true;
+                }
+
+                expectedIndex++;
+            }
+
+            if (!TryHasCompletedMultiPartGroup(relatedParts))
+            {
+                reason = "等待最後分卷";
+                return true;
+            }
+
+            return false;
+        }
+
+        private static string BuildPendingMultipartStatusText(IReadOnlyList<string> archiveNames)
+        {
+            if (archiveNames.Count == 1)
+            {
+                return $"等待分卷下載完成：{archiveNames[0]}";
+            }
+
+            return $"等待分卷下載完成：{archiveNames.Count} 組壓縮檔";
+        }
+
+        private static List<string> GetMultiPartRarGroupFiles(string archivePath, string baseName)
+        {
+            var directory = Path.GetDirectoryName(archivePath);
+            if (string.IsNullOrWhiteSpace(directory) || !Directory.Exists(directory))
+            {
+                return new List<string>();
+            }
+
+            return Directory.EnumerateFiles(directory, "*.rar", SearchOption.TopDirectoryOnly)
+                .Where(path => TryParseMultiPartRar(path, out var candidateBaseName, out _)
+                    && string.Equals(candidateBaseName, baseName, StringComparison.OrdinalIgnoreCase))
+                .OrderBy(path =>
+                {
+                    _ = TryParseMultiPartRar(path, out _, out var currentPartIndex);
+                    return currentPartIndex;
+                })
+                .ToList();
+        }
+
+        private static bool TryHasCompletedMultiPartGroup(IReadOnlyList<string> relatedParts)
+        {
+            if (relatedParts.Count < 2)
+            {
+                return false;
+            }
+
+            long? commonPartSize = null;
+            for (var index = 0; index < relatedParts.Count; index++)
+            {
+                var fileInfo = new FileInfo(relatedParts[index]);
+                if (!fileInfo.Exists || fileInfo.Length <= 0)
+                {
+                    return false;
+                }
+
+                if (index == 0)
+                {
+                    commonPartSize = fileInfo.Length;
+                    continue;
+                }
+
+                if (index < relatedParts.Count - 1)
+                {
+                    if (fileInfo.Length != commonPartSize)
+                    {
+                        return false;
+                    }
+
+                    continue;
+                }
+
+                if (!commonPartSize.HasValue)
+                {
+                    return false;
+                }
+
+                return fileInfo.Length != commonPartSize.Value && fileInfo.Length < commonPartSize.Value;
+            }
+
+            return false;
+        }
+
+        private static bool TryParseMultiPartRar(string archivePath, out string baseName, out int partIndex)
+        {
+            baseName = string.Empty;
+            partIndex = 0;
+
+            if (!string.Equals(Path.GetExtension(archivePath), ".rar", StringComparison.OrdinalIgnoreCase))
+            {
+                return false;
+            }
+
+            var fileNameWithoutExtension = Path.GetFileNameWithoutExtension(archivePath);
+            if (string.IsNullOrWhiteSpace(fileNameWithoutExtension))
+            {
+                return false;
+            }
+
+            var markerIndex = fileNameWithoutExtension.LastIndexOf(".part", StringComparison.OrdinalIgnoreCase);
+            if (markerIndex <= 0)
+            {
+                return false;
+            }
+
+            var suffix = fileNameWithoutExtension[(markerIndex + 5)..];
+            if (!int.TryParse(suffix, NumberStyles.None, CultureInfo.InvariantCulture, out partIndex) || partIndex <= 0)
+            {
+                partIndex = 0;
+                return false;
+            }
+
+            baseName = fileNameWithoutExtension[..markerIndex];
+            return !string.IsNullOrWhiteSpace(baseName);
         }
 
         private static void SafeDeleteDirectory(string path)

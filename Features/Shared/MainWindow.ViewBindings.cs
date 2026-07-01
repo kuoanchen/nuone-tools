@@ -95,6 +95,8 @@ namespace nuone_tools
         private TextBox FileBunkerOutputEndpointTextBox => SettingsPage.FileBunkerOutputEndpointTextBoxElement;
         private TextBox LogDirectoryPathTextBox => SettingsPage.LogDirectoryPathTextBoxElement;
         private TextBlock AppUpdateManifestUrlTextBlock => SettingsPage.AppUpdateManifestUrlTextBlockElement;
+        private ProgressBar AppUpdateProgressBar => SettingsPage.AppUpdateProgressBarElement;
+        private TextBlock AppUpdateProgressTextBlock => SettingsPage.AppUpdateProgressTextBlockElement;
         private TextBlock AppUpdateReleaseNotesTextBlock => SettingsPage.AppUpdateReleaseNotesTextBlockElement;
         private TextBlock AppUpdateStatusTextBlock => SettingsPage.AppUpdateStatusTextBlockElement;
         private TextBlock LatestAppVersionTextBlock => SettingsPage.LatestAppVersionTextBlockElement;
@@ -114,6 +116,7 @@ namespace nuone_tools
         private ToggleSwitch ShowHiddenSystemItemsToggle => SettingsPage.ShowHiddenSystemItemsToggleElement;
         private ToggleSwitch ShowSelectedFileSizeToggle => SettingsPage.ShowSelectedFileSizeToggleElement;
         private ToggleSwitch ShowSelectedFolderSizeToggle => SettingsPage.ShowSelectedFolderSizeToggleElement;
+        private ToggleSwitch ShowCurrentDirectoryItemSizesToggle => SettingsPage.ShowCurrentDirectoryItemSizesToggleElement;
         private ComboBox ThemeModeComboBox => SettingsPage.ThemeModeComboBoxElement;
         private Border ToolbarSettingsContent => SettingsPage.ToolbarSettingsContentElement;
         private Border ToolbarSettingsNavBorder => SettingsPage.ToolbarSettingsNavBorderElement;

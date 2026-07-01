@@ -113,6 +113,10 @@ namespace nuone_tools
                     document.RootElement,
                     "showSelectedFolderSize",
                     nameof(ShortcutSettingsConfig.ShowSelectedFolderSize));
+                var showCurrentDirectoryItemSizesProperty = ReadProperty(
+                    document.RootElement,
+                    "showCurrentDirectoryItemSizes",
+                    nameof(ShortcutSettingsConfig.ShowCurrentDirectoryItemSizes));
                 var defaultTerminalShellKindProperty = ReadProperty(
                     document.RootElement,
                     "defaultTerminalShellKind",
@@ -136,6 +140,7 @@ namespace nuone_tools
                     ThemeMode = ReadThemeMode(themeModeProperty, ShortcutSettings.DefaultThemeMode),
                     ShowSelectedFileSize = ReadBooleanSetting(showSelectedFileSizeProperty, ShortcutSettings.DefaultShowSelectedFileSize),
                     ShowSelectedFolderSize = ReadBooleanSetting(showSelectedFolderSizeProperty, ShortcutSettings.DefaultShowSelectedFolderSize),
+                    ShowCurrentDirectoryItemSizes = ReadBooleanSetting(showCurrentDirectoryItemSizesProperty, ShortcutSettings.DefaultShowCurrentDirectoryItemSizes),
                     ShowHiddenSystemItems = ReadBooleanSetting(showHiddenSystemItemsProperty, ShortcutSettings.DefaultShowHiddenSystemItems),
                     DefaultTerminalShellKind = ReadEnumSetting(defaultTerminalShellKindProperty, ShortcutSettings.DefaultTerminalShellKindValue),
                     DefaultTerminalWorkingDirectoryMode = ReadEnumSetting(defaultTerminalWorkingDirectoryModeProperty, ShortcutSettings.DefaultTerminalWorkingDirectoryModeValue),
@@ -328,6 +333,7 @@ namespace nuone_tools
                 config.ThemeMode = _shortcutSettings.ThemeMode;
                 config.ShowSelectedFileSize = _shortcutSettings.ShowSelectedFileSize;
                 config.ShowSelectedFolderSize = _shortcutSettings.ShowSelectedFolderSize;
+                config.ShowCurrentDirectoryItemSizes = _shortcutSettings.ShowCurrentDirectoryItemSizes;
                 config.ShowHiddenSystemItems = _shortcutSettings.ShowHiddenSystemItems;
                 config.DefaultTerminalShellKind = _shortcutSettings.DefaultTerminalShellKind;
                 config.DefaultTerminalWorkingDirectoryMode = _shortcutSettings.DefaultTerminalWorkingDirectoryMode;
@@ -1698,6 +1704,7 @@ namespace nuone_tools
                 ThemeMode = _shortcutSettings.ThemeMode,
                 ShowSelectedFileSize = _shortcutSettings.ShowSelectedFileSize,
                 ShowSelectedFolderSize = _shortcutSettings.ShowSelectedFolderSize,
+                ShowCurrentDirectoryItemSizes = _shortcutSettings.ShowCurrentDirectoryItemSizes,
                 ShowHiddenSystemItems = _shortcutSettings.ShowHiddenSystemItems,
                 DefaultTerminalShellKind = _shortcutSettings.DefaultTerminalShellKind,
                 DefaultTerminalWorkingDirectoryMode = _shortcutSettings.DefaultTerminalWorkingDirectoryMode,
@@ -1729,6 +1736,7 @@ namespace nuone_tools
                 config.ThemeMode = current.ThemeMode;
                 config.ShowSelectedFileSize = current.ShowSelectedFileSize;
                 config.ShowSelectedFolderSize = current.ShowSelectedFolderSize;
+                config.ShowCurrentDirectoryItemSizes = current.ShowCurrentDirectoryItemSizes;
                 config.ShowHiddenSystemItems = current.ShowHiddenSystemItems;
                 config.DefaultTerminalShellKind = current.DefaultTerminalShellKind;
                 config.DefaultTerminalWorkingDirectoryMode = current.DefaultTerminalWorkingDirectoryMode;

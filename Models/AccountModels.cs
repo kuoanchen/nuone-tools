@@ -128,6 +128,14 @@ namespace nuone_tools
 
         public bool IsUpdateAvailable { get; set; }
 
+        public bool HasProgress { get; set; }
+
+        public bool IsProgressIndeterminate { get; set; }
+
+        public double ProgressValue { get; set; }
+
+        public string ProgressText { get; set; } = string.Empty;
+
         public static AppUpdateState CreateDefault()
         {
             return new AppUpdateState();
