@@ -169,6 +169,22 @@ function Convert-GitRemoteToHttps {
     return $normalized
 }
 
+function ConvertTo-ShieldsBadgeValue {
+    param(
+        [string]$Value
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Value)) {
+        return ''
+    }
+
+    $escaped = $Value.Trim()
+    $escaped = $escaped.Replace('-', '--')
+    $escaped = $escaped.Replace('_', '__')
+    $escaped = $escaped.Replace(' ', '_')
+    return $escaped
+}
+
 function Get-GitCommits {
     param(
         [string]$SinceRef = ''
@@ -181,7 +197,12 @@ function Get-GitCommits {
         $arguments += "$SinceRef..HEAD"
     }
 
-    $raw = & git @arguments
+    $rawLines = & git @arguments
+    if ($null -eq $rawLines) {
+        return @()
+    }
+
+    $raw = ($rawLines | Out-String)
     if ([string]::IsNullOrWhiteSpace($raw)) {
         return @()
     }
@@ -200,10 +221,14 @@ function Get-GitCommits {
         }
 
         $subject = $parts[2].Trim()
-        $body = if ($parts.Length -ge 4) { $parts[3].Trim() } else { '' }
+        $body = if ($parts.Length -ge 4) {
+            (($parts | Select-Object -Skip 3) -join [char]0x1f).Trim()
+        } else {
+            ''
+        }
         $parsed = Parse-ConventionalCommit -Message $subject
 
-        $commits.Add([pscustomobject]@{
+        $commit = [pscustomobject]@{
             Hash      = $parts[0].Trim()
             ShortHash = $parts[1].Trim()
             Subject   = $subject
@@ -212,10 +237,40 @@ function Get-GitCommits {
             Scope     = $parsed.Scope
             Title     = $parsed.Title
             Group     = $parsed.Group
-        })
+        }
+
+        if (Test-ShouldIncludeChangelogCommit -Commit $commit) {
+            $commits.Add($commit)
+        }
     }
 
     return $commits
+}
+
+function Test-ShouldIncludeChangelogCommit {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Commit
+    )
+
+    $subject = if ($null -ne $Commit.Subject) { [string]$Commit.Subject } else { '' }
+    if ([string]::IsNullOrWhiteSpace($subject)) {
+        return $false
+    }
+
+    if ($subject -match '^Merge pull request\b') {
+        return $false
+    }
+
+    if ($subject -match '^Merge branch\b') {
+        return $false
+    }
+
+    if ($subject -match '^Nueva versi[oó]n\b') {
+        return $false
+    }
+
+    return $true
 }
 
 function Parse-ConventionalCommit {
@@ -280,6 +335,121 @@ function Get-PreviousVersionTag {
     } catch {
         return ''
     }
+}
+
+function Get-VersionSortKey {
+    param(
+        [string]$Version
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        return ,@(0)
+    }
+
+    $matches = [regex]::Matches($Version, '\d+')
+    if ($matches.Count -eq 0) {
+        return ,@(0)
+    }
+
+    return @($matches | ForEach-Object { [int]$_.Value })
+}
+
+function Compare-VersionKeys {
+    param(
+        [int[]]$Left,
+        [int[]]$Right
+    )
+
+    $maxLength = [Math]::Max($Left.Length, $Right.Length)
+    for ($index = 0; $index -lt $maxLength; $index++) {
+        $leftValue = if ($index -lt $Left.Length) { $Left[$index] } else { 0 }
+        $rightValue = if ($index -lt $Right.Length) { $Right[$index] } else { 0 }
+        if ($leftValue -lt $rightValue) {
+            return -1
+        }
+
+        if ($leftValue -gt $rightValue) {
+            return 1
+        }
+    }
+
+    return 0
+}
+
+function Get-PreviousReleasedVersion {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$CurrentVersion
+    )
+
+    $repoRoot = Get-RepoRoot
+    $currentKey = Get-VersionSortKey -Version $CurrentVersion
+    $versions = New-Object System.Collections.Generic.List[string]
+
+    try {
+        foreach ($tag in @(git -C $repoRoot tag)) {
+            if (-not [string]::IsNullOrWhiteSpace($tag)) {
+                $versions.Add($tag.Trim())
+            }
+        }
+    } catch {
+    }
+
+    $distinctVersions = $versions |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object -Unique
+
+    $previousVersion = ''
+    foreach ($candidate in $distinctVersions) {
+        $candidateKey = Get-VersionSortKey -Version $candidate
+        if ((Compare-VersionKeys -Left $candidateKey -Right $currentKey) -ge 0) {
+            continue
+        }
+
+        if ([string]::IsNullOrWhiteSpace($previousVersion) -or
+            (Compare-VersionKeys -Left $candidateKey -Right (Get-VersionSortKey -Version $previousVersion)) -gt 0) {
+            $previousVersion = $candidate
+        }
+    }
+
+    return $previousVersion
+}
+
+function Resolve-ReleaseBoundaryRef {
+    param(
+        [Parameter(Mandatory = $true)]
+        [string]$Version
+    )
+
+    if ([string]::IsNullOrWhiteSpace($Version)) {
+        return ''
+    }
+
+    $repoRoot = Get-RepoRoot
+    $grepPatterns = @(
+        "Nueva versión $Version",
+        "Nueva version $Version"
+    )
+
+    foreach ($pattern in $grepPatterns) {
+        try {
+            $match = git -C $repoRoot log --all --fixed-strings --grep=$pattern --format=%H -n 1 | Select-Object -First 1
+            if (-not [string]::IsNullOrWhiteSpace($match)) {
+                return [string]$match
+            }
+        } catch {
+        }
+    }
+
+    try {
+        $tagMatch = git -C $repoRoot rev-list -n 1 $Version 2>$null | Select-Object -First 1
+        if (-not [string]::IsNullOrWhiteSpace($tagMatch)) {
+            return [string]$tagMatch
+        }
+    } catch {
+    }
+
+    return ''
 }
 
 function Render-MarkdownListFromCommit {

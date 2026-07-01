@@ -1,8 +1,8 @@
-﻿# Nuone Tools
+# Nuone Tools
 
-![Version](https://img.shields.io/badge/version-1.202606.4-blue.svg?cacheSeconds=2592000)
-![AssemblyVersion](https://img.shields.io/badge/assembly-1.2026.6.4-purple.svg?cacheSeconds=2592000)
-![TargetFramework](https://img.shields.io/badge/framework-net8.0-windows10.0.19041.0-0a7ea4.svg?cacheSeconds=2592000)
+![Version](https://img.shields.io/badge/version-1.202607.1-blue?cacheSeconds=2592000)
+![AssemblyVersion](https://img.shields.io/badge/assembly-1.2026.7.1-purple?cacheSeconds=2592000)
+![TargetFramework](https://img.shields.io/badge/framework-net8.0--windows10.0.19041.0-0a7ea4?cacheSeconds=2592000)
 
 WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動化、批次重新命名、工具列命令與原生 Windows Shell 操作流程。
 
@@ -10,10 +10,10 @@ WinUI 3 檔案管理工具，支援雙 Pane 瀏覽、群組捷徑、背景自動
 
 - 專案名稱：Nuone Tools
 - RootNamespace：`nuone_tools`
-- Version：`1.202606.4`
-- AssemblyVersion：`1.2026.6.4`
-- FileVersion：`1.2026.6.4`
-- InformationalVersion：`1.2026.6.4`
+- Version：`1.202607.1`
+- AssemblyVersion：`1.2026.7.1`
+- FileVersion：`1.2026.7.1`
+- InformationalVersion：`1.2026.7.1`
 - TargetFramework：`net8.0-windows10.0.19041.0`
 - Platforms：`x86;x64;ARM64`
 - RuntimeIdentifiers：`win-x86;win-x64;win-arm64`
